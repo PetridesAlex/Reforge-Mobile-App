@@ -1,89 +1,143 @@
 import { StyleSheet, Text, View } from 'react-native';
 
 import { AppCard } from '@/components/ui/AppCard';
-import { colors, spacing, typography } from '@/constants/theme';
-import { formatDuration } from '@/lib/utils/dates';
+import { formatVolumeKg } from '@/lib/training/volume';
 import type { WorkoutSummary } from '@/types';
+import { colors, fonts, spacing, typography } from '@/constants/theme';
 
-type WorkoutSummaryCardProps = {
-  summary: WorkoutSummary;
-};
+function formatDuration(seconds: number) {
+  const m = Math.floor(seconds / 60);
+  const s = seconds % 60;
+  return `${m}:${s.toString().padStart(2, '0')}`;
+}
 
-export function WorkoutSummaryCard({ summary }: WorkoutSummaryCardProps) {
-  const stats = [
-    { label: 'Duration', value: formatDuration(summary.durationSeconds) },
-    { label: 'Exercises', value: String(summary.exercisesCompleted) },
-    { label: 'Sets', value: String(summary.totalSets) },
-    { label: 'Volume', value: `${summary.estimatedVolumeKg} kg` },
-  ];
-
+export function WorkoutSummaryCard({ summary }: { summary: WorkoutSummary }) {
   return (
-    <AppCard accent>
-      <Text style={styles.title}>Workout complete</Text>
+    <AppCard style={styles.card}>
+      {summary.workoutName ? <Text style={styles.workoutName}>{summary.workoutName}</Text> : null}
       <View style={styles.grid}>
-        {stats.map((s) => (
-          <View key={s.label} style={styles.stat}>
-            <Text style={styles.value}>{s.value}</Text>
-            <Text style={styles.label}>{s.label}</Text>
-          </View>
-        ))}
+        <Metric label="DURATION" value={formatDuration(summary.durationSeconds)} />
+        <Metric label="VOLUME" value={formatVolumeKg(summary.estimatedVolumeKg)} />
+        <Metric label="SETS" value={String(summary.totalSets)} />
+        <Metric label="EXERCISES" value={String(summary.exercisesCompleted)} />
       </View>
+      {summary.completionPct != null ? (
+        <View style={styles.completion}>
+          <Text style={styles.completionLabel}>COMPLETION</Text>
+          <View style={styles.track}>
+            <View style={[styles.fill, { width: `${summary.completionPct}%` }]} />
+          </View>
+          <Text style={styles.completionValue}>{summary.completionPct}%</Text>
+        </View>
+      ) : null}
+      {summary.highlight ? (
+        <View style={styles.highlight}>
+          <Text style={styles.highlightKicker}>{summary.highlight.title}</Text>
+          <Text style={styles.highlightValue}>{summary.highlight.subtitle}</Text>
+        </View>
+      ) : null}
       {summary.personalRecords.length > 0 ? (
         <View style={styles.prs}>
-          <Text style={styles.prTitle}>Personal records</Text>
+          <Text style={styles.prLabel}>PERSONAL RECORDS</Text>
           {summary.personalRecords.map((pr) => (
-            <Text key={pr} style={styles.pr}>
+            <Text key={pr} style={styles.prItem}>
               {pr}
             </Text>
           ))}
         </View>
-      ) : (
-        <Text style={styles.noPr}>No new PRs this session — keep grinding.</Text>
-      )}
+      ) : null}
     </AppCard>
   );
 }
 
+function Metric({ label, value }: { label: string; value: string }) {
+  return (
+    <View style={styles.metric}>
+      <Text style={styles.metricLabel}>{label}</Text>
+      <Text style={styles.metricValue}>{value}</Text>
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
-  title: {
-    ...typography.title,
+  card: { gap: spacing.md },
+  workoutName: {
+    fontFamily: fonts.display,
+    fontSize: 28,
+    lineHeight: 30,
     color: colors.text,
-    marginBottom: spacing.md,
+    textTransform: 'uppercase',
   },
   grid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: spacing.sm,
   },
-  stat: {
+  metric: {
     width: '47%',
-    gap: spacing.xs,
-    marginBottom: spacing.sm,
+    backgroundColor: colors.background,
+    borderRadius: 12,
+    padding: spacing.md,
+    gap: 4,
   },
-  value: {
-    ...typography.subtitle,
+  metricLabel: {
+    fontFamily: fonts.sansMedium,
+    fontSize: 10,
+    letterSpacing: 1.4,
+    color: colors.textMuted,
+  },
+  metricValue: {
+    fontFamily: fonts.display,
+    fontSize: 28,
+    lineHeight: 30,
     color: colors.accent,
-    fontSize: 22,
   },
-  label: {
+  completion: { gap: spacing.sm },
+  completionLabel: {
+    fontFamily: fonts.sansMedium,
+    fontSize: 10,
+    letterSpacing: 1.4,
+    color: colors.textMuted,
+  },
+  track: {
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    overflow: 'hidden',
+  },
+  fill: { height: '100%', backgroundColor: colors.accent },
+  completionValue: {
     ...typography.caption,
     color: colors.textSecondary,
   },
-  prs: {
-    marginTop: spacing.md,
-    gap: spacing.xs,
+  highlight: {
+    borderWidth: 1,
+    borderColor: 'rgba(200,255,0,0.28)',
+    borderRadius: 12,
+    padding: spacing.md,
+    gap: 4,
   },
-  prTitle: {
-    ...typography.label,
-    color: colors.textSecondary,
+  highlightKicker: {
+    fontFamily: fonts.sansMedium,
+    fontSize: 10,
+    letterSpacing: 1.6,
+    color: colors.accent,
   },
-  pr: {
-    ...typography.body,
+  highlightValue: {
+    fontFamily: fonts.display,
+    fontSize: 32,
     color: colors.text,
   },
-  noPr: {
-    ...typography.caption,
+  prs: { gap: spacing.xs },
+  prLabel: {
+    fontFamily: fonts.sansMedium,
+    fontSize: 10,
+    letterSpacing: 1.4,
     color: colors.textMuted,
-    marginTop: spacing.md,
+  },
+  prItem: {
+    fontFamily: fonts.sansSemiBold,
+    fontSize: 14,
+    color: colors.accent,
   },
 });

@@ -20,6 +20,7 @@ import { Screen } from '@/components/ui/Screen';
 import { SectionHeader } from '@/components/ui/SectionHeader';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { useAuth } from '@/hooks/useAuth';
+import { useStudioSync } from '@/hooks/useStudioSync';
 import { canManageStudio } from '@/lib/permissions';
 import { formatTime } from '@/lib/utils/dates';
 import * as adminService from '@/services/admin';
@@ -81,6 +82,9 @@ export default function CoachCalendarScreen() {
   const [view, setView] = useState<'daily' | 'weekly'>('daily');
   const [selected, setSelected] = useState(new Date());
   const [entries, setEntries] = useState<ScheduleEntry[]>([]);
+  const [wodWeek, setWodWeek] = useState<
+    Array<{ id: string; date: string; title: string; start_time: string; joinedCount?: number }>
+  >([]);
   const [dayCounts, setDayCounts] = useState<Record<string, number>>({});
   const [members, setMembers] = useState<Profile[]>([]);
   const [coaches, setCoaches] = useState<Profile[]>([]);
@@ -128,13 +132,20 @@ export default function CoachCalendarScreen() {
     if (!profile) return;
     try {
       setError(null);
-      const [all, memberRows, staff] = await Promise.all([
+      const start = startOfWeek(selected, { weekStartsOn: 1 });
+      const end = addDays(start, 6);
+      const from = format(start, 'yyyy-MM-dd');
+      const to = format(end, 'yyyy-MM-dd');
+
+      const [all, memberRows, staff, wods] = await Promise.all([
         scheduleService.getStudioSchedule(scheduleOptions),
         isAdmin ? adminService.listMembers() : Promise.resolve([]),
         adminService.listCoaches(),
+        isAdmin ? adminService.listStudioWorkoutsOfTheDay(from, to) : Promise.resolve([]),
       ]);
 
       setEntries(all);
+      setWodWeek(wods);
       setMembers(memberRows.filter((r) => r.active).map((r) => r.member));
       setCoaches(staff);
       if (!gCoachId && staff[0]) setGCoachId(staff[0].id);
@@ -142,11 +153,12 @@ export default function CoachCalendarScreen() {
       if (!pMemberId && memberRows[0]) setPMemberId(memberRows.find((r) => r.active)?.member.id);
 
       const counts: Record<string, number> = {};
-      const start = startOfWeek(selected, { weekStartsOn: 1 });
       for (let i = 0; i < 7; i += 1) {
         const day = addDays(start, i);
         const key = format(day, 'yyyy-MM-dd');
-        counts[key] = all.filter((entry) => isSameDay(parseISO(entry.startsAt), day)).length;
+        const sessionCount = all.filter((entry) => isSameDay(parseISO(entry.startsAt), day)).length;
+        const wodCount = wods.some((w) => w.date === key) ? 1 : 0;
+        counts[key] = sessionCount + wodCount;
       }
       setDayCounts(counts);
     } catch (e) {
@@ -161,14 +173,23 @@ export default function CoachCalendarScreen() {
     load();
   }, [load]);
 
+  useStudioSync(load);
+
   const dayEntries = useMemo(
     () => entries.filter((entry) => isSameDay(parseISO(entry.startsAt), selected)),
     [entries, selected],
   );
 
+  const selectedDate = scheduleService.dateInputValue(selected);
+
+  const selectedWod = useMemo(
+    () => wodWeek.find((w) => w.date === selectedDate) ?? null,
+    [wodWeek, selectedDate],
+  );
+
   const groupCount = dayEntries.filter((e) => e.kind === 'group').length;
   const privateCount = dayEntries.filter((e) => e.kind === 'private').length;
-  const selectedDate = scheduleService.dateInputValue(selected);
+  const wodCount = selectedWod ? 1 : 0;
 
   const openAddForDay = (kind: 'group' | 'private') => {
     setFormError(null);
@@ -327,6 +348,11 @@ export default function CoachCalendarScreen() {
         </View>
         <View style={styles.summaryDivider} />
         <View style={styles.summaryItem}>
+          <Text style={styles.summaryValue}>{wodCount}</Text>
+          <Text style={styles.summaryLabel}>WOD</Text>
+        </View>
+        <View style={styles.summaryDivider} />
+        <View style={styles.summaryItem}>
           <Text style={styles.summaryValue}>{groupCount}</Text>
           <Text style={styles.summaryLabel}>Group</Text>
         </View>
@@ -386,6 +412,13 @@ export default function CoachCalendarScreen() {
       {isAdmin ? (
         <View style={styles.addRow}>
           <PrimaryButton
+            title="+ Publish WOD"
+            onPress={() =>
+              router.push(`/(coach)/admin/wod?date=${selectedDate}` as never)
+            }
+            style={styles.addBtn}
+          />
+          <PrimaryButton
             title="+ Group class"
             onPress={() => openAddForDay('group')}
             style={styles.addBtn}
@@ -400,7 +433,44 @@ export default function CoachCalendarScreen() {
       ) : null}
 
       <SectionHeader title={format(selected, 'EEEE d MMM')} kicker="Schedule" />
-      {dayEntries.length === 0 ? (
+
+      {selectedWod ? (
+        <Pressable
+          onPress={() => router.push(`/(coach)/admin/wod?date=${selectedDate}` as never)}
+          style={({ pressed }) => [styles.wodCard, pressed && styles.entryPressed]}>
+          <LinearGradient
+            colors={['rgba(200,255,0,0.12)', 'transparent']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={styles.entryGlow}
+          />
+          <View style={styles.wodCardTop}>
+            <View style={styles.wodPill}>
+              <Text style={styles.wodPillText}>WORKOUT OF THE DAY</Text>
+            </View>
+            <Text style={styles.wodTime}>{selectedWod.start_time}</Text>
+          </View>
+          <Text style={styles.wodTitle}>{selectedWod.title}</Text>
+          <Text style={styles.wodMeta}>
+            {selectedWod.joinedCount ?? 0} athletes joined · Tap to edit
+          </Text>
+        </Pressable>
+      ) : isAdmin ? (
+        <Pressable
+          onPress={() => router.push(`/(coach)/admin/wod?date=${selectedDate}` as never)}
+          style={({ pressed }) => [styles.wodEmpty, pressed && styles.entryPressed]}>
+          <Ionicons name="flash-outline" size={20} color={colors.accent} />
+          <View style={styles.wodEmptyCopy}>
+            <Text style={styles.wodEmptyTitle}>No WOD published for this day</Text>
+            <Text style={styles.wodEmptyBody}>
+              Athletes see coach workouts on Home and their training calendar.
+            </Text>
+          </View>
+          <Ionicons name="add-circle-outline" size={22} color={colors.accent} />
+        </Pressable>
+      ) : null}
+
+      {dayEntries.length === 0 && !selectedWod ? (
         <EmptyState
           title="Nothing scheduled"
           description={
@@ -1000,4 +1070,75 @@ const styles = StyleSheet.create({
   },
   memberInitials: { fontFamily: fonts.sansSemiBold, fontSize: 12, color: colors.accent },
   memberName: { ...typography.body, color: colors.text, flex: 1 },
+  wodCard: {
+    position: 'relative',
+    overflow: 'hidden',
+    marginBottom: spacing.md,
+    padding: spacing.md,
+    borderRadius: radius.xl,
+    borderWidth: 1,
+    borderColor: 'rgba(200,255,0,0.28)',
+    backgroundColor: colors.surfaceElevated,
+    gap: spacing.sm,
+  },
+  wodCardTop: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  wodPill: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: radius.full,
+    backgroundColor: colors.accentMuted,
+    borderWidth: 1,
+    borderColor: 'rgba(200,255,0,0.28)',
+  },
+  wodPillText: {
+    fontFamily: fonts.sansSemiBold,
+    fontSize: 9,
+    letterSpacing: 1.2,
+    color: colors.accent,
+  },
+  wodTime: {
+    fontFamily: fonts.sansSemiBold,
+    fontSize: 13,
+    color: colors.textSecondary,
+  },
+  wodTitle: {
+    fontFamily: fonts.display,
+    fontSize: 28,
+    lineHeight: 30,
+    letterSpacing: 0.8,
+    color: colors.text,
+    textTransform: 'uppercase',
+  },
+  wodMeta: {
+    ...typography.caption,
+    color: colors.textSecondary,
+  },
+  wodEmpty: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    marginBottom: spacing.md,
+    padding: spacing.md,
+    borderRadius: radius.xl,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderStyle: 'dashed',
+    backgroundColor: colors.surface,
+  },
+  wodEmptyCopy: { flex: 1, gap: 2 },
+  wodEmptyTitle: {
+    fontFamily: fonts.sansSemiBold,
+    fontSize: 14,
+    color: colors.text,
+  },
+  wodEmptyBody: {
+    fontFamily: fonts.sans,
+    fontSize: 12,
+    lineHeight: 17,
+    color: colors.textSecondary,
+  },
 });

@@ -1,8 +1,10 @@
 import { router } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
+import { MemberAppGuide } from '@/components/onboarding/MemberAppGuide';
+import { PerformanceBuildProfile } from '@/components/performance/PerformanceBuildProfile';
 import { AppCard } from '@/components/ui/AppCard';
 import { Avatar } from '@/components/ui/Avatar';
 import { MoreMenu } from '@/components/ui/MoreMenu';
@@ -13,6 +15,7 @@ import { Screen } from '@/components/ui/Screen';
 import { SectionHeader } from '@/components/ui/SectionHeader';
 import { useAuth } from '@/hooks/useAuth';
 import { pickAvatarImage } from '@/lib/utils/pickAvatar';
+import * as community from '@/services/community';
 import * as memberService from '@/services/member';
 import { colors, radius, spacing, typography } from '@/constants/theme';
 
@@ -33,6 +36,20 @@ export default function ProfileScreen() {
   const [signingOut, setSigningOut] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [guideOpen, setGuideOpen] = useState(false);
+  const [messagingCoach, setMessagingCoach] = useState(false);
+  const [performanceStats, setPerformanceStats] = useState<{
+    weeklyWorkouts: number;
+    monthlyWorkouts: number;
+    weightKg: number | null;
+    bodyFatPct: number | null;
+    performance?: {
+      onboardingComplete: boolean;
+      profileCompletionPct: number;
+      weeklyGoal: number;
+      streak: number;
+    };
+  } | null>(null);
 
   useEffect(() => {
     if (!profile) return;
@@ -40,7 +57,30 @@ export default function ProfileScreen() {
       setCoachName(extras.coach?.full_name ?? null);
       setPlan(extras.programName ?? extras.membership);
     });
+    memberService.getMemberDashboard(profile.id, profile).then((dash) => {
+      setPerformanceStats({
+        weeklyWorkouts: dash.stats.weeklyWorkouts,
+        monthlyWorkouts: dash.stats.monthlyWorkouts,
+        weightKg: dash.stats.weightKg,
+        bodyFatPct: dash.stats.bodyFatPct,
+        performance: dash.performance,
+      });
+    });
   }, [profile]);
+
+  const onMessageCoach = async () => {
+    if (!profile) return;
+    setMessagingCoach(true);
+    setError(null);
+    try {
+      const thread = await community.getOrCreateCoachDm(profile.id);
+      router.push(`/(member)/messages/${thread.id}`);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not open coach chat');
+    } finally {
+      setMessagingCoach(false);
+    }
+  };
 
   const onUpload = async () => {
     setError(null);
@@ -116,6 +156,17 @@ export default function ProfileScreen() {
         </View>
       </AppCard>
 
+      {/* Performance build profile */}
+      <SectionHeader title="Performance build" kicker="Analytics" />
+      {performanceStats ? (
+        <PerformanceBuildProfile
+          stats={performanceStats}
+          performance={performanceStats.performance}
+          memberName={profile?.full_name}
+          compact
+        />
+      ) : null}
+
       {/* Training info */}
       <SectionHeader title="Performance" />
       <AppCard onPress={() => router.push('/(member)/progress/setup')} style={styles.infoCard}>
@@ -133,15 +184,19 @@ export default function ProfileScreen() {
 
       <SectionHeader title="Training" />
       <AppCard style={styles.infoCard}>
-        <View style={styles.infoRow}>
+        <Pressable onPress={() => void onMessageCoach()} style={styles.infoRow}>
           <View style={styles.infoIcon}>
             <PersonIcon size={18} color={colors.accent} />
           </View>
           <View style={styles.infoCopy}>
             <Text style={styles.infoLabel}>Coach</Text>
-            <Text style={styles.infoValue}>{coachName ?? 'Unassigned'}</Text>
+            <Text style={styles.infoValue}>{coachName ?? 'Studio coach'}</Text>
+            <Text style={styles.infoHint}>
+              {messagingCoach ? 'Opening chat…' : 'Tap to message your coach'}
+            </Text>
           </View>
-        </View>
+          <Ionicons name="chatbubble-ellipses-outline" size={18} color={colors.accent} />
+        </Pressable>
         <View style={styles.divider} />
         <View style={styles.infoRow}>
           <View style={styles.infoIcon}>
@@ -156,6 +211,11 @@ export default function ProfileScreen() {
 
       <SectionHeader title="Settings" />
       <View style={styles.menu}>
+        <AppCard onPress={() => setGuideOpen(true)} style={styles.menuItem}>
+          <Ionicons name="map-outline" size={20} color={colors.accent} />
+          <Text style={styles.menuLabel}>App guide</Text>
+          <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
+        </AppCard>
         <AppCard onPress={onUpload} style={styles.menuItem}>
           <Ionicons name="camera-outline" size={20} color={colors.textSecondary} />
           <Text style={styles.menuLabel}>{uploading ? 'Uploading…' : 'Change profile photo'}</Text>
@@ -187,6 +247,13 @@ export default function ProfileScreen() {
         <ReforgeLogo width={110} height={28} />
         <Text style={styles.brandCaption}>REFORGE · Limassol</Text>
       </View>
+
+      <MemberAppGuide
+        visible={guideOpen}
+        memberName={profile?.full_name}
+        onComplete={() => setGuideOpen(false)}
+        onSkip={() => setGuideOpen(false)}
+      />
     </Screen>
   );
 }
@@ -273,6 +340,11 @@ const styles = StyleSheet.create({
     ...typography.body,
     color: colors.text,
     fontWeight: '600',
+  },
+  infoHint: {
+    ...typography.caption,
+    color: colors.accent,
+    marginTop: 2,
   },
   divider: {
     height: 1,

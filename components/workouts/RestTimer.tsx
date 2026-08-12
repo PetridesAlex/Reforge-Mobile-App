@@ -1,58 +1,128 @@
-import { useEffect, useState } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { useEffect, useRef, useState } from 'react';
+import { AppState, Pressable, StyleSheet, Text, View } from 'react-native';
+import * as Haptics from 'expo-haptics';
+import { Platform } from 'react-native';
 
-import { PrimaryButton } from '@/components/ui/PrimaryButton';
-import { colors, radius, spacing, typography } from '@/constants/theme';
+import { colors, fonts, radius, spacing } from '@/constants/theme';
 
 type RestTimerProps = {
   seconds: number;
+  autoStart?: boolean;
+  nextLabel?: string;
   onDone?: () => void;
+  onSkip?: () => void;
 };
 
-export function RestTimer({ seconds, onDone }: RestTimerProps) {
+export function RestTimer({
+  seconds,
+  autoStart = false,
+  nextLabel,
+  onDone,
+  onSkip,
+}: RestTimerProps) {
   const [remaining, setRemaining] = useState(seconds);
-  const [running, setRunning] = useState(false);
+  const [running, setRunning] = useState(autoStart);
+  const endsAtRef = useRef<number | null>(null);
 
   useEffect(() => {
     setRemaining(seconds);
-    setRunning(false);
-  }, [seconds]);
+    if (autoStart) {
+      endsAtRef.current = Date.now() + seconds * 1000;
+      setRunning(true);
+    } else {
+      endsAtRef.current = null;
+      setRunning(false);
+    }
+  }, [seconds, autoStart]);
 
   useEffect(() => {
     if (!running) return;
-    if (remaining <= 0) {
-      setRunning(false);
-      onDone?.();
-      return;
+
+    if (!endsAtRef.current) {
+      endsAtRef.current = Date.now() + remaining * 1000;
     }
-    const id = setTimeout(() => setRemaining((r) => r - 1), 1000);
-    return () => clearTimeout(id);
-  }, [running, remaining, onDone]);
+
+    const tick = () => {
+      const endsAt = endsAtRef.current ?? Date.now();
+      const next = Math.max(0, Math.ceil((endsAt - Date.now()) / 1000));
+      setRemaining(next);
+      if (next <= 0) {
+        setRunning(false);
+        endsAtRef.current = null;
+        if (Platform.OS !== 'web') {
+          void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        }
+        onDone?.();
+      }
+    };
+
+    tick();
+    const id = setInterval(tick, 250);
+    return () => clearInterval(id);
+  }, [running, onDone, remaining]);
+
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', (state) => {
+      if (state === 'active' && endsAtRef.current) {
+        const next = Math.max(0, Math.ceil((endsAtRef.current - Date.now()) / 1000));
+        setRemaining(next);
+        if (next <= 0) {
+          setRunning(false);
+          endsAtRef.current = null;
+          onDone?.();
+        }
+      }
+    });
+    return () => sub.remove();
+  }, [onDone]);
 
   const mins = Math.floor(remaining / 60);
   const secs = remaining % 60;
 
+  const add30 = () => {
+    const base = endsAtRef.current ?? Date.now() + remaining * 1000;
+    endsAtRef.current = base + 30_000;
+    setRemaining((r) => r + 30);
+    setRunning(true);
+  };
+
+  const skip = () => {
+    setRunning(false);
+    endsAtRef.current = null;
+    setRemaining(0);
+    onSkip?.();
+    onDone?.();
+  };
+
   return (
     <View style={styles.container}>
-      <Text style={styles.label}>Rest timer</Text>
+      <Text style={styles.label}>REST</Text>
       <Text style={styles.time}>
-        {mins}:{secs.toString().padStart(2, '0')}
+        {mins.toString().padStart(2, '0')}:{secs.toString().padStart(2, '0')}
       </Text>
+      {nextLabel ? <Text style={styles.next}>Next: {nextLabel}</Text> : null}
       <View style={styles.actions}>
-        <PrimaryButton
-          title={running ? 'Pause' : 'Start Rest'}
-          onPress={() => setRunning((r) => !r)}
-          style={styles.btn}
-        />
-        <PrimaryButton
-          title="Reset"
-          variant="secondary"
+        <Pressable onPress={add30} style={({ pressed }) => [styles.btn, pressed && styles.pressed]}>
+          <Text style={styles.btnText}>+30 SEC</Text>
+        </Pressable>
+        <Pressable
+          onPress={skip}
+          style={({ pressed }) => [styles.btn, styles.btnGhost, pressed && styles.pressed]}>
+          <Text style={[styles.btnText, styles.btnGhostText]}>SKIP</Text>
+        </Pressable>
+        <Pressable
           onPress={() => {
-            setRunning(false);
-            setRemaining(seconds);
+            if (running) {
+              endsAtRef.current = null;
+              setRunning(false);
+            } else {
+              endsAtRef.current = Date.now() + remaining * 1000;
+              setRunning(true);
+            }
           }}
-          style={styles.btn}
-        />
+          style={({ pressed }) => [styles.btn, styles.btnGhost, pressed && styles.pressed]}>
+          <Text style={[styles.btnText, styles.btnGhostText]}>{running ? 'PAUSE' : 'START'}</Text>
+        </Pressable>
       </View>
     </View>
   );
@@ -61,21 +131,31 @@ export function RestTimer({ seconds, onDone }: RestTimerProps) {
 const styles = StyleSheet.create({
   container: {
     backgroundColor: colors.surfaceElevated,
-    borderRadius: radius.lg,
+    borderRadius: radius.xl,
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: 'rgba(200,255,0,0.22)',
     padding: spacing.md,
     alignItems: 'center',
     gap: spacing.sm,
     marginBottom: spacing.md,
   },
   label: {
-    ...typography.label,
-    color: colors.textSecondary,
+    fontFamily: fonts.sansMedium,
+    fontSize: 11,
+    letterSpacing: 2,
+    color: colors.accent,
   },
   time: {
-    ...typography.hero,
-    color: colors.accent,
+    fontFamily: fonts.display,
+    fontSize: 56,
+    lineHeight: 58,
+    color: colors.text,
+    letterSpacing: 2,
+  },
+  next: {
+    fontFamily: fonts.sans,
+    fontSize: 13,
+    color: colors.textSecondary,
   },
   actions: {
     flexDirection: 'row',
@@ -84,6 +164,25 @@ const styles = StyleSheet.create({
   },
   btn: {
     flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
     paddingVertical: spacing.sm,
+    borderRadius: radius.md,
+    backgroundColor: colors.accent,
   },
+  btnGhost: {
+    backgroundColor: 'transparent',
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  btnText: {
+    fontFamily: fonts.sansSemiBold,
+    fontSize: 12,
+    color: colors.background,
+    letterSpacing: 0.6,
+  },
+  btnGhostText: {
+    color: colors.text,
+  },
+  pressed: { opacity: 0.88 },
 });

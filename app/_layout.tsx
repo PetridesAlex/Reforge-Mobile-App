@@ -15,6 +15,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { AppPreload } from '@/components/ui/AppPreload';
 import { AuthProvider, useAuth } from '@/hooks/useAuth';
+import { ActiveWorkoutProvider } from '@/hooks/useActiveWorkout';
 import { colors } from '@/constants/theme';
 
 SplashScreen.preventAutoHideAsync().catch(() => undefined);
@@ -106,7 +107,9 @@ export default function RootLayout() {
   return (
     <SafeAreaProvider>
       <AuthProvider>
-        <RootNavigator fontsReady={fontsReady} />
+        <ActiveWorkoutProvider>
+          <RootNavigator fontsReady={fontsReady} />
+        </ActiveWorkoutProvider>
       </AuthProvider>
     </SafeAreaProvider>
   );

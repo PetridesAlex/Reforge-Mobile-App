@@ -9,6 +9,19 @@
    - [`migrations/006_member_fitness.sql`](migrations/006_member_fitness.sql) — **member stats, goals & progress tracking**
    - [`migrations/007_memberships.sql`](migrations/007_memberships.sql) — **billing, payment history & auto membership rows**
    - [`migrations/008_profile_gender.sql`](migrations/008_profile_gender.sql) — **optional gender on profiles for roster filters**
+   - [`migrations/009_member_absences.sql`](migrations/009_member_absences.sql)
+   - [`migrations/010_wod_movements.sql`](migrations/010_wod_movements.sql)
+   - [`migrations/011_app_onboarding.sql`](migrations/011_app_onboarding.sql) — **new member app guide**
+   - [`migrations/012_chat_sync.sql`](migrations/012_chat_sync.sql) — **chat threads, read cursors & notifications sync**
+   - [`migrations/013_workout_session_sync.sql`](migrations/013_workout_session_sync.sql) — **workout session & set logging sync**
+   - [`migrations/014_fix_chat_rls_recursion.sql`](migrations/014_fix_chat_rls_recursion.sql) — **fixes “infinite recursion” error on Messages**
+   - [`migrations/015_session_state.sql`](migrations/015_session_state.sql) — **live session state + RPE/RIR on sets**
+   - [`migrations/016_personal_records.sql`](migrations/016_personal_records.sql) — **PR storage**
+   - [`migrations/017_progression_fields.sql`](migrations/017_progression_fields.sql) — **coach progression targets**
+   - [`migrations/018_engagement.sql`](migrations/018_engagement.sql) — **readiness, achievements, challenges**
+   - [`migrations/019_coach_feedback_notifications.sql`](migrations/019_coach_feedback_notifications.sql) — **session feedback + program realtime**
+   - [`migrations/020_activity_feed.sql`](migrations/020_activity_feed.sql) — **opt-in gym activity feed**
+   - [`migrations/021_coach_dm_ensure.sql`](migrations/021_coach_dm_ensure.sql) — **member → coach DM (auto-assign studio coach)**
 3. In **Authentication → Providers**, enable **Email** and **Google**
 4. In **Authentication → URL configuration**:
    - **Site URL:** `reforge://auth/callback` (not `http://localhost:3000`)
@@ -70,6 +83,8 @@ Manual fallback: create the user in **Authentication → Users**, then run [`see
 | `admin` | Andreas (owner) | Created via `npm run seed:andreas` |
 | `member` | Everyone else | Default on app registration |
 
+New members see a **7-step in-app guide** (Home, Workouts, Sessions, Messages, Progress) on first sign-in. Completion is stored on `profiles.app_onboarding_complete`. Members can replay it from **Profile → App guide**.
+
 Run [`migrations/004_role_guard.sql`](migrations/004_role_guard.sql) in the SQL Editor so new signups are always `member` and users cannot promote themselves to admin.
 
 ### Admin → member sync
@@ -84,6 +99,18 @@ When Supabase is configured (`EXPO_PUBLIC_USE_MOCK_AUTH=false`), studio content 
 
 Changes appear when the member opens or returns to those screens, and **update live** via Supabase Realtime while the app is open.
 
+### Chat & workout sync
+
+When Supabase is configured, these also persist and sync live:
+
+| Action | Who sees it |
+|--------|-------------|
+| Coach creates **group chat** or **DM** | Athletes get a notification + thread in Messages |
+| Member or coach **sends a message** | Other participants see it in real time |
+| Athlete **logs a workout** (sets, WOD, solo) | History persists across sign-ins; Progress stats update |
+
+Requires migrations `012_chat_sync.sql` and `013_workout_session_sync.sql`.
+
 Until keys are set, the app uses mock auth and mock data (`EXPO_PUBLIC_USE_MOCK_AUTH=true`).
 
 ### Google Sign-In
@@ -91,8 +118,25 @@ Until keys are set, the app uses mock auth and mock data (`EXPO_PUBLIC_USE_MOCK_
 1. **Supabase** → Authentication → Providers → **Google** → Enable (Client ID + Secret from Google Cloud)
 2. **Google Cloud Console** → OAuth client → Authorized redirect URI:
    - `https://YOUR_PROJECT_REF.supabase.co/auth/v1/callback`
-3. Installed app uses `reforge://auth/callback`; Expo web dev uses `http://localhost:8081/auth/callback`
-4. New Google users get role `member` automatically (migration `004_role_guard.sql`)
+3. **Redirect URLs in Supabase** (Authentication → URL configuration) — add **all** that apply:
+   - `reforge://**` · `reforge://auth/callback` · `reforge://reset-password`
+   - `exp://**` (Expo Go local testing)
+   - `http://localhost:8081/auth/callback` · `http://localhost:8081/**` (**required for Expo web on your Mac**)
+   - `https://YOUR_WEB_DOMAIN/auth/callback` (when you host the web app)
+4. **Site URL:** keep `reforge://auth/callback` for native builds. For web-only testing you can temporarily set Site URL to `http://localhost:8081`.
+5. On the login screen (dev builds), note the **Dev redirect** line — that exact URL must be allowed in Supabase or Google consent will succeed but the app never receives the session.
+6. New Google users get role `member` automatically (migration `004_role_guard.sql`)
+
+**If Google opens but never returns:** you are almost always missing the redirect URL for your current environment (localhost web vs Expo Go vs dev build).
+
+### Email OTP (passwordless sign-in)
+
+1. Supabase → **Authentication → Providers → Email** → enable Email provider
+2. **Authentication → Email Templates → Magic Link** — ensure the template includes the OTP token, e.g.:
+   - `Your REFORGE sign-in code: {{ .Token }}`
+   - Or keep the magic link button and use **Confirm signup** template for 6-digit codes
+3. Configure **SMTP** (Resend / SendGrid) so codes are delivered reliably (see Admin invites below)
+4. In the app: **Sign in → Sign in with email code**
 
 ### Go live (App Store / Play Store)
 

@@ -374,6 +374,32 @@ export async function setWorkoutOfTheDayRsvp(
   return getMemberWorkoutOfTheDay(memberId);
 }
 
+export async function listStudioWorkoutsOfTheDay(fromDate: string, toDate: string) {
+  const supabase = getSupabase();
+  const { data, error } = await supabase
+    .from('workouts_of_the_day')
+    .select('*')
+    .eq('active', true)
+    .gte('date', fromDate)
+    .lte('date', toDate)
+    .order('date', { ascending: true });
+  if (error) throw error;
+
+  const rows = (data ?? []).map(mapWod);
+  if (rows.length === 0) return [];
+
+  const wodIds = rows.map((w) => w.id);
+  const { data: rsvps } = await supabase.from('wod_rsvps').select('*').in('wod_id', wodIds);
+
+  return rows.map((wod) => {
+    const wodRsvps = (rsvps ?? []).filter((r) => r.wod_id === wod.id);
+    return {
+      ...wod,
+      joinedCount: wodRsvps.filter((r) => r.status === 'joined').length,
+    };
+  });
+}
+
 export async function listMemberWorkoutsOfTheDay(
   memberId: string,
   fromDate: string,

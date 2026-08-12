@@ -5,6 +5,7 @@ import { format, parseISO, addDays } from 'date-fns';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 
+import { PerformanceBuildProfile } from '@/components/performance/PerformanceBuildProfile';
 import { AppInput } from '@/components/ui/AppInput';
 import { Avatar } from '@/components/ui/Avatar';
 import { MembershipBillingPanel } from '@/components/billing/MembershipBillingPanel';
@@ -16,6 +17,7 @@ import { Screen } from '@/components/ui/Screen';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { useAuth } from '@/hooks/useAuth';
 import { canManageStudio } from '@/lib/permissions';
+import { useSupabaseProgress } from '@/lib/progress/config';
 import { formatTime, relativeTime } from '@/lib/utils/dates';
 import { genderIcon, genderLabel, genderTone } from '@/lib/utils/gender';
 import { formatPrescription, parsePrescription } from '@/lib/workouts/prescription';
@@ -23,8 +25,11 @@ import * as adminService from '@/services/admin';
 import * as coachService from '@/services/coach';
 import { ABSENCE_SCOPE_LABELS } from '@/services/absences';
 import * as memberService from '@/services/member';
+import * as progressSupabase from '@/services/progress.supabase';
+import { createWorkoutFeedback } from '@/services/coaching.supabase';
+import * as workoutsSupabase from '@/services/workouts.supabase';
 import type { MembershipPayment } from '@/services/mock/data';
-import type { MemberAbsence, Profile, Program, UserRole } from '@/types';
+import type { MemberAbsence, Profile, Program, UserRole, WorkoutSession } from '@/types';
 import { colors, fonts, radius, spacing, typography } from '@/constants/theme';
 
 type Tab = 'overview' | 'program' | 'progress' | 'sessions' | 'notes' | 'billing';
@@ -78,12 +83,27 @@ export default function ClientDetailScreen() {
   const [assignedCoachId, setAssignedCoachId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [note, setNote] = useState('');
+  const [feedback, setFeedback] = useState('');
+  const [recentSessions, setRecentSessions] = useState<WorkoutSession[]>([]);
+  const [feedbackSessionId, setFeedbackSessionId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [billing, setBilling] = useState<adminService.MembershipRow | null>(null);
   const [payments, setPayments] = useState<MembershipPayment[]>([]);
   const [billingLoading, setBillingLoading] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
   const [memberAbsences, setMemberAbsences] = useState<MemberAbsence[]>([]);
+  const [athletePerformance, setAthletePerformance] = useState<{
+    weeklyWorkouts: number;
+    monthlyWorkouts: number;
+    weightKg: number | null;
+    bodyFatPct: number | null;
+    performance: {
+      onboardingComplete: boolean;
+      profileCompletionPct: number;
+      weeklyGoal: number;
+      streak: number;
+    };
+  } | null>(null);
 
   const load = useCallback(async () => {
     if (!id) return;
@@ -91,6 +111,13 @@ export default function ClientDetailScreen() {
       setError(null);
       const detail = await coachService.getClientDetail(id);
       setData(detail);
+      try {
+        const sessions = await workoutsSupabase.listRecentSessions(id, 8);
+        setRecentSessions(sessions.filter((s) => s.status === 'completed'));
+        setFeedbackSessionId(sessions.find((s) => s.status === 'completed')?.id ?? null);
+      } catch {
+        setRecentSessions([]);
+      }
       try {
         const from = format(new Date(), 'yyyy-MM-dd');
         const to = format(addDays(new Date(), 60), 'yyyy-MM-dd');
@@ -120,6 +147,42 @@ export default function ClientDetailScreen() {
   useEffect(() => {
     load();
   }, [load]);
+
+  useEffect(() => {
+    if (!id) return;
+    if (useSupabaseProgress()) {
+      progressSupabase
+        .getPerformanceStats(id)
+        .then((perf) => {
+          setAthletePerformance({
+            weeklyWorkouts: perf.weeklyWorkouts,
+            monthlyWorkouts: perf.monthlyWorkouts,
+            weightKg: perf.weightKg,
+            bodyFatPct: perf.bodyFatPct,
+            performance: {
+              onboardingComplete: perf.onboardingComplete,
+              profileCompletionPct: perf.profileCompletionPct,
+              weeklyGoal: perf.weeklyGoal,
+              streak: perf.streak,
+            },
+          });
+        })
+        .catch(() => setAthletePerformance(null));
+      return;
+    }
+    setAthletePerformance({
+      weeklyWorkouts: data?.workoutsThisWeek ?? 0,
+      monthlyWorkouts: data?.sessions.filter((s) => s.status === 'completed').length ?? 0,
+      weightKg: data?.latestWeight?.weight_kg ?? null,
+      bodyFatPct: data?.latestWeight?.body_fat_pct ?? null,
+      performance: {
+        onboardingComplete: Boolean(data?.latestWeight),
+        profileCompletionPct: data?.latestWeight ? 80 : 35,
+        weeklyGoal: 4,
+        streak: 3,
+      },
+    });
+  }, [id, data]);
 
   const loadBilling = useCallback(async () => {
     if (!id || !isAdmin) return;
@@ -624,6 +687,15 @@ export default function ClientDetailScreen() {
 
       {tab === 'progress' ? (
         <View style={styles.progressPanel}>
+          {athletePerformance ? (
+            <PerformanceBuildProfile
+              stats={athletePerformance}
+              performance={athletePerformance.performance}
+              memberName={data.member.full_name}
+              coachMode
+              compact
+            />
+          ) : null}
           <View style={styles.kpiGrid}>
             <KpiTile
               featured
@@ -676,6 +748,66 @@ export default function ClientDetailScreen() {
 
       {tab === 'notes' ? (
         <View style={styles.notesSection}>
+          <View style={styles.noteComposer}>
+            <AppInput
+              label="Workout feedback (athlete visible)"
+              value={feedback}
+              onChangeText={setFeedback}
+              placeholder="Great session — keep pressing the top set…"
+              multiline
+              style={styles.noteInput}
+            />
+            {recentSessions.length > 0 ? (
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: spacing.sm }}>
+                {recentSessions.map((s) => (
+                  <Pressable
+                    key={s.id}
+                    onPress={() => setFeedbackSessionId(s.id)}
+                    style={[
+                      styles.statusPill,
+                      {
+                        marginRight: spacing.sm,
+                        borderColor:
+                          feedbackSessionId === s.id ? colors.accent : colors.border,
+                        backgroundColor:
+                          feedbackSessionId === s.id
+                            ? 'rgba(200,255,0,0.12)'
+                            : colors.surfaceElevated,
+                      },
+                    ]}>
+                    <Text
+                      style={[
+                        styles.statusText,
+                        { color: feedbackSessionId === s.id ? colors.accent : colors.textMuted },
+                      ]}>
+                      {s.finished_at
+                        ? format(parseISO(s.finished_at), 'd MMM')
+                        : 'Session'}
+                    </Text>
+                  </Pressable>
+                ))}
+              </ScrollView>
+            ) : null}
+            <PrimaryButton
+              title="Send workout feedback"
+              onPress={async () => {
+                if (!profile || !feedbackSessionId || !feedback.trim() || !id) return;
+                try {
+                  await createWorkoutFeedback({
+                    coachId: profile.id,
+                    memberId: id,
+                    sessionId: feedbackSessionId,
+                    content: feedback.trim(),
+                  });
+                  setFeedback('');
+                  setToast('Feedback sent');
+                } catch (e) {
+                  setToast(e instanceof Error ? e.message : 'Could not send feedback');
+                }
+              }}
+              disabled={!feedback.trim() || !feedbackSessionId}
+            />
+          </View>
           <View style={styles.noteComposer}>
             <AppInput
               label="Private coach note"

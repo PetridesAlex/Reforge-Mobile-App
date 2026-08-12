@@ -16,6 +16,8 @@ type AuthContextValue = {
   role: UserRole | null;
   signIn: (email: string, password: string) => Promise<Profile>;
   signInWithGoogle: () => Promise<Profile>;
+  sendEmailOtp: (email: string) => Promise<void>;
+  verifyEmailOtp: (email: string, token: string) => Promise<Profile>;
   signUp: (input: { email: string; password: string; fullName: string; phone?: string }) => Promise<Profile>;
   signOut: () => Promise<void>;
   refreshProfile: () => Promise<void>;
@@ -129,6 +131,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return result.profile;
   }, []);
 
+  const sendEmailOtp = useCallback(async (email: string) => {
+    await authService.sendEmailOtp(email);
+  }, []);
+
+  const verifyEmailOtp = useCallback(async (email: string, token: string) => {
+    const result = await authService.verifyEmailOtp(email, token);
+    setSession(result.session);
+    setProfile(result.profile);
+    return result.profile;
+  }, []);
+
   const signUp = useCallback(
     async (input: { email: string; password: string; fullName: string; phone?: string }) => {
       const result = await authService.signUp(input);
@@ -188,6 +201,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       role: profile?.role ?? null,
       signIn,
       signInWithGoogle,
+      sendEmailOtp,
+      verifyEmailOtp,
       signUp,
       signOut,
       refreshProfile,
@@ -202,6 +217,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       isLoading,
       signIn,
       signInWithGoogle,
+      sendEmailOtp,
+      verifyEmailOtp,
       signUp,
       signOut,
       refreshProfile,

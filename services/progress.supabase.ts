@@ -65,9 +65,74 @@ function computeStreak(sessionDates: string[]): number {
   let streak = 0;
   let cursor = startOfDay(new Date());
 
+  // Allow missing today if athlete hasn't trained yet — start from yesterday.
+  if (!days.has(format(cursor, 'yyyy-MM-dd'))) {
+    cursor = subDays(cursor, 1);
+  }
+
   while (days.has(format(cursor, 'yyyy-MM-dd'))) {
     streak += 1;
     cursor = subDays(cursor, 1);
+  }
+
+  return streak;
+}
+
+/** Program-aware streak: consecutive scheduled program days completed (skips rest days). */
+export async function computeProgramAwareStreak(memberId: string): Promise<number> {
+  const supabase = getSupabase();
+  const { data: assignment } = await supabase
+    .from('client_programs')
+    .select('program_id')
+    .eq('client_id', memberId)
+    .eq('is_active', true)
+    .maybeSingle();
+
+  if (!assignment?.program_id) {
+    const { data: sessions } = await supabase
+      .from('workout_sessions')
+      .select('finished_at, started_at')
+      .eq('member_id', memberId)
+      .eq('status', 'completed');
+    const dates =
+      sessions?.map((s) => (s.finished_at as string) ?? (s.started_at as string)).filter(Boolean) ??
+      [];
+    return computeStreak(dates);
+  }
+
+  const { data: days } = await supabase
+    .from('program_days')
+    .select('id, day_of_week, order_index')
+    .eq('program_id', assignment.program_id as string)
+    .order('order_index', { ascending: true });
+
+  const scheduled = (days ?? []).filter((d) => d.day_of_week != null);
+  if (scheduled.length === 0) return 0;
+
+  const { data: completed } = await supabase
+    .from('workout_sessions')
+    .select('program_day_id, finished_at')
+    .eq('member_id', memberId)
+    .eq('status', 'completed')
+    .not('program_day_id', 'is', null);
+
+  const completedDayIds = new Set(
+    (completed ?? []).map((s) => s.program_day_id as string).filter(Boolean),
+  );
+
+  let streak = 0;
+  const todayDow = new Date().getDay();
+  const ordered = [...scheduled].sort(
+    (a, b) => Number(a.day_of_week) - Number(b.day_of_week),
+  );
+
+  // Walk backwards from the most recent scheduled day that is today or earlier.
+  const pastOrToday = ordered.filter((d) => Number(d.day_of_week) <= todayDow).reverse();
+  const cycle = [...pastOrToday, ...[...ordered].reverse().filter((d) => Number(d.day_of_week) > todayDow)];
+
+  for (const day of cycle) {
+    if (completedDayIds.has(day.id as string)) streak += 1;
+    else break;
   }
 
   return streak;
@@ -243,13 +308,19 @@ export async function getPerformanceStats(memberId: string): Promise<MemberPerfo
   }).length;
 
   const weeklyGoal = profile?.weekly_session_goal ?? 4;
+  let streak = computeStreak(sessionDates);
+  try {
+    streak = await computeProgramAwareStreak(memberId);
+  } catch {
+    // keep calendar streak
+  }
 
   return {
     weightKg: latest?.weight_kg ?? null,
     bodyFatPct: latest?.body_fat_pct ?? null,
     weeklyWorkouts,
     monthlyWorkouts,
-    streak: computeStreak(sessionDates),
+    streak,
     weeklyGoal,
     onboardingComplete: profile?.onboarding_complete ?? false,
     profileCompletionPct: profileCompletion(profile, latest),
@@ -301,6 +372,28 @@ export async function getProgressStats(memberId: string) {
           { label: 'Now', value: latest?.weight_kg ?? 0 },
         ];
 
+  const { data: setRows } = await supabase
+    .from('workout_sets')
+    .select('weight_kg, reps, completed, workout_sessions!inner(member_id, status, finished_at)')
+    .eq('completed', true)
+    .eq('workout_sessions.member_id', memberId)
+    .eq('workout_sessions.status', 'completed');
+
+  const volumeByWeek = frequency.map((f) => ({ label: f.label, value: 0 }));
+  for (const row of setRows ?? []) {
+    const session = row.workout_sessions as { finished_at?: string } | null;
+    const finished = session?.finished_at;
+    if (!finished) continue;
+    const dt = parseISO(finished);
+    for (let i = 0; i < volumeByWeek.length; i += 1) {
+      const weekStart = addDays(startOfDay(new Date()), -((5 - i) * 7));
+      const weekEnd = addDays(weekStart, 7);
+      if (dt >= weekStart && dt < weekEnd) {
+        volumeByWeek[i].value += Number(row.weight_kg ?? 0) * Number(row.reps ?? 0);
+      }
+    }
+  }
+
   return {
     latest,
     weeklyWorkouts: performance.weeklyWorkouts,
@@ -312,5 +405,6 @@ export async function getProgressStats(memberId: string) {
     weightSeries,
     strengthSeries,
     frequencySeries: frequency,
+    volumeSeries: volumeByWeek.map((v) => ({ ...v, value: Math.round(v.value) })),
   };
 }

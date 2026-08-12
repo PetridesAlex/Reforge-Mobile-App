@@ -15,6 +15,7 @@ import { PrimaryButton } from '@/components/ui/PrimaryButton';
 import { Screen } from '@/components/ui/Screen';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { useAuth } from '@/hooks/useAuth';
+import { useStudioSync } from '@/hooks/useStudioSync';
 import { canManageAllChats } from '@/lib/permissions';
 import * as community from '@/services/community';
 import type { AppNotification, ChatThreadPreview, Profile } from '@/types';
@@ -95,6 +96,8 @@ export default function MessagesScreen() {
       load();
     }, [load]),
   );
+
+  useStudioSync(load);
 
   const athleteThreads = useMemo(
     () => threads.filter((t) => t.kind === 'coach_dm'),

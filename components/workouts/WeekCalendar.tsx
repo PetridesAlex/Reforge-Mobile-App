@@ -12,12 +12,22 @@ export type CalendarWorkoutDay = {
   status: 'completed' | 'upcoming' | 'today';
 };
 
+export type CalendarDayMarkers = {
+  wod?: boolean;
+  class?: boolean;
+  program?: boolean;
+  private?: boolean;
+  absence?: boolean;
+};
+
 type WeekCalendarProps = {
   weekStart: Date;
   selectedDate: Date;
   workoutDays: CalendarWorkoutDay[];
   /** Extra yyyy-MM-dd keys with studio sessions (WOD, classes) to mark on the strip */
   markedDates?: string[];
+  /** Per-day multi-event markers (WOD, class, program, etc.) */
+  dayMarkers?: Record<string, CalendarDayMarkers>;
   onSelectDate: (date: Date) => void;
   onWeekChange: (nextWeekStart: Date) => void;
   compact?: boolean;
@@ -33,6 +43,7 @@ export function WeekCalendar({
   selectedDate,
   workoutDays,
   markedDates = [],
+  dayMarkers = {},
   onSelectDate,
   onWeekChange,
   compact = false,
@@ -68,7 +79,21 @@ export function WeekCalendar({
           const selected = isSameDay(date, selectedDate);
           const isToday = isSameDay(date, new Date());
           const dateKey = format(date, 'yyyy-MM-dd');
-          const hasWorkout = Boolean(workout) || markedDates.includes(dateKey);
+          const markers = dayMarkers[dateKey];
+          const hasWorkout =
+            Boolean(workout) ||
+            markedDates.includes(dateKey) ||
+            Boolean(markers && Object.values(markers).some(Boolean));
+          const markerList = markers
+            ? ([
+                markers.wod && 'wod',
+                markers.class && 'class',
+                markers.program && 'program',
+                markers.private && 'private',
+              ].filter(Boolean) as Array<'wod' | 'class' | 'program' | 'private'>)
+            : hasWorkout
+              ? (['program'] as const)
+              : [];
 
           return (
             <Pressable
@@ -88,14 +113,25 @@ export function WeekCalendar({
                   {format(date, 'd')}
                 </Text>
               </View>
-              <View
-                style={[
-                  styles.dot,
-                  hasWorkout && styles.dotOn,
-                  selected && hasWorkout && styles.dotSelected,
-                  isToday && hasWorkout && !selected && styles.dotToday,
-                ]}
-              />
+              {markerList.length > 0 ? (
+                <View style={styles.dotsRow}>
+                  {markerList.slice(0, 3).map((kind) => (
+                    <View
+                      key={kind}
+                      style={[
+                        styles.markerDot,
+                        kind === 'wod' && styles.markerWod,
+                        kind === 'class' && styles.markerClass,
+                        kind === 'program' && styles.markerProgram,
+                        kind === 'private' && styles.markerPrivate,
+                        selected && styles.markerSelected,
+                      ]}
+                    />
+                  ))}
+                </View>
+              ) : (
+                <View style={[styles.dot, hasWorkout && styles.dotOn, selected && hasWorkout && styles.dotSelected]} />
+              )}
             </Pressable>
           );
         })}
@@ -190,5 +226,32 @@ const styles = StyleSheet.create({
   },
   dotToday: {
     backgroundColor: '#FF4D4D',
+  },
+  dotsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 3,
+    minHeight: 5,
+  },
+  markerDot: {
+    width: 5,
+    height: 5,
+    borderRadius: 3,
+  },
+  markerWod: {
+    backgroundColor: colors.accent,
+  },
+  markerClass: {
+    backgroundColor: colors.success,
+  },
+  markerProgram: {
+    backgroundColor: colors.textMuted,
+  },
+  markerPrivate: {
+    backgroundColor: '#60A5FA',
+  },
+  markerSelected: {
+    transform: [{ scale: 1.15 }],
   },
 });

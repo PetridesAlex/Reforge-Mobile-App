@@ -1,3 +1,4 @@
+import * as Linking from 'expo-linking';
 import { router } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { ActivityIndicator, Platform, StyleSheet, Text, View } from 'react-native';
@@ -8,7 +9,7 @@ import { isAuthCallbackUrl } from '@/lib/auth/sessionFromUrl';
 import * as authService from '@/services/auth';
 import { colors, spacing, typography } from '@/constants/theme';
 
-/** Opened after email confirm or Google OAuth (reforge://auth/callback or /auth/callback). */
+/** Opened after email confirm, Google OAuth, magic link, or OTP (reforge://auth/callback or /auth/callback). */
 export default function AuthCallbackScreen() {
   const { isAuthenticated, role, isLoading } = useAuth();
   const [timedOut, setTimedOut] = useState(false);
@@ -37,21 +38,35 @@ export default function AuthCallbackScreen() {
       }
     };
 
-    if (Platform.OS === 'web' && typeof window !== 'undefined') {
-      void completeFromUrl(window.location.href);
-      return () => {
-        mounted = false;
-      };
-    }
+    const run = async () => {
+      if (Platform.OS === 'web' && typeof window !== 'undefined') {
+        await completeFromUrl(window.location.href);
+        return;
+      }
 
-    setProcessing(false);
+      const initial = await Linking.getInitialURL();
+      if (initial) {
+        await completeFromUrl(initial);
+        return;
+      }
+
+      if (mounted) setProcessing(false);
+    };
+
+    void run();
+
+    const subscription = Linking.addEventListener('url', ({ url }) => {
+      void completeFromUrl(url);
+    });
+
     return () => {
       mounted = false;
+      subscription.remove();
     };
   }, []);
 
   useEffect(() => {
-    const timer = setTimeout(() => setTimedOut(true), 8000);
+    const timer = setTimeout(() => setTimedOut(true), 12000);
     return () => clearTimeout(timer);
   }, []);
 
@@ -61,13 +76,24 @@ export default function AuthCallbackScreen() {
     }
   }, [processing, isLoading, isAuthenticated, role]);
 
+  useEffect(() => {
+    if (!processing && !isLoading && !isAuthenticated && !error && timedOut) {
+      router.replace('/(auth)/login');
+    }
+  }, [processing, isLoading, isAuthenticated, error, timedOut]);
+
   return (
     <Screen contentContainerStyle={styles.content}>
       <ActivityIndicator size="large" color={colors.accent} />
       <Text style={styles.title}>
         {error ? 'Sign-in failed' : processing ? 'Completing sign-in…' : 'Confirming your account…'}
       </Text>
-      {error ? <Text style={styles.hint}>{error}</Text> : null}
+      {error ? (
+        <>
+          <Text style={styles.hint}>{error}</Text>
+          <Text style={styles.hint}>Return to login and try again.</Text>
+        </>
+      ) : null}
       {timedOut && !isAuthenticated && !error ? (
         <Text style={styles.hint}>
           If this takes too long, open the link on the same device where REFORGE is installed, then sign in.

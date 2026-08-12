@@ -7,6 +7,8 @@ import { addDays, format, isAfter, isBefore, parseISO, startOfDay } from 'date-f
 import { exerciseImageFor } from '@/constants/media';
 import { useSupabaseContent } from '@/lib/content/config';
 import { useSupabaseProgress } from '@/lib/progress/config';
+import { useSupabasePrograms } from '@/lib/programs/config';
+import { useSupabaseWorkouts } from '@/lib/workouts/config';
 import { withStudioFallback } from '@/lib/content/safe';
 import {
   dayMatchesCategory,
@@ -19,6 +21,8 @@ import { memberMatchesNewsAudience } from '@/lib/news/audience';
 import { formatDateLabel, formatTime } from '@/lib/utils/dates';
 import * as contentSupabase from '@/services/content.supabase';
 import * as progressSupabase from '@/services/progress.supabase';
+import * as programsSupabase from '@/services/programs.supabase';
+import * as workoutsSupabase from '@/services/workouts.supabase';
 import {
   delay,
   IDS,
@@ -270,11 +274,79 @@ async function applyPerformanceStats(
   memberId: string,
   dashboard: MemberDashboard,
 ): Promise<MemberDashboard> {
-  if (!useSupabaseProgress()) return dashboard;
+  let next = { ...dashboard };
+
+  if (useSupabasePrograms()) {
+    try {
+      const assigned = await programsSupabase.getAssignedProgram(memberId);
+      if (assigned) {
+        const todayDow = new Date().getDay();
+        const todayDay = assigned.days.find((d) => d.day_of_week === todayDow) ?? null;
+        const nextDay =
+          assigned.days.find((d) => d.day_of_week != null && d.day_of_week > todayDow) ??
+          assigned.days[0] ??
+          null;
+        next = {
+          ...next,
+          programName: assigned.program.name,
+          currentWeek: assigned.clientProgram.current_week,
+          durationWeeks: assigned.program.duration_weeks,
+          todayWorkout: todayDay
+            ? {
+                dayId: todayDay.id,
+                title: todayDay.name,
+                duration: `${Math.max(25, todayDay.exercises.length * 7)} min`,
+                exercises: todayDay.exercises.length,
+                calories: Math.max(200, todayDay.exercises.length * 45),
+              }
+            : next.todayWorkout,
+          nextWorkout: nextDay
+            ? {
+                dayId: nextDay.id,
+                title: nextDay.name,
+                dayLabel:
+                  nextDay.day_of_week != null ? DAY_NAMES[nextDay.day_of_week] : 'Next session',
+              }
+            : next.nextWorkout,
+        };
+      }
+    } catch {
+      // keep mock dashboard fields
+    }
+  }
+
+  if (useSupabaseWorkouts()) {
+    try {
+      const active = await workoutsSupabase.findActiveSession(memberId);
+      next = { ...next, activeSessionId: active?.id ?? null };
+    } catch {
+      next = { ...next, activeSessionId: null };
+    }
+  }
+
+  try {
+    const { getLatestPr } = await import('@/services/pr.supabase');
+    if (useSupabaseWorkouts()) {
+      const pr = await getLatestPr(memberId);
+      if (pr) {
+        next = {
+          ...next,
+          latestPr: {
+            exerciseName: pr.exercise_name ?? 'Exercise',
+            label: `${pr.weight_kg ?? pr.value} KG`,
+          },
+        };
+      }
+    }
+  } catch {
+    // optional until migration applied
+  }
+
+  if (!useSupabaseProgress()) return next;
   try {
     const perf = await progressSupabase.getPerformanceStats(memberId);
     return {
-      ...dashboard,
+      ...next,
       stats: {
         weightKg: perf.weightKg,
         bodyFatPct: perf.bodyFatPct,
@@ -294,7 +366,7 @@ async function applyPerformanceStats(
       },
     };
   } catch {
-    return dashboard;
+    return next;
   }
 }
 
@@ -438,6 +510,16 @@ export async function getWodWorkoutDetail(wodId: string, memberId: string) {
 }
 
 export async function startWodWorkout(memberId: string, wodId: string): Promise<WorkoutSession> {
+  if (useSupabaseWorkouts()) {
+    const detail = await getWodWorkoutDetail(wodId, memberId);
+    if (!detail) throw new Error('Join today’s workout on Home before starting');
+    return workoutsSupabase.startSession({
+      memberId,
+      wodId,
+      notes: `wod:${wodId}`,
+      exercises: detail.exercises,
+    });
+  }
   await delay(200);
   const detail = await getWodWorkoutDetail(wodId, memberId);
   if (!detail) throw new Error('Join today’s workout on Home before starting');
@@ -522,6 +604,13 @@ async function setWorkoutOfTheDayRsvpMock(
 }
 
 export async function getAssignedProgram(memberId: string): Promise<AssignedProgramView | null> {
+  if (useSupabasePrograms()) {
+    try {
+      return await programsSupabase.getAssignedProgram(memberId);
+    } catch {
+      // fall through to mock
+    }
+  }
   await delay();
   const assignment = mockClientPrograms.find((cp) => cp.client_id === memberId && cp.is_active);
   if (!assignment) return null;
@@ -550,6 +639,13 @@ export async function getAssignedProgram(memberId: string): Promise<AssignedProg
 }
 
 export async function getProgramDayDetail(dayId: string) {
+  if (useSupabasePrograms()) {
+    try {
+      return await programsSupabase.getProgramDayDetail(dayId);
+    } catch {
+      // fall through
+    }
+  }
   await delay();
   const day = mockProgramDays.find((d) => d.id === dayId);
   if (!day) return null;
@@ -561,7 +657,34 @@ export async function getProgramDayDetail(dayId: string) {
   };
 }
 
+export async function getPreviousSetsForExercise(memberId: string, exerciseId: string) {
+  if (useSupabasePrograms()) {
+    try {
+      return await programsSupabase.getPreviousSetsForExercise(memberId, exerciseId);
+    } catch {
+      // fall through
+    }
+  }
+  return mockSets.filter(
+    (s) =>
+      s.exercise_id === exerciseId &&
+      s.completed &&
+      mockSessions.some(
+        (ws) => ws.id === s.session_id && ws.member_id === memberId && ws.status === 'completed',
+      ),
+  );
+}
+
 export async function startWorkout(memberId: string, dayId: string): Promise<WorkoutSession> {
+  if (useSupabaseWorkouts()) {
+    const detail = await getProgramDayDetail(dayId);
+    if (!detail) throw new Error('Workout day not found');
+    return workoutsSupabase.startSession({
+      memberId,
+      programDayId: dayId,
+      exercises: detail.exercises,
+    });
+  }
   await delay(200);
   const session: WorkoutSession = {
     id: newId('ws'),
@@ -595,6 +718,7 @@ export async function startWorkout(memberId: string, dayId: string): Promise<Wor
 }
 
 export async function getSessionDetail(sessionId: string) {
+  if (useSupabaseWorkouts()) return workoutsSupabase.getSessionDetail(sessionId);
   await delay();
   const session = mockSessions.find((s) => s.id === sessionId);
   if (!session) return null;
@@ -644,21 +768,73 @@ export async function getSessionDetail(sessionId: string) {
   return { session, day, exercises, sets, previousSets };
 }
 
+export async function getWorkoutHistory(memberId: string, limit = 40) {
+  if (useSupabaseWorkouts()) {
+    return workoutsSupabase.listWorkoutHistory(memberId, limit);
+  }
+  await delay();
+  return mockSessions
+    .filter((s) => s.member_id === memberId && s.status === 'completed')
+    .sort((a, b) => (b.finished_at ?? b.started_at).localeCompare(a.finished_at ?? a.started_at))
+    .slice(0, limit)
+    .map((session) => {
+      const sets = mockSets.filter((s) => s.session_id === session.id);
+      const completed = sets.filter((s) => s.completed);
+      const day = session.program_day_id
+        ? mockProgramDays.find((d) => d.id === session.program_day_id)
+        : null;
+      const isSolo = session.notes === 'solo';
+      const isWod = session.notes?.startsWith('wod:');
+      return {
+        sessionId: session.id,
+        title: day?.name ?? (isSolo ? 'Solo session' : isWod ? 'WOD' : 'Workout'),
+        kind: (isSolo ? 'solo' : isWod ? 'wod' : 'program') as 'program' | 'wod' | 'solo',
+        finishedAt: session.finished_at,
+        startedAt: session.started_at,
+        durationSeconds: session.duration_seconds ?? 0,
+        volumeKg: Math.round(
+          completed.reduce((sum, s) => sum + (s.weight_kg ?? 0) * (s.reps ?? 0), 0),
+        ),
+        completedSets: completed.length,
+        totalSets: sets.length,
+        exerciseCount: new Set(completed.map((s) => s.exercise_id)).size,
+        calories: session.estimated_calories,
+      };
+    });
+}
+
 export async function updateSet(
   setId: string,
-  patch: Partial<Pick<WorkoutSet, 'weight_kg' | 'reps' | 'completed' | 'notes'>>,
+  patch: Partial<Pick<WorkoutSet, 'weight_kg' | 'reps' | 'completed' | 'notes' | 'rpe' | 'rir'>>,
 ): Promise<WorkoutSet> {
+  if (useSupabaseWorkouts()) return workoutsSupabase.updateSet(setId, patch);
   await delay(80);
   const idx = mockSets.findIndex((s) => s.id === setId);
   if (idx < 0) throw new Error('Set not found');
-  mockSets[idx] = { ...mockSets[idx], ...patch };
+  mockSets[idx] = {
+    ...mockSets[idx],
+    ...patch,
+    completed_at: patch.completed ? new Date().toISOString() : mockSets[idx].completed_at,
+  };
   return mockSets[idx];
+}
+
+export async function updateSessionState(
+  sessionId: string,
+  state: import('@/types').WorkoutSessionState,
+): Promise<void> {
+  if (useSupabaseWorkouts()) {
+    await workoutsSupabase.updateSessionState(sessionId, state);
+  }
 }
 
 export async function finishSoloWorkout(
   memberId: string,
   durationSeconds: number,
 ): Promise<WorkoutSummary> {
+  if (useSupabaseWorkouts()) {
+    return workoutsSupabase.finishSoloSession({ memberId, durationSeconds });
+  }
   await delay(200);
   const duration = Math.max(1, durationSeconds);
   const finishedAt = new Date();
@@ -703,6 +879,9 @@ export async function finishWorkout(
   sessionId: string,
   options?: { durationSeconds?: number },
 ): Promise<WorkoutSummary> {
+  if (useSupabaseWorkouts()) {
+    return workoutsSupabase.finishSession(sessionId, options);
+  }
   await delay(300);
   const session = mockSessions.find((s) => s.id === sessionId);
   if (!session) throw new Error('Session not found');
@@ -759,6 +938,28 @@ export async function finishWorkout(
 }
 
 export async function getBookings(memberId: string): Promise<{ upcoming: Booking[]; past: Booking[] }> {
+  if (useSupabaseWorkouts()) {
+    try {
+      const bookingsSupabase = await import('@/services/bookings.supabase');
+      const all = await bookingsSupabase.listMemberBookings(memberId);
+      const now = new Date();
+      return {
+        upcoming: all.filter(
+          (b) =>
+            (b.status === 'pending' || b.status === 'confirmed') &&
+            isAfter(parseISO(b.starts_at), now),
+        ),
+        past: all.filter(
+          (b) =>
+            b.status === 'completed' ||
+            b.status === 'cancelled' ||
+            isBefore(parseISO(b.starts_at), now),
+        ),
+      };
+    } catch {
+      // fall through
+    }
+  }
   await delay();
   hydrateMockBookings();
   const coach = mockProfiles.find((p) => p.id === IDS.coach);
@@ -1150,6 +1351,7 @@ export async function getProgressStats(memberId: string) {
     weightSeries,
     strengthSeries,
     frequencySeries: frequency,
+    volumeSeries: frequency.map((f) => ({ label: f.label, value: f.value * 2500 })),
   };
 }
 
@@ -1162,8 +1364,61 @@ export async function markNotificationsRead(memberId: string): Promise<void> {
 }
 
 export async function getMemberProfileExtras(memberId: string) {
+  if (useSupabasePrograms() || useSupabaseWorkouts() || useSupabaseContent()) {
+    try {
+      const supabase = (await import('@/lib/supabase/client')).getSupabase();
+      const [{ data: link }, { data: assignment }] = await Promise.all([
+        supabase
+          .from('coach_clients')
+          .select('coach_id, profiles:coach_id(id, full_name, email, avatar_url, role, phone, created_at)')
+          .eq('member_id', memberId)
+          .order('assigned_at', { ascending: false })
+          .limit(1)
+          .maybeSingle(),
+        supabase
+          .from('client_programs')
+          .select('program_id, programs(name, coach_id)')
+          .eq('client_id', memberId)
+          .eq('is_active', true)
+          .order('start_date', { ascending: false })
+          .limit(1)
+          .maybeSingle(),
+      ]);
+
+      let coach: Profile | null = null;
+      const linked = link?.profiles as Profile | Profile[] | null;
+      if (linked) coach = Array.isArray(linked) ? linked[0] ?? null : linked;
+
+      if (!coach) {
+        const { data: coaches } = await supabase
+          .from('profiles')
+          .select('*')
+          .in('role', ['coach', 'admin'])
+          .order('created_at', { ascending: true })
+          .limit(1);
+        coach = (coaches?.[0] as Profile) ?? null;
+      }
+
+      const program = assignment?.programs as
+        | { name?: string; coach_id?: string }
+        | { name?: string; coach_id?: string }[]
+        | null;
+      const programRow = Array.isArray(program) ? program[0] : program;
+
+      return {
+        coach,
+        programName: programRow?.name ?? null,
+        membership: 'REFORGE Training Plan',
+        membershipStatus: null as string | null,
+        membershipEnds: null as string | null,
+      };
+    } catch {
+      // fall through to mock
+    }
+  }
+
   await delay();
-  const coach = mockProfiles.find((p) => p.id === IDS.coach);
+  const coach = mockProfiles.find((p) => p.id === IDS.coach) ?? null;
   const assignment = mockClientPrograms.find((cp) => cp.client_id === memberId && cp.is_active);
   const program = assignment ? mockPrograms.find((p) => p.id === assignment.program_id) : null;
   const membership = mockMemberships.find((m) => m.member_id === memberId);

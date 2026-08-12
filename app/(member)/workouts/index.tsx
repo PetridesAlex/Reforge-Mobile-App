@@ -12,7 +12,8 @@ import { addDays, format, isSameDay, parseISO } from 'date-fns';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 
-import { ErrorState } from '@/components/ui/ErrorState';
+import { GymCalendarToolbar } from '@/components/calendar/GymCalendarToolbar';
+import { AppBottomSheet } from '@/components/ui/AppBottomSheet';
 import { MediaImage } from '@/components/ui/MediaImage';
 import { MoreMenu } from '@/components/ui/MoreMenu';
 import { PrimaryButton } from '@/components/ui/PrimaryButton';
@@ -20,7 +21,9 @@ import { Screen } from '@/components/ui/Screen';
 import { SectionHeader } from '@/components/ui/SectionHeader';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { WorkoutOfTheDayCard } from '@/components/ui/WorkoutOfTheDayCard';
-import { getWeekStart, WeekCalendar } from '@/components/workouts/WeekCalendar';
+import { WorkoutStopwatch } from '@/components/workouts/WorkoutStopwatch';
+import { getWeekStart, WeekCalendar, type CalendarDayMarkers } from '@/components/workouts/WeekCalendar';
+import { mergeDayMarker } from '@/lib/schedule/trainingEvents';
 import { JoinedWodCard } from '@/components/workouts/JoinedWodCard';
 import { useAuth } from '@/hooks/useAuth';
 import { useStudioSync } from '@/hooks/useStudioSync';
@@ -28,7 +31,7 @@ import { workoutImageForDay } from '@/constants/media';
 import { formatTime } from '@/lib/utils/dates';
 import * as memberService from '@/services/member';
 import type { WorkoutOfTheDayView } from '@/services/member';
-import type { AssignedProgramView, GymClass, MemberAbsence } from '@/types';
+import type { AssignedProgramView, Booking, GymClass, MemberAbsence } from '@/types';
 import { colors, fonts, radius, spacing, typography } from '@/constants/theme';
 
 import { WORKOUT_CATEGORY_LIST } from '@/lib/workouts/categories';
@@ -44,6 +47,9 @@ export default function WorkoutsScreen() {
   const [wodWeek, setWodWeek] = useState<WorkoutOfTheDayView[]>([]);
   const [classes, setClasses] = useState<GymClass[]>([]);
   const [absences, setAbsences] = useState<MemberAbsence[]>([]);
+  const [bookings, setBookings] = useState<Booking[]>([]);
+  const [soloSheetOpen, setSoloSheetOpen] = useState(false);
+  const [soloFinishing, setSoloFinishing] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
@@ -58,16 +64,18 @@ export default function WorkoutsScreen() {
       const weekEnd = addDays(weekStart, 6);
       const from = format(weekStart, 'yyyy-MM-dd');
       const to = format(weekEnd, 'yyyy-MM-dd');
-      const [program, wods, classList, absenceList] = await Promise.all([
+      const [program, wods, classList, absenceList, bookingRows] = await Promise.all([
         memberService.getAssignedProgram(profile.id),
         memberService.listWorkoutsOfTheDay(profile.id, from, to),
         memberService.getClasses(profile.id),
         memberService.getMemberAbsences(profile.id, from, to),
+        memberService.getBookings(profile.id),
       ]);
       setData(program);
       setWodWeek(wods);
       setClasses(classList);
       setAbsences(absenceList);
+      setBookings(bookingRows.upcoming);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to load');
     } finally {
@@ -95,21 +103,45 @@ export default function WorkoutsScreen() {
     [classes, selectedKey],
   );
   const selectedProgramDay = data ? programDayForDate(data, selectedDate) : null;
+  const selectedBookings = useMemo(
+    () =>
+      bookings.filter(
+        (b) => format(parseISO(b.starts_at), 'yyyy-MM-dd') === selectedKey,
+      ),
+    [bookings, selectedKey],
+  );
 
-  const markedDates = useMemo(() => {
-    const keys = new Set<string>();
-    for (const wod of wodWeek) keys.add(wod.date);
+  const dayMarkers = useMemo(() => {
+    const map: Record<string, CalendarDayMarkers> = {};
+    for (const wod of wodWeek) mergeDayMarker(map, wod.date, 'wod');
     for (const gymClass of classes) {
-      keys.add(format(parseISO(gymClass.starts_at), 'yyyy-MM-dd'));
+      mergeDayMarker(map, format(parseISO(gymClass.starts_at), 'yyyy-MM-dd'), 'class');
     }
-    for (const absence of absences) {
-      keys.add(absence.absence_date);
+    for (const booking of bookings) {
+      mergeDayMarker(map, format(parseISO(booking.starts_at), 'yyyy-MM-dd'), 'private');
     }
-    return [...keys];
-  }, [wodWeek, classes, absences]);
+    if (data) {
+      for (const day of data.days) {
+        if (day.day_of_week == null) continue;
+        for (let i = 0; i < 7; i += 1) {
+          const date = addDays(weekStart, i);
+          if (date.getDay() === day.day_of_week) {
+            mergeDayMarker(map, format(date, 'yyyy-MM-dd'), 'program');
+          }
+        }
+      }
+    }
+    for (const absence of absences) mergeDayMarker(map, absence.absence_date, 'absence');
+    return map;
+  }, [wodWeek, classes, bookings, data, absences, weekStart]);
+
+  const markedDates = useMemo(() => Object.keys(dayMarkers), [dayMarkers]);
 
   const sessionCount =
-    (selectedWod ? 1 : 0) + selectedClasses.length + (selectedProgramDay ? 1 : 0);
+    (selectedWod ? 1 : 0) +
+    selectedClasses.length +
+    selectedBookings.length +
+    (selectedProgramDay ? 1 : 0);
 
   const onWodUpdated = (next: WorkoutOfTheDayView | null) => {
     if (!next) return;
@@ -200,32 +232,14 @@ export default function WorkoutsScreen() {
         </Text>
       </View>
 
-      <Pressable
-        onPress={() => router.push('/(member)/workouts/absences')}
-        style={({ pressed }) => [styles.absenceCta, pressed && styles.pressed]}>
-        <LinearGradient
-          colors={['rgba(255,77,77,0.1)', 'transparent']}
-          start={{ x: 0, y: 0.5 }}
-          end={{ x: 1, y: 0.5 }}
-          style={styles.absenceCtaGlow}
-        />
-        <View style={styles.absenceCtaIcon}>
-          <Ionicons name="calendar-clear-outline" size={20} color="#FF4D4D" />
-        </View>
-        <View style={styles.absenceCtaCopy}>
-          <Text style={styles.absenceCtaTitle}>Report absence</Text>
-          <Text style={styles.absenceCtaSub}>
-            Let your coach know when you can&apos;t make training
-          </Text>
-        </View>
-        <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
-      </Pressable>
+      <GymCalendarToolbar onTrainSolo={() => setSoloSheetOpen(true)} />
 
       <WeekCalendar
         weekStart={weekStart}
         selectedDate={selectedDate}
         workoutDays={data?.days ?? []}
         markedDates={markedDates}
+        dayMarkers={dayMarkers}
         onSelectDate={setSelectedDate}
         onWeekChange={(next) => {
           setWeekStart(next);
@@ -235,8 +249,9 @@ export default function WorkoutsScreen() {
 
       <View style={styles.legendRow}>
         <LegendDot label="Studio WOD" tone="accent" />
-        <LegendDot label="Your program" tone="muted" />
         <LegendDot label="Group class" tone="live" />
+        <LegendDot label="Your program" tone="muted" />
+        <LegendDot label="Private PT" tone="private" />
       </View>
 
       <SectionHeader
@@ -264,6 +279,10 @@ export default function WorkoutsScreen() {
           onJoin={() => onJoinClass(gymClass.id)}
           onLeave={() => onLeaveClass(gymClass.id)}
         />
+      ))}
+
+      {selectedBookings.map((booking) => (
+        <PrivateBookingCard key={booking.id} booking={booking} />
       ))}
 
       {selectedProgramDay && data ? (
@@ -395,6 +414,38 @@ export default function WorkoutsScreen() {
           </Pressable>
         ))}
       </ScrollView>
+
+      <AppBottomSheet
+        visible={soloSheetOpen}
+        onClose={() => {
+          if (!soloFinishing) setSoloSheetOpen(false);
+        }}
+        title="Train Solo"
+        kicker="Open gym"
+        hint="Log an open-gym session — counts toward your monthly volume."
+        icon="stopwatch-outline"
+        scroll>
+        {profile ? (
+          <WorkoutStopwatch
+            finishing={soloFinishing}
+            onFinish={async (durationSeconds) => {
+              if (!profile) return;
+              setSoloFinishing(true);
+              try {
+                const summary = await memberService.finishSoloWorkout(profile.id, durationSeconds);
+                setSoloSheetOpen(false);
+                await load();
+                router.push(`/(member)/workouts/summary/${summary.sessionId}`);
+              } catch (e) {
+                setError(e instanceof Error ? e.message : 'Could not save workout');
+              } finally {
+                setSoloFinishing(false);
+              }
+            }}
+            onProgramPress={() => setSoloSheetOpen(false)}
+          />
+        ) : null}
+      </AppBottomSheet>
     </Screen>
   );
 }
@@ -404,7 +455,7 @@ function LegendDot({
   tone,
 }: {
   label: string;
-  tone: 'accent' | 'muted' | 'live';
+  tone: 'accent' | 'muted' | 'live' | 'private';
 }) {
   return (
     <View style={styles.legendItem}>
@@ -413,10 +464,34 @@ function LegendDot({
           styles.legendDot,
           tone === 'accent' && styles.legendDotAccent,
           tone === 'live' && styles.legendDotLive,
+          tone === 'private' && styles.legendDotPrivate,
         ]}
       />
       <Text style={styles.legendLabel}>{label}</Text>
     </View>
+  );
+}
+
+function PrivateBookingCard({ booking }: { booking: Booking }) {
+  return (
+    <Pressable
+      onPress={() => router.push(`/(member)/bookings/${booking.id}`)}
+      style={({ pressed }) => [styles.scheduleCard, pressed && styles.pressed]}>
+      <LinearGradient
+        colors={['rgba(96,165,250,0.12)', 'transparent']}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={styles.scheduleCardGlow}
+      />
+      <View style={styles.scheduleCardTop}>
+        <View style={styles.scheduleBadgePrivate}>
+          <Text style={styles.scheduleBadgeTextPrivate}>PRIVATE SESSION</Text>
+        </View>
+        <Text style={styles.scheduleTime}>{formatTime(booking.starts_at)}</Text>
+      </View>
+      <Text style={styles.scheduleTitle}>{booking.notes?.trim() || 'Personal training'}</Text>
+      <Text style={styles.scheduleMeta}>{booking.location ?? 'Studio'} · {booking.status}</Text>
+    </Pressable>
   );
 }
 
@@ -692,7 +767,10 @@ const styles = StyleSheet.create({
     backgroundColor: colors.accent,
   },
   legendDotLive: {
-    backgroundColor: '#FF4D4D',
+    backgroundColor: colors.success,
+  },
+  legendDotPrivate: {
+    backgroundColor: '#60A5FA',
   },
   legendLabel: {
     ...typography.caption,
@@ -726,6 +804,26 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
     gap: spacing.sm,
     zIndex: 1,
+    justifyContent: 'space-between',
+  },
+  scheduleBadgePrivate: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: radius.full,
+    backgroundColor: 'rgba(96,165,250,0.12)',
+    borderWidth: 1,
+    borderColor: 'rgba(96,165,250,0.35)',
+  },
+  scheduleBadgeTextPrivate: {
+    fontFamily: fonts.sansSemiBold,
+    fontSize: 9,
+    letterSpacing: 1.2,
+    color: '#60A5FA',
+  },
+  scheduleTime: {
+    fontFamily: fonts.sansSemiBold,
+    fontSize: 13,
+    color: colors.textSecondary,
   },
   scheduleIcon: {
     width: 40,

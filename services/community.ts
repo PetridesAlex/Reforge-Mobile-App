@@ -1,6 +1,8 @@
 import { useSupabaseAdmin } from '@/lib/admin/config';
+import { useSupabaseCommunity } from '@/lib/community/config';
 import { canManageAllChats, isCoachOrAdmin } from '@/lib/permissions';
 import * as adminSupabase from '@/services/admin.supabase';
+import * as communitySupabase from '@/services/community.supabase';
 import {
   delay,
   IDS,
@@ -216,6 +218,7 @@ export async function getThreadPreviews(
   userId: string,
   role?: UserRole | null,
 ): Promise<ChatThreadPreview[]> {
+  if (useSupabaseCommunity()) return communitySupabase.getThreadPreviews(userId, role);
   const threads = await getThreads(userId, role);
   return threads
     .map((thread) => enrichPreview(thread, userId, role))
@@ -223,6 +226,7 @@ export async function getThreadPreviews(
 }
 
 export async function getUnreadChatNotifications(userId: string): Promise<number> {
+  if (useSupabaseCommunity()) return communitySupabase.getUnreadChatNotifications(userId);
   await delay(20);
   return mockNotifications.filter(
     (n) =>
@@ -235,6 +239,7 @@ export async function getUnreadChatNotifications(userId: string): Promise<number
 }
 
 export async function getChatInviteNotifications(userId: string): Promise<AppNotification[]> {
+  if (useSupabaseCommunity()) return communitySupabase.getChatInviteNotifications(userId);
   await delay(20);
   return mockNotifications
     .filter((n) => n.user_id === userId && !n.read && n.type === 'chat_invite')
@@ -242,6 +247,7 @@ export async function getChatInviteNotifications(userId: string): Promise<AppNot
 }
 
 export async function getChatNotifications(userId: string): Promise<AppNotification[]> {
+  if (useSupabaseCommunity()) return communitySupabase.getChatNotifications(userId);
   await delay(20);
   return mockNotifications
     .filter(
@@ -256,6 +262,7 @@ export async function getChatNotifications(userId: string): Promise<AppNotificat
 }
 
 export async function markNotificationRead(userId: string, notificationId: string): Promise<void> {
+  if (useSupabaseCommunity()) return communitySupabase.markNotificationRead(userId, notificationId);
   await delay(10);
   const row = mockNotifications.find((n) => n.id === notificationId && n.user_id === userId);
   if (row) row.read = true;
@@ -265,6 +272,7 @@ export async function markChatNotificationsRead(
   userId: string,
   threadId?: string,
 ): Promise<void> {
+  if (useSupabaseCommunity()) return communitySupabase.markChatNotificationsRead(userId, threadId);
   await delay(20);
   for (const n of mockNotifications) {
     if (n.user_id !== userId) continue;
@@ -275,6 +283,7 @@ export async function markChatNotificationsRead(
 }
 
 export async function markThreadRead(threadId: string, userId: string): Promise<void> {
+  if (useSupabaseCommunity()) return communitySupabase.markThreadRead(threadId, userId);
   await delay(20);
   if (!mockChatReadCursors[userId]) mockChatReadCursors[userId] = {};
   mockChatReadCursors[userId][threadId] = new Date().toISOString();
@@ -282,6 +291,7 @@ export async function markThreadRead(threadId: string, userId: string): Promise<
 }
 
 export async function getOrCreateCoachDm(memberId: string): Promise<ChatThreadPreview> {
+  if (useSupabaseCommunity()) return communitySupabase.getOrCreateCoachDm(memberId);
   await delay(100);
   provisionMemberThreads(memberId);
   const { thread } = ensureCoachDmThread(memberId);
@@ -290,6 +300,7 @@ export async function getOrCreateCoachDm(memberId: string): Promise<ChatThreadPr
 }
 
 export async function getClassmates(memberId: string): Promise<Profile[]> {
+  if (useSupabaseCommunity()) return communitySupabase.getClassmates(memberId);
   await delay(50);
   provisionMemberThreads(memberId);
   const peerIds = new Set<string>();
@@ -348,6 +359,7 @@ export async function getCoachMessageRoster(
   coachId: string,
   role?: UserRole | null,
 ): Promise<Profile[]> {
+  if (useSupabaseCommunity()) return communitySupabase.getCoachMessageRoster(coachId, role);
   if (useSupabaseAdmin()) {
     return getCoachMessageRosterFromSupabase(coachId, role);
   }
@@ -459,6 +471,7 @@ export async function createCoachAthleteChat(
   memberId: string,
   role?: UserRole | null,
 ): Promise<ChatThreadPreview> {
+  if (useSupabaseCommunity()) return communitySupabase.createCoachAthleteChat(coachId, memberId, role);
   await delay(150);
   if (!isCoachOrAdmin(role)) throw new Error('Only coaches can message athletes');
   if (memberId === coachId) throw new Error('Pick an athlete from your roster');
@@ -482,6 +495,7 @@ export async function createCoachGroupChat(
   },
   role?: UserRole | null,
 ): Promise<ChatThreadPreview> {
+  if (useSupabaseCommunity()) return communitySupabase.createCoachGroupChat(coachId, input, role);
   await delay(200);
   if (!isCoachOrAdmin(role)) throw new Error('Only coaches can create groups');
 
@@ -529,6 +543,7 @@ export async function createPrivateChat(
   memberId: string,
   peerMemberId: string,
 ): Promise<ChatThreadPreview> {
+  if (useSupabaseCommunity()) return communitySupabase.createPrivateChat(memberId, peerMemberId);
   await delay(150);
   if (memberId === peerMemberId) throw new Error('Pick someone else to chat with');
 
@@ -557,6 +572,7 @@ export async function createPrivateChat(
 }
 
 export async function getThread(threadId: string, viewerId?: string, role?: UserRole | null) {
+  if (useSupabaseCommunity()) return communitySupabase.getThread(threadId, viewerId, role);
   await delay();
   const thread = mockChatThreads.find((t) => t.id === threadId);
   if (!thread) return null;
@@ -584,6 +600,7 @@ export async function getThread(threadId: string, viewerId?: string, role?: User
 }
 
 export async function getMessages(threadId: string): Promise<ChatMessage[]> {
+  if (useSupabaseCommunity()) return communitySupabase.getMessages(threadId);
   await delay();
   return mockChatMessages
     .filter((m) => m.thread_id === threadId)
@@ -602,6 +619,7 @@ export async function sendMessage(input: {
   meta?: ChatMessage['meta'];
   role?: UserRole | null;
 }): Promise<ChatMessage> {
+  if (useSupabaseCommunity()) return communitySupabase.sendMessage(input);
   await delay(200);
   const thread = mockChatThreads.find((t) => t.id === input.threadId);
   if (!thread) throw new Error('Chat not found');

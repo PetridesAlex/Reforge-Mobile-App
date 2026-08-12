@@ -5,6 +5,7 @@ import { Ionicons } from '@expo/vector-icons';
 
 import { AppBottomSheet } from '@/components/ui/AppBottomSheet';
 import { AppCard } from '@/components/ui/AppCard';
+import { AthleteHomeDashboard } from '@/components/home/AthleteHomeDashboard';
 import { Avatar } from '@/components/ui/Avatar';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { ErrorState } from '@/components/ui/ErrorState';
@@ -21,6 +22,7 @@ import { Skeleton } from '@/components/ui/Skeleton';
 import { WorkoutOfTheDayCard } from '@/components/ui/WorkoutOfTheDayCard';
 import { WorkoutStopwatch } from '@/components/workouts/WorkoutStopwatch';
 import { useAuth } from '@/hooks/useAuth';
+import { useActiveWorkout } from '@/hooks/useActiveWorkout';
 import { useStudioSync } from '@/hooks/useStudioSync';
 import { workoutImageForDay } from '@/constants/media';
 import {
@@ -43,6 +45,7 @@ const QUICK_ACTIONS = [
 
 export default function HomeScreen() {
   const { profile } = useAuth();
+  const { activeSessionId, refreshActiveSession } = useActiveWorkout();
   const [data, setData] = useState<MemberDashboard | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -69,13 +72,37 @@ export default function HomeScreen() {
       ]);
       setData(dashboard);
       setChatAlertCount(chatAlerts.length);
+      if (chatAlerts[0]) {
+        dashboard.recentCoachMessage = {
+          title: chatAlerts[0].title,
+          body: chatAlerts[0].body,
+          threadId: chatAlerts[0].thread_id ?? null,
+        };
+        setData({ ...dashboard });
+      } else {
+        try {
+          const { listMemberFeedback } = await import('@/services/coaching.supabase');
+          const feedback = await listMemberFeedback(profile.id);
+          if (feedback[0]) {
+            dashboard.recentCoachMessage = {
+              title: 'Coach feedback',
+              body: feedback[0].content,
+              threadId: null,
+            };
+            setData({ ...dashboard });
+          }
+        } catch {
+          // optional until migration applied
+        }
+      }
+      await refreshActiveSession();
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to load');
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [profile]);
+  }, [profile, refreshActiveSession]);
 
   useFocusEffect(
     useCallback(() => {
@@ -116,8 +143,6 @@ export default function HomeScreen() {
       </Screen>
     );
   }
-
-  const progressPercent = (data.weeklyProgress.completed / data.weeklyProgress.goal) * 100;
 
   return (
     <Screen
@@ -183,6 +208,11 @@ export default function HomeScreen() {
           ) : null}
         </View>
       </View>
+
+      <AthleteHomeDashboard
+        data={data}
+        activeSessionId={activeSessionId ?? data.activeSessionId}
+      />
 
       {chatAlertCount > 0 ? (
         <Pressable
@@ -260,104 +290,11 @@ export default function HomeScreen() {
       ) : null}
 
       {/* Stats strip */}
-      <MemberStatsStrip stats={data.stats} performance={data.performance} />
-
-      <SectionHeader
-        title="Today's Workout"
-        actionLabel="View all"
-        onActionPress={() => router.push('/(member)/workouts')}
+      <MemberStatsStrip
+        stats={data.stats}
+        performance={data.performance}
+        memberName={data.fullName ?? profile?.full_name}
       />
-      {data.todayWorkout ? (
-        <AppCard accent style={styles.workoutCard}>
-          <View style={styles.workoutHero}>
-            <MediaImage
-              uri={workoutImageForDay(data.todayWorkout.title)}
-              style={styles.workoutHeroImage}
-              overlay
-            />
-            <View style={styles.workoutHeroPlay}>
-              <Ionicons name="play" size={18} color={colors.background} />
-            </View>
-          </View>
-          <View style={styles.workoutHeader}>
-            <View style={styles.workoutInfo}>
-              <Text style={styles.workoutEyebrow}>Today&apos;s session</Text>
-              <Text style={styles.workoutTitle}>{data.todayWorkout.title}</Text>
-              <Text style={styles.workoutMeta}>
-                {data.todayWorkout.duration} · {data.todayWorkout.exercises} exercises
-              </Text>
-            </View>
-          </View>
-          <View style={styles.workoutMetrics}>
-            <View style={styles.metricChip}>
-              <Text style={styles.metricValue}>{data.todayWorkout.calories}</Text>
-              <Text style={styles.metricLabel}>kcal</Text>
-            </View>
-            <View style={styles.metricChip}>
-              <Text style={styles.metricValue}>{data.todayWorkout.exercises}</Text>
-              <Text style={styles.metricLabel}>moves</Text>
-            </View>
-            <View style={styles.metricChip}>
-              <Text style={styles.metricValue}>
-                {data.todayWorkout.duration.replace(' min', '')}
-              </Text>
-              <Text style={styles.metricLabel}>min</Text>
-            </View>
-          </View>
-          <PrimaryButton
-            title="Start Workout"
-            onPress={() => router.push(`/(member)/workouts/${data.todayWorkout!.dayId}`)}
-            style={styles.startButton}
-          />
-        </AppCard>
-      ) : (
-        <AppCard style={styles.restCard}>
-          <View style={styles.restIcon}>
-            <Ionicons name="moon-outline" size={22} color={colors.accent} />
-          </View>
-          <View style={styles.restContent}>
-            <Text style={styles.restTitle}>Recovery day</Text>
-            <Text style={styles.restDesc}>
-              {data.nextWorkout
-                ? `Next up: ${data.nextWorkout.dayLabel} — ${data.nextWorkout.title}`
-                : 'No workout scheduled for today. Focus on recovery.'}
-            </Text>
-          </View>
-          {data.nextWorkout ? (
-            <PrimaryButton
-              title="Preview next"
-              variant="secondary"
-              onPress={() => router.push(`/(member)/workouts/${data.nextWorkout!.dayId}`)}
-              style={styles.restBtn}
-            />
-          ) : (
-            <PrimaryButton
-              title="View plan"
-              variant="secondary"
-              onPress={() => router.push('/(member)/workouts')}
-              style={styles.restBtn}
-            />
-          )}
-        </AppCard>
-      )}
-
-      <SectionHeader title="Weekly Progress" />
-      <AppCard style={styles.sectionCard}>
-        <View style={styles.progressRow}>
-          <View style={styles.progressCopy}>
-            <Text style={styles.progressText}>
-              {data.weeklyProgress.completed} of {data.weeklyProgress.goal} workouts
-            </Text>
-            <Text style={styles.progressHint}>
-              {data.weeklyProgress.goal - data.weeklyProgress.completed} left to hit your weekly goal
-            </Text>
-          </View>
-          <Text style={styles.progressPercent}>{Math.round(progressPercent)}%</Text>
-        </View>
-        <View style={styles.progressBar}>
-          <View style={[styles.progressFill, { width: `${Math.min(progressPercent, 100)}%` }]} />
-        </View>
-      </AppCard>
 
       <SectionHeader
         title={

@@ -205,6 +205,7 @@ function createMockMemberProfile(input: {
     avatar_url: null,
     role: 'member',
     gender: input.gender ?? null,
+    app_onboarding_complete: false,
     created_at: new Date().toISOString(),
   };
   mockProfiles.push(profile);
@@ -804,6 +805,17 @@ export async function getActiveWorkoutOfTheDay(): Promise<WodAdminView | null> {
     mockWorkoutsOfTheDay.find((w) => w.active) ??
     null;
   return wod ? buildWodAdminView(wod) : null;
+}
+
+export async function listStudioWorkoutsOfTheDay(fromDate: string, toDate: string) {
+  if (useSupabaseContent()) return contentSupabase.listStudioWorkoutsOfTheDay(fromDate, toDate);
+  await delay(50);
+  return mockWorkoutsOfTheDay
+    .filter((w) => w.active && w.date >= fromDate && w.date <= toDate)
+    .map((wod) => ({
+      ...wod,
+      joinedCount: mockWodRsvps.filter((r) => r.wod_id === wod.id && r.status === 'joined').length,
+    }));
 }
 
 export async function publishWorkoutOfTheDay(input: {

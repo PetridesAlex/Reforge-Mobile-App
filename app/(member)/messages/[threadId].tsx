@@ -16,6 +16,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { ErrorState } from '@/components/ui/ErrorState';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { useAuth } from '@/hooks/useAuth';
+import { useStudioSync } from '@/hooks/useStudioSync';
 import { formatTime } from '@/lib/utils/dates';
 import * as community from '@/services/community';
 import type { ChatMessage, ChatMessageType, ChatThread, Profile } from '@/types';
@@ -73,9 +74,20 @@ export default function ChatThreadScreen() {
     }
   }, [threadId, profile?.id, profile?.role]);
 
+  const reloadMessages = useCallback(async () => {
+    if (!threadId) return;
+    try {
+      setMessages(await community.getMessages(threadId));
+    } catch {
+      // Realtime refresh is best-effort.
+    }
+  }, [threadId]);
+
   useEffect(() => {
     load();
   }, [load]);
+
+  useStudioSync(reloadMessages);
 
   useEffect(() => {
     const id = setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 80);

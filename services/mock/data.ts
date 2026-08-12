@@ -309,6 +309,12 @@ export const mockProfiles: Profile[] = [
   },
 ];
 
+for (const profile of mockProfiles) {
+  if (profile.role === 'member') {
+    profile.app_onboarding_complete = true;
+  }
+}
+
 export const mockPasswords: Record<string, string> = {
   'member@reforge.cy': 'password123',
   'coach@reforge.cy': 'password123',

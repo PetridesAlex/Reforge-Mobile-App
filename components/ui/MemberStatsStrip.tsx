@@ -5,7 +5,7 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 
 import { AnimatedCount } from '@/components/ui/AnimatedCount';
-import { PrimaryButton } from '@/components/ui/PrimaryButton';
+import { PerformanceBuildProfile } from '@/components/performance/PerformanceBuildProfile';
 import { SectionHeader } from '@/components/ui/SectionHeader';
 import { colors, fonts, radius, spacing } from '@/constants/theme';
 
@@ -80,6 +80,7 @@ const STAT_ITEMS: StatConfig[] = [
 type MemberStatsStripProps = {
   stats: MemberStats;
   performance?: PerformanceMeta;
+  memberName?: string | null;
 };
 
 function StatValue({
@@ -121,7 +122,7 @@ function StatValue({
   );
 }
 
-export function MemberStatsStrip({ stats, performance }: MemberStatsStripProps) {
+export function MemberStatsStrip({ stats, performance, memberName }: MemberStatsStripProps) {
   const values: Record<StatKey, number | null> = {
     weeklyWorkouts: stats.weeklyWorkouts,
     weightKg: stats.weightKg,
@@ -130,9 +131,6 @@ export function MemberStatsStrip({ stats, performance }: MemberStatsStripProps) 
   };
 
   const needsSetup = performance ? !performance.onboardingComplete : false;
-  const completion = performance?.profileCompletionPct ?? 0;
-  const weeklyGoal = performance?.weeklyGoal ?? 4;
-  const weeklyPct = Math.min(100, Math.round((stats.weeklyWorkouts / Math.max(weeklyGoal, 1)) * 100));
 
   return (
     <View style={styles.wrap}>
@@ -143,48 +141,7 @@ export function MemberStatsStrip({ stats, performance }: MemberStatsStripProps) 
         onActionPress={needsSetup ? undefined : () => router.push('/(member)/progress')}
       />
 
-      {needsSetup ? (
-        <Animated.View entering={FadeInDown.duration(450)}>
-          <LinearGradient
-            colors={['rgba(200,255,0,0.14)', 'rgba(200,255,0,0.04)', 'transparent']}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={styles.setupBanner}>
-            <View style={styles.setupIcon}>
-              <Ionicons name="person-circle-outline" size={28} color={colors.accent} />
-            </View>
-            <View style={styles.setupCopy}>
-              <Text style={styles.setupTitle}>Build your performance profile</Text>
-              <Text style={styles.setupBody}>
-                Add your baseline weight, goals, and avatar — then stats update automatically when
-                you complete workouts.
-              </Text>
-            </View>
-            <PrimaryButton
-              title="Set up profile"
-              onPress={() => router.push('/(member)/progress/setup')}
-              style={styles.setupBtn}
-            />
-          </LinearGradient>
-        </Animated.View>
-      ) : (
-        <Animated.View entering={FadeInDown.duration(400)} style={styles.progressRow}>
-          <View style={styles.progressMeta}>
-            <Text style={styles.progressLabel}>Profile {completion}% complete</Text>
-            <Text style={styles.progressSub}>
-              {stats.weeklyWorkouts}/{weeklyGoal} sessions this week · {performance?.streak ?? 0} day streak
-            </Text>
-          </View>
-          <View style={styles.progressTrack}>
-            <LinearGradient
-              colors={[colors.accent, '#A8E600']}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 0 }}
-              style={[styles.progressFill, { width: `${weeklyPct}%` }]}
-            />
-          </View>
-        </Animated.View>
-      )}
+      <PerformanceBuildProfile stats={stats} performance={performance} memberName={memberName} />
 
       <View style={styles.grid}>
         {STAT_ITEMS.map((item, index) => {
@@ -256,72 +213,6 @@ const styles = StyleSheet.create({
   wrap: {
     marginBottom: spacing.lg,
     gap: spacing.sm,
-  },
-  setupBanner: {
-    borderRadius: radius.xl,
-    borderWidth: 1,
-    borderColor: 'rgba(200,255,0,0.24)',
-    padding: spacing.md,
-    gap: spacing.sm,
-    marginBottom: spacing.xs,
-  },
-  setupIcon: {
-    width: 44,
-    height: 44,
-    borderRadius: radius.md,
-    backgroundColor: colors.accentMuted,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  setupCopy: {
-    gap: 4,
-  },
-  setupTitle: {
-    fontFamily: fonts.sansSemiBold,
-    fontSize: 16,
-    color: colors.text,
-  },
-  setupBody: {
-    fontFamily: fonts.sans,
-    fontSize: 13,
-    lineHeight: 19,
-    color: colors.textSecondary,
-  },
-  setupBtn: {
-    marginTop: spacing.xs,
-  },
-  progressRow: {
-    gap: spacing.sm,
-    marginBottom: spacing.xs,
-    padding: spacing.md,
-    borderRadius: radius.lg,
-    backgroundColor: colors.surfaceElevated,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  progressMeta: {
-    gap: 2,
-  },
-  progressLabel: {
-    fontFamily: fonts.sansSemiBold,
-    fontSize: 13,
-    color: colors.text,
-  },
-  progressSub: {
-    fontFamily: fonts.sans,
-    fontSize: 12,
-    color: colors.textSecondary,
-  },
-  progressTrack: {
-    height: 6,
-    borderRadius: radius.full,
-    backgroundColor: 'rgba(255,255,255,0.08)',
-    overflow: 'hidden',
-  },
-  progressFill: {
-    height: '100%',
-    borderRadius: radius.full,
-    minWidth: 6,
   },
   grid: {
     flexDirection: 'row',

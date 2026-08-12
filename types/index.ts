@@ -24,6 +24,9 @@ export type Profile = {
   avatar_url: string | null;
   role: UserRole;
   gender?: MemberGender | null;
+  /** First-run app guide (Home, Workouts, Messages, etc.) */
+  app_onboarding_complete?: boolean;
+  share_activity?: boolean;
   created_at: string;
 };
 
@@ -75,6 +78,10 @@ export type ProgramExercise = {
   rest_seconds: number;
   coach_notes: string | null;
   order_index: number;
+  target_weight_kg?: number | null;
+  progression_increment_kg?: number | null;
+  rep_range_min?: number | null;
+  rep_range_max?: number | null;
   exercise?: Exercise;
 };
 
@@ -88,6 +95,12 @@ export type ClientProgram = {
   program?: Program;
 };
 
+export type WorkoutSessionState = {
+  activeExerciseIndex?: number;
+  restEndsAt?: string | null;
+  restSeconds?: number;
+};
+
 export type WorkoutSession = {
   id: string;
   member_id: string;
@@ -98,6 +111,7 @@ export type WorkoutSession = {
   duration_seconds: number | null;
   estimated_calories: number | null;
   notes: string | null;
+  session_state?: WorkoutSessionState | null;
 };
 
 export type WorkoutSet = {
@@ -109,6 +123,10 @@ export type WorkoutSet = {
   reps: number | null;
   completed: boolean;
   notes: string | null;
+  rpe?: number | null;
+  rir?: number | null;
+  completed_at?: string | null;
+  exercise_name?: string | null;
 };
 
 export type Booking = {
@@ -178,7 +196,13 @@ export type AppNotificationType =
   | 'membership_invoice'
   | 'chat_request'
   | 'chat_message'
-  | 'chat_invite';
+  | 'chat_invite'
+  | 'training_reminder'
+  | 'coach_feedback'
+  | 'rest_complete'
+  | 'class_reminder'
+  | 'week_complete'
+  | 'general';
 
 export type AppNotification = {
   id: string;
@@ -316,6 +340,16 @@ export type MemberDashboard = {
     weeklyGoal: number;
     streak: number;
   };
+  latestPr?: {
+    exerciseName: string;
+    label: string;
+  } | null;
+  recentCoachMessage?: {
+    title: string;
+    body: string;
+    threadId?: string | null;
+  } | null;
+  activeSessionId?: string | null;
   upcomingSession: {
     bookingId: string;
     trainer: string;
@@ -371,6 +405,102 @@ export type WorkoutSummary = {
   totalSets: number;
   estimatedVolumeKg: number;
   personalRecords: string[];
+  completionPct?: number;
+  workoutName?: string | null;
+  highlight?: {
+    title: string;
+    subtitle: string;
+    kind: 'pr' | 'volume' | 'consistency';
+  } | null;
+};
+
+export type PersonalRecordType = 'max_weight' | 'reps_at_weight' | 'estimated_1rm' | 'max_volume';
+
+export type PersonalRecord = {
+  id: string;
+  member_id: string;
+  exercise_id: string;
+  record_type: PersonalRecordType;
+  value: number;
+  weight_kg: number | null;
+  reps: number | null;
+  session_id: string | null;
+  set_id: string | null;
+  previous_value: number | null;
+  achieved_at: string;
+  exercise_name?: string;
+};
+
+export type ReadinessCheckin = {
+  id: string;
+  member_id: string;
+  session_id: string | null;
+  energy: number;
+  sleep_quality: number;
+  soreness: number;
+  motivation: number;
+  score: number;
+  created_at: string;
+};
+
+export type Achievement = {
+  id: string;
+  code: string;
+  title: string;
+  description: string;
+  category: string;
+  threshold: number | null;
+};
+
+export type MemberAchievement = {
+  id: string;
+  member_id: string;
+  achievement_id: string;
+  unlocked_at: string;
+  achievement?: Achievement;
+};
+
+export type GymChallenge = {
+  id: string;
+  title: string;
+  description: string | null;
+  metric: 'workouts' | 'classes' | 'adherence';
+  target: number;
+  starts_on: string;
+  ends_on: string;
+  active: boolean;
+  created_by: string;
+};
+
+export type ChallengeEnrollment = {
+  id: string;
+  challenge_id: string;
+  member_id: string;
+  progress: number;
+  joined_at: string;
+};
+
+export type WorkoutFeedback = {
+  id: string;
+  coach_id: string;
+  member_id: string;
+  session_id: string;
+  content: string;
+  created_at: string;
+  coach_name?: string;
+  read?: boolean;
+};
+
+export type ActivityFeedEvent = {
+  id: string;
+  member_id: string;
+  kind: 'pr' | 'milestone' | 'program_complete';
+  title: string;
+  body: string;
+  visibility: 'gym' | 'private';
+  created_at: string;
+  member_name?: string;
+  reaction_counts?: Record<string, number>;
 };
 
 export type CoachDashboard = {

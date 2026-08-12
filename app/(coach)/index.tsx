@@ -63,6 +63,14 @@ const ADMIN_ACTIONS: Action[] = [
     accent: true,
   },
   {
+    key: 'athletes',
+    title: 'Athletes',
+    meta: 'Adherence dashboard',
+    href: '/(coach)/athletes',
+    icon: 'pulse-outline',
+    accent: true,
+  },
+  {
     key: 'chat',
     title: 'Messages',
     meta: 'Athletes & class groups',

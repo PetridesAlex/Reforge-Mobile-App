@@ -2,6 +2,7 @@ import type { User } from '@supabase/supabase-js';
 import * as WebBrowser from 'expo-web-browser';
 import { Platform } from 'react-native';
 
+import '@/lib/auth/browser';
 import type { AuthSession, Profile } from '@/types';
 import { getPasswordResetUrl, getAuthCallbackUrl, getOAuthReturnUrl } from '@/lib/auth/redirect';
 import {
@@ -51,6 +52,57 @@ export async function createSessionFromUrl(url: string): Promise<AuthSession | n
   }
 
   return null;
+}
+
+async function sessionFromActiveUser(): Promise<{ session: AuthSession; profile: Profile } | null> {
+  const supabase = getSupabase();
+  const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+  if (sessionError || !sessionData.session?.user) return null;
+
+  const user = sessionData.session.user;
+  const profile = await ensureOAuthProfile(user);
+  return {
+    session: toSession(user.id, user.email ?? '', sessionData.session.access_token, sessionData.session.expires_at),
+    profile,
+  };
+}
+
+export async function sendEmailOtp(email: string): Promise<void> {
+  const supabase = getSupabase();
+  const redirectTo = getAuthCallbackUrl();
+  const { error } = await supabase.auth.signInWithOtp({
+    email: email.trim(),
+    options: {
+      shouldCreateUser: true,
+      emailRedirectTo: redirectTo,
+    },
+  });
+  if (error) throw error;
+}
+
+export async function verifyEmailOtp(
+  email: string,
+  token: string,
+): Promise<{ session: AuthSession; profile: Profile }> {
+  const supabase = getSupabase();
+  const { data, error } = await supabase.auth.verifyOtp({
+    email: email.trim(),
+    token: token.trim(),
+    type: 'email',
+  });
+  if (error) throw error;
+  if (!data.session?.user) throw new Error('Invalid or expired code');
+
+  const profile = await ensureOAuthProfile(data.session.user);
+  return {
+    session: toSession(
+      data.session.user.id,
+      data.session.user.email ?? email.trim(),
+      data.session.access_token,
+      data.session.expires_at,
+    ),
+    profile,
+  };
 }
 
 export async function ensureOAuthProfile(user: User): Promise<Profile> {
@@ -107,11 +159,19 @@ export async function signInWithGoogle(): Promise<{ session: AuthSession; profil
   const supabase = getSupabase();
   const redirectTo = getAuthCallbackUrl();
 
+  if (__DEV__) {
+    console.log('[REFORGE auth] Google OAuth redirectTo:', redirectTo);
+  }
+
   const { data, error } = await supabase.auth.signInWithOAuth({
     provider: 'google',
     options: {
       redirectTo,
       skipBrowserRedirect: true,
+      queryParams: {
+        access_type: 'offline',
+        prompt: 'select_account',
+      },
     },
   });
 
@@ -137,35 +197,35 @@ export async function signInWithGoogle(): Promise<{ session: AuthSession; profil
 
   let result: WebBrowser.WebBrowserAuthSessionResult;
   try {
-    result = await WebBrowser.openAuthSessionAsync(data.url, returnUrl);
+    result = await WebBrowser.openAuthSessionAsync(data.url, returnUrl, {
+      showInRecents: true,
+      ...(Platform.OS === 'android' ? { createTask: false } : {}),
+    });
   } catch {
     throw new Error('Network error during Google sign-in');
   }
+
+  if (result.type === 'success' && result.url) {
+    const session = await createSessionFromUrl(result.url);
+    if (!session) {
+      throw new Error('Google sign-in failed to complete');
+    }
+
+    const active = await sessionFromActiveUser();
+    if (active) return active;
+
+    throw new Error('Google sign-in failed');
+  }
+
+  // Some Android builds dismiss the browser after redirect without returning the URL.
+  const recovered = await sessionFromActiveUser();
+  if (recovered) return recovered;
 
   if (result.type === 'cancel' || result.type === 'dismiss') {
     throw new GoogleSignInCancelledError();
   }
 
-  if (result.type !== 'success') {
-    throw new Error('Google sign-in failed');
-  }
-
-  const session = await createSessionFromUrl(result.url);
-  if (!session) {
-    throw new Error('Google sign-in failed to complete');
-  }
-
-  const { data: userData, error: userError } = await supabase.auth.getUser();
-  if (userError) {
-    throw new Error(userError.message || 'Google sign-in failed');
-  }
-
-  if (!userData.user) {
-    throw new Error('Google sign-in failed');
-  }
-
-  const profile = await ensureOAuthProfile(userData.user);
-  return { session, profile };
+  throw new Error('Google sign-in failed');
 }
 
 export function subscribeToAuthChanges(
@@ -216,11 +276,28 @@ export async function signIn(email: string, password: string): Promise<{ session
   const { data, error } = await supabase.auth.signInWithPassword({ email, password });
   if (error) throw error;
   if (!data.session || !data.user) throw new Error('Sign in failed');
-  const profile = await resolveProfileForUser(data.user.id);
-  return {
-    session: toSession(data.user.id, data.user.email ?? email, data.session.access_token, data.session.expires_at),
-    profile,
-  };
+  try {
+    const profile = await resolveProfileForUser(data.user.id);
+    return {
+      session: toSession(data.user.id, data.user.email ?? email, data.session.access_token, data.session.expires_at),
+      profile,
+    };
+  } catch (profileError) {
+    const message =
+      profileError instanceof Error
+        ? profileError.message
+        : typeof profileError === 'object' &&
+            profileError &&
+            'message' in profileError &&
+            typeof (profileError as { message: unknown }).message === 'string'
+          ? (profileError as { message: string }).message
+          : 'Could not load profile';
+    throw new Error(
+      message.includes('recursion') || message.includes('500')
+        ? 'Signed in, but profile load failed (database policy). Run migration 022_fix_profiles_select_recursion.sql.'
+        : `Signed in, but profile load failed: ${message}`,
+    );
+  }
 }
 
 export async function signUp(input: {

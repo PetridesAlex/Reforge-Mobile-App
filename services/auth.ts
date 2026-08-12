@@ -63,6 +63,23 @@ export async function signInWithGoogle(): Promise<{ session: AuthSession; profil
   return supabaseAuth.signInWithGoogle();
 }
 
+export async function sendEmailOtp(email: string): Promise<void> {
+  if (useMock()) {
+    throw new Error('Email codes require Supabase authentication');
+  }
+  return supabaseAuth.sendEmailOtp(email);
+}
+
+export async function verifyEmailOtp(
+  email: string,
+  token: string,
+): Promise<{ session: AuthSession; profile: Profile }> {
+  if (useMock()) {
+    throw new Error('Email codes require Supabase authentication');
+  }
+  return supabaseAuth.verifyEmailOtp(email, token);
+}
+
 export async function resolveProfileForUser(userId: string): Promise<Profile> {
   return useMock() ? mockAuth.getProfile(userId).then((p) => {
     if (!p) throw new Error('Profile not found');

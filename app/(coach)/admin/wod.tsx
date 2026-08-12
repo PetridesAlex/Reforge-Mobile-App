@@ -1,4 +1,4 @@
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
 import { Modal, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -36,6 +36,10 @@ function initials(name: string) {
 
 export default function AdminWodScreen() {
   const { profile } = useAuth();
+  const { date: dateParam } = useLocalSearchParams<{ date?: string }>();
+  const publishDate = typeof dateParam === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(dateParam)
+    ? dateParam
+    : undefined;
   const [wod, setWod] = useState<adminService.WodAdminView | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -97,6 +101,10 @@ export default function AdminWodScreen() {
     load();
   }, [load]);
 
+  useEffect(() => {
+    if (publishDate) setComposeOpen(true);
+  }, [publishDate]);
+
   const publish = async () => {
     if (!profile) return;
     setFormError(null);
@@ -112,11 +120,16 @@ export default function AdminWodScreen() {
         startTime,
         movements,
         authorId: profile.id,
+        date: publishDate,
       });
       setWod(next);
       setComposeOpen(false);
       setRsvpTab('joined');
-      setToast('Live on every member Home');
+      setToast(
+        publishDate
+          ? `Published for ${publishDate} — athletes see it on their calendar`
+          : 'Live on every member Home',
+      );
     } catch (e) {
       setFormError(e instanceof Error ? e.message : 'Could not publish');
     } finally {
@@ -202,7 +215,9 @@ export default function AdminWodScreen() {
         <Text style={styles.heroKicker}>STUDIO FLOOR</Text>
         <Text style={styles.heroTitle}>Workout of the day</Text>
         <Text style={styles.heroSub}>
-          One shared session for every member — publish once, track joins and skips on Home.
+          {publishDate
+            ? `Publishing for ${publishDate} — appears on athlete training calendars and Home.`
+            : 'One shared session for every member — publish once, track joins and skips on Home.'}
         </Text>
       </View>
 

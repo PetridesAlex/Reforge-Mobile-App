@@ -9,6 +9,7 @@ import { ReforgeLogo } from '@/components/ui/ReforgeLogo';
 import { Screen } from '@/components/ui/Screen';
 import { homeRouteForRole, useAuth } from '@/hooks/useAuth';
 import { isGoogleSignInCancelled } from '@/lib/auth/oauth';
+import { getAuthCallbackUrl } from '@/lib/auth/redirect';
 import { isSupabaseConfigured } from '@/lib/supabase/client';
 import { colors, fonts, radius, spacing, typography } from '@/constants/theme';
 
@@ -51,7 +52,13 @@ export default function LoginScreen() {
       const profile = await signIn(email.trim(), password);
       router.replace(homeRouteForRole(profile.role));
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Sign in failed');
+      const message =
+        e instanceof Error
+          ? e.message
+          : typeof e === 'object' && e && 'message' in e && typeof (e as { message: unknown }).message === 'string'
+            ? (e as { message: string }).message
+            : 'Sign in failed';
+      setError(message || 'Sign in failed');
     } finally {
       setLoading(false);
     }
@@ -104,15 +111,28 @@ export default function LoginScreen() {
         {error ? <Text style={styles.error}>{error}</Text> : null}
         <PrimaryButton title={loading ? 'Signing in…' : 'Sign In'} onPress={onSubmit} disabled={loading || googleLoading} />
         {!useMockAuth ? (
-          <PrimaryButton
-            title={googleLoading ? 'Opening Google…' : 'Continue with Google'}
-            variant="secondary"
-            icon={<GoogleIcon size={18} />}
-            iconBackground
-            onPress={onGoogleSignIn}
-            disabled={loading || googleLoading}
-            style={styles.googleButton}
-          />
+          <>
+            <PrimaryButton
+              title={googleLoading ? 'Opening Google…' : 'Continue with Google'}
+              variant="secondary"
+              icon={<GoogleIcon size={18} />}
+              iconBackground
+              onPress={onGoogleSignIn}
+              disabled={loading || googleLoading}
+              style={styles.googleButton}
+            />
+            <Link
+              href={{ pathname: '/(auth)/verify-otp', params: email ? { email } : undefined }}
+              style={styles.otpLink}>
+              Sign in with email code instead
+            </Link>
+            {__DEV__ ? (
+              <Text style={styles.devHint}>
+                Dev redirect: {getAuthCallbackUrl()}
+                {'\n'}Add to Supabase → Auth → Redirect URLs if Google gets stuck after consent.
+              </Text>
+            ) : null}
+          </>
         ) : null}
       </View>
 
@@ -218,6 +238,21 @@ const styles = StyleSheet.create({
   googleButton: {
     borderColor: 'rgba(255,255,255,0.14)',
     backgroundColor: 'rgba(255,255,255,0.04)',
+  },
+  otpLink: {
+    fontFamily: fonts.sansSemiBold,
+    fontSize: 13,
+    color: colors.accent,
+    textAlign: 'center',
+    marginTop: -4,
+  },
+  devHint: {
+    fontFamily: fonts.sans,
+    fontSize: 11,
+    lineHeight: 16,
+    color: colors.textMuted,
+    textAlign: 'center',
+    marginTop: spacing.xs,
   },
   demo: {
     gap: spacing.sm,
