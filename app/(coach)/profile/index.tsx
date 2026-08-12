@@ -1,10 +1,14 @@
 import { router } from 'expo-router';
-import { useCallback, useEffect, useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
+import * as Haptics from 'expo-haptics';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { Animated, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 
 import { AppCard } from '@/components/ui/AppCard';
 import { AppInput } from '@/components/ui/AppInput';
 import { Avatar } from '@/components/ui/Avatar';
+import { NavChevron } from '@/components/ui/BackButton';
 import { PrimaryButton } from '@/components/ui/PrimaryButton';
 import { ReforgeLogo } from '@/components/ui/ReforgeLogo';
 import { Screen } from '@/components/ui/Screen';
@@ -15,7 +19,7 @@ import { canManageStudio } from '@/lib/permissions';
 import { pickAvatarImage } from '@/lib/utils/pickAvatar';
 import * as adminService from '@/services/admin';
 import type { StudioSettings } from '@/services/mock/data';
-import { colors, radius, spacing, typography } from '@/constants/theme';
+import { colors, fonts, radius, spacing, typography } from '@/constants/theme';
 
 type LinkItem = {
   key: string;
@@ -119,6 +123,56 @@ export default function CoachProfileScreen() {
         .join(' · ')
     : null;
 
+  const signOutScale = useRef(new Animated.Value(1)).current;
+  const brandOpacity = useRef(new Animated.Value(0)).current;
+  const brandY = useRef(new Animated.Value(10)).current;
+
+  useEffect(() => {
+    Animated.parallel([
+      Animated.timing(brandOpacity, {
+        toValue: 1,
+        duration: 700,
+        delay: 180,
+        useNativeDriver: true,
+      }),
+      Animated.spring(brandY, {
+        toValue: 0,
+        friction: 9,
+        tension: 60,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  }, [brandOpacity, brandY]);
+
+  const onSignOutPressIn = () => {
+    Animated.spring(signOutScale, {
+      toValue: 0.97,
+      friction: 6,
+      tension: 200,
+      useNativeDriver: true,
+    }).start();
+  };
+
+  const onSignOutPressOut = () => {
+    Animated.spring(signOutScale, {
+      toValue: 1,
+      friction: 5,
+      tension: 160,
+      useNativeDriver: true,
+    }).start();
+  };
+
+  const onSignOut = async () => {
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setSigningOut(true);
+    try {
+      await signOut();
+      router.replace('/(auth)/login');
+    } finally {
+      setSigningOut(false);
+    }
+  };
+
   return (
     <Screen>
       <View style={styles.topBar}>
@@ -146,7 +200,7 @@ export default function CoachProfileScreen() {
         {saved ? <Text style={styles.saved}>Profile saved</Text> : null}
       </View>
 
-      <SectionHeader title="Account" />
+      <SectionHeader title="Account" kicker="Profile" />
       <AppCard style={styles.card}>
         <AppInput label="Full name" value={fullName} onChangeText={setFullName} />
         <AppInput label="Email" value={profile?.email ?? ''} editable={false} />
@@ -165,45 +219,96 @@ export default function CoachProfileScreen() {
         />
       </AppCard>
 
-      <SectionHeader title="Studio" />
+      <SectionHeader title="Studio" kicker="Operations" />
       {loadingSettings ? (
-        <Skeleton height={120} style={{ marginBottom: spacing.md }} />
+        <Skeleton height={180} style={{ marginBottom: spacing.md }} />
       ) : (
-        <AppCard style={styles.card}>
-          <InfoRow label="Studio" value={settings?.name ?? 'REFORGE Limassol'} />
-          <InfoRow label="Location" value={settings?.location ?? 'Limassol, Cyprus'} />
-          <InfoRow
-            label="Access"
-            value={isAdmin ? 'Owner — full studio control' : 'Trainer — assigned clients'}
+        <View style={styles.studioCard}>
+          <LinearGradient
+            colors={['rgba(200,255,0,0.2)', 'transparent']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={styles.studioSheen}
           />
-          <InfoRow label="Membership label" value={settings?.membershipLabel ?? 'REFORGE Strength'} />
-          {settings ? (
-            <>
-              <InfoRow label="Hours" value={`${settings.openTime} – ${settings.closeTime}`} />
-              <InfoRow label="Open days" value={weekLabel || '—'} />
-              <InfoRow
-                label="Member booking"
-                value={settings.allowMemberBooking ? 'Enabled' : 'Disabled'}
+          <View style={styles.studioIdentity}>
+            <View style={styles.studioMark}>
+              <Ionicons name="business-outline" size={20} color={colors.background} />
+            </View>
+            <View style={styles.studioIdentityCopy}>
+              <Text style={styles.studioName}>{settings?.name ?? 'REFORGE Limassol'}</Text>
+              <Text style={styles.studioLocation}>{settings?.location ?? 'Limassol, Cyprus'}</Text>
+            </View>
+            <View style={[styles.accessChip, isAdmin ? styles.accessChipOwner : styles.accessChipCoach]}>
+              <Text style={styles.accessChipText}>{isAdmin ? 'Owner' : 'Trainer'}</Text>
+            </View>
+          </View>
+
+          <View style={styles.studioFlags}>
+            <View style={styles.flagPill}>
+              <View
+                style={[
+                  styles.flagDot,
+                  settings?.allowMemberBooking ? styles.flagDotOn : styles.flagDotOff,
+                ]}
               />
-              <InfoRow
-                label="Group chat"
-                value={settings.groupChatEnabled ? 'Enabled' : 'Disabled'}
+              <Text style={styles.flagText}>
+                Booking {settings?.allowMemberBooking ? 'on' : 'off'}
+              </Text>
+            </View>
+            <View style={styles.flagPill}>
+              <View
+                style={[
+                  styles.flagDot,
+                  settings?.groupChatEnabled ? styles.flagDotOn : styles.flagDotOff,
+                ]}
               />
-            </>
-          ) : (
-            <InfoRow label="Role" value={isAdmin ? 'Admin' : 'Coach'} />
-          )}
+              <Text style={styles.flagText}>
+                Chat {settings?.groupChatEnabled ? 'on' : 'off'}
+              </Text>
+            </View>
+          </View>
+
+          <View style={styles.studioGrid}>
+            <StudioMetric
+              icon="pricetag-outline"
+              label="Membership"
+              value={settings?.membershipLabel ?? 'REFORGE Strength'}
+            />
+            <StudioMetric
+              icon="time-outline"
+              label="Hours"
+              value={settings ? `${settings.openTime} – ${settings.closeTime}` : '—'}
+            />
+            <StudioMetric
+              icon="calendar-outline"
+              label="Open days"
+              value={weekLabel || '—'}
+            />
+            <StudioMetric
+              icon="shield-checkmark-outline"
+              label="Access"
+              value={isAdmin ? 'Full studio control' : 'Assigned clients'}
+            />
+          </View>
+
           {isAdmin ? (
             <Pressable
               onPress={() => router.push('/(coach)/admin/settings')}
-              style={styles.inlineLink}>
-              <Text style={styles.inlineLinkText}>Edit studio settings →</Text>
+              style={({ pressed }) => [styles.studioCta, pressed && styles.studioCtaPressed]}>
+              <View style={styles.studioCtaIcon}>
+                <Ionicons name="settings-outline" size={16} color={colors.background} />
+              </View>
+              <View style={styles.studioCtaCopy}>
+                <Text style={styles.studioCtaTitle}>Edit studio settings</Text>
+                <Text style={styles.studioCtaSub}>Hours, access & branding</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={16} color={colors.background} />
             </Pressable>
           ) : null}
-        </AppCard>
+        </View>
       )}
 
-      <SectionHeader title={isAdmin ? 'Studio tools' : 'Shortcuts'} />
+      <SectionHeader title={isAdmin ? 'Studio tools' : 'Shortcuts'} kicker="Navigate" />
       <View style={styles.linkList}>
         {links.map((item) => (
           <Pressable
@@ -217,7 +322,7 @@ export default function CoachProfileScreen() {
               <Text style={styles.linkTitle}>{item.title}</Text>
               <Text style={styles.linkMeta}>{item.meta}</Text>
             </View>
-            <Text style={styles.chevron}>›</Text>
+            <NavChevron size="sm" />
           </Pressable>
         ))}
         <Pressable
@@ -232,41 +337,85 @@ export default function CoachProfileScreen() {
             </Text>
             <Text style={styles.linkMeta}>Update your avatar</Text>
           </View>
-          <Text style={styles.chevron}>›</Text>
+          <NavChevron size="sm" />
         </Pressable>
       </View>
 
-      <PrimaryButton
-        title={signingOut ? 'Signing out…' : 'Sign out'}
-        variant="secondary"
-        onPress={async () => {
-          setSigningOut(true);
-          try {
-            await signOut();
-            router.replace('/(auth)/login');
-          } finally {
-            setSigningOut(false);
-          }
-        }}
-        disabled={signingOut}
-        style={styles.signOut}
-      />
+      <Animated.View style={{ transform: [{ scale: signOutScale }] }}>
+        <Pressable
+          onPress={onSignOut}
+          onPressIn={onSignOutPressIn}
+          onPressOut={onSignOutPressOut}
+          disabled={signingOut}
+          accessibilityRole="button"
+          accessibilityLabel="Sign out"
+          style={({ pressed }) => [
+            styles.signOut,
+            pressed && styles.signOutPressed,
+            signingOut && styles.signOutDisabled,
+          ]}>
+          <LinearGradient
+            colors={['rgba(255,77,77,0.14)', 'rgba(255,77,77,0.04)']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={StyleSheet.absoluteFillObject}
+          />
+          <View style={styles.signOutInner}>
+            <View style={styles.signOutIconWrap}>
+              <Ionicons name="log-out-outline" size={18} color={colors.danger} />
+            </View>
+            <Text style={styles.signOutLabel}>
+              {signingOut ? 'Signing out…' : 'Sign Out'}
+            </Text>
+          </View>
+        </Pressable>
+      </Animated.View>
 
-      <View style={styles.brandFooter}>
-        <ReforgeLogo width={120} height={32} />
-        <Text style={styles.brandCaption}>
-          {isAdmin ? 'Andreas Petrides · Owner' : 'Andreas Petrides · Trainer'} · Limassol
+      <Animated.View
+        style={[
+          styles.brandFooter,
+          { opacity: brandOpacity, transform: [{ translateY: brandY }] },
+        ]}>
+        <View style={styles.brandRuleRow}>
+          <LinearGradient
+            colors={['transparent', 'rgba(200,255,0,0.35)', 'transparent']}
+            start={{ x: 0, y: 0.5 }}
+            end={{ x: 1, y: 0.5 }}
+            style={styles.brandRule}
+          />
+        </View>
+        <ReforgeLogo width={128} height={32} />
+        <View style={styles.brandCaptionRow}>
+          <Text style={styles.brandWord}>REFORGE</Text>
+          <View style={styles.brandDot} />
+          <Text style={styles.brandPlace}>LIMASSOL</Text>
+        </View>
+        <Text style={styles.brandRole}>
+          {isAdmin ? 'Owner access' : 'Trainer access'}
         </Text>
-      </View>
+      </Animated.View>
     </Screen>
   );
 }
 
-function InfoRow({ label, value }: { label: string; value: string }) {
+function StudioMetric({
+  icon,
+  label,
+  value,
+}: {
+  icon: keyof typeof Ionicons.glyphMap;
+  label: string;
+  value: string;
+}) {
   return (
-    <View style={styles.infoRow}>
-      <Text style={styles.infoLabel}>{label}</Text>
-      <Text style={styles.infoValue}>{value}</Text>
+    <View style={styles.studioMetric}>
+      <View style={styles.studioMetricIcon}>
+        <Ionicons name={icon} size={14} color={colors.accent} />
+      </View>
+      <Text style={styles.studioMetricLabel}>{label}</Text>
+      <Text style={styles.studioMetricValue} numberOfLines={2}>
+        {value}
+      </Text>
     </View>
   );
 }
@@ -346,29 +495,178 @@ const styles = StyleSheet.create({
   saveBtn: {
     marginTop: spacing.xs,
   },
-  infoRow: {
+  studioCard: {
+    marginBottom: spacing.xl,
+    borderRadius: radius.xl,
+    borderWidth: 1,
+    borderColor: 'rgba(200,255,0,0.28)',
+    backgroundColor: colors.surfaceElevated,
+    padding: spacing.md,
+    overflow: 'hidden',
+    gap: spacing.md,
+  },
+  studioSheen: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    height: 90,
+  },
+  studioIdentity: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+  },
+  studioMark: {
+    width: 44,
+    height: 44,
+    borderRadius: radius.full,
+    backgroundColor: colors.accent,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  studioIdentityCopy: {
+    flex: 1,
+    minWidth: 0,
     gap: 2,
-    paddingBottom: spacing.sm,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
   },
-  infoLabel: {
-    ...typography.label,
-    color: colors.textMuted,
-    fontSize: 10,
-  },
-  infoValue: {
-    ...typography.body,
+  studioName: {
+    fontFamily: fonts.sansBold,
+    fontSize: 18,
     color: colors.text,
-    fontSize: 15,
+    letterSpacing: -0.2,
   },
-  inlineLink: {
-    paddingTop: spacing.xs,
+  studioLocation: {
+    fontFamily: fonts.sans,
+    fontSize: 12,
+    color: colors.textSecondary,
   },
-  inlineLinkText: {
-    ...typography.caption,
+  accessChip: {
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: radius.full,
+    borderWidth: 1,
+  },
+  accessChipOwner: {
+    backgroundColor: colors.accentMuted,
+    borderColor: 'rgba(200,255,0,0.35)',
+  },
+  accessChipCoach: {
+    backgroundColor: 'rgba(255,255,255,0.05)',
+    borderColor: colors.border,
+  },
+  accessChipText: {
+    fontFamily: fonts.sansSemiBold,
+    fontSize: 11,
+    letterSpacing: 0.6,
+    textTransform: 'uppercase',
     color: colors.accent,
-    fontWeight: '600',
+  },
+  studioFlags: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.sm,
+  },
+  flagPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: radius.full,
+    backgroundColor: 'rgba(0,0,0,0.28)',
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  flagDot: {
+    width: 6,
+    height: 6,
+    borderRadius: radius.full,
+  },
+  flagDotOn: {
+    backgroundColor: colors.success,
+  },
+  flagDotOff: {
+    backgroundColor: colors.textMuted,
+  },
+  flagText: {
+    fontFamily: fonts.sansMedium,
+    fontSize: 11,
+    color: colors.textSecondary,
+  },
+  studioGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.sm,
+  },
+  studioMetric: {
+    width: '48%',
+    flexGrow: 1,
+    minWidth: 140,
+    padding: spacing.sm + 2,
+    borderRadius: radius.lg,
+    backgroundColor: 'rgba(0,0,0,0.22)',
+    borderWidth: 1,
+    borderColor: colors.border,
+    gap: 4,
+  },
+  studioMetricIcon: {
+    width: 26,
+    height: 26,
+    borderRadius: radius.sm,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.accentMuted,
+    marginBottom: 2,
+  },
+  studioMetricLabel: {
+    fontFamily: fonts.sansMedium,
+    fontSize: 10,
+    letterSpacing: 1.4,
+    textTransform: 'uppercase',
+    color: colors.accent,
+  },
+  studioMetricValue: {
+    fontFamily: fonts.sansSemiBold,
+    fontSize: 13,
+    lineHeight: 18,
+    color: colors.text,
+  },
+  studioCta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    paddingVertical: 12,
+    paddingHorizontal: 12,
+    borderRadius: radius.lg,
+    backgroundColor: colors.accent,
+  },
+  studioCtaPressed: {
+    opacity: 0.9,
+    transform: [{ scale: 0.985 }],
+  },
+  studioCtaIcon: {
+    width: 30,
+    height: 30,
+    borderRadius: radius.full,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(0,0,0,0.18)',
+  },
+  studioCtaCopy: {
+    flex: 1,
+    minWidth: 0,
+    gap: 1,
+  },
+  studioCtaTitle: {
+    fontFamily: fonts.sansSemiBold,
+    fontSize: 13,
+    color: colors.background,
+  },
+  studioCtaSub: {
+    fontFamily: fonts.sans,
+    fontSize: 11,
+    color: 'rgba(10,10,10,0.62)',
   },
   linkList: {
     gap: spacing.sm,
@@ -415,20 +713,90 @@ const styles = StyleSheet.create({
     ...typography.caption,
     color: colors.textMuted,
   },
-  chevron: {
-    fontSize: 22,
-    color: colors.textMuted,
-  },
   signOut: {
-    marginBottom: spacing.lg,
+    marginBottom: spacing.xl,
+    marginTop: spacing.sm,
+    borderRadius: radius.lg,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: 'rgba(255,77,77,0.35)',
+    backgroundColor: 'rgba(255,77,77,0.06)',
+    minHeight: 56,
+    justifyContent: 'center',
+  },
+  signOutPressed: {
+    borderColor: 'rgba(255,77,77,0.55)',
+    backgroundColor: 'rgba(255,77,77,0.12)',
+  },
+  signOutDisabled: {
+    opacity: 0.55,
+  },
+  signOutInner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.sm,
+    paddingVertical: spacing.md + 2,
+    paddingHorizontal: spacing.lg,
+  },
+  signOutIconWrap: {
+    width: 32,
+    height: 32,
+    borderRadius: radius.full,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(255,77,77,0.12)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,77,77,0.22)',
+  },
+  signOutLabel: {
+    fontFamily: fonts.sansSemiBold,
+    fontSize: 15,
+    letterSpacing: 1.4,
+    textTransform: 'uppercase',
+    color: colors.danger,
   },
   brandFooter: {
     alignItems: 'center',
-    gap: spacing.sm,
-    marginBottom: spacing.xl,
+    gap: spacing.md,
+    marginBottom: spacing.xxl,
+    paddingTop: spacing.sm,
   },
-  brandCaption: {
-    ...typography.label,
+  brandRuleRow: {
+    width: '100%',
+    alignItems: 'center',
+    marginBottom: spacing.xs,
+  },
+  brandRule: {
+    width: 160,
+    height: 1,
+  },
+  brandCaptionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  brandWord: {
+    fontFamily: fonts.display,
+    fontSize: 18,
+    letterSpacing: 3.2,
+    color: colors.text,
+  },
+  brandDot: {
+    width: 4,
+    height: 4,
+    borderRadius: radius.full,
+    backgroundColor: colors.accent,
+  },
+  brandPlace: {
+    fontFamily: fonts.sansMedium,
+    fontSize: 11,
+    letterSpacing: 2.8,
+    color: colors.accent,
+  },
+  brandRole: {
+    fontFamily: fonts.sans,
+    fontSize: 12,
     color: colors.textMuted,
   },
 });

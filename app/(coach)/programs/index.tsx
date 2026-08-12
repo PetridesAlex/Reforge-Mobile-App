@@ -11,6 +11,7 @@ import {
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
+import { addDays, format, parseISO } from 'date-fns';
 
 import { AppInput } from '@/components/ui/AppInput';
 import { EmptyState } from '@/components/ui/EmptyState';
@@ -20,13 +21,16 @@ import { MediaImage } from '@/components/ui/MediaImage';
 import { PrimaryButton } from '@/components/ui/PrimaryButton';
 import { Screen } from '@/components/ui/Screen';
 import { Skeleton } from '@/components/ui/Skeleton';
+import { BackButton } from '@/components/ui/BackButton';
 import { useAuth } from '@/hooks/useAuth';
 import { canManageStudio } from '@/lib/permissions';
 import { PLACEHOLDER_IMAGES, workoutImageForDay } from '@/constants/media';
 import * as adminService from '@/services/admin';
 import * as coachService from '@/services/coach';
+import { toWeekStartKey } from '@/services/weeks.supabase';
 import { formatPrescription, parsePrescription } from '@/lib/workouts/prescription';
 import type { Exercise, Program, ProgramExercise } from '@/types';
+import type { WeekDayAttendance } from '@/services/weeks.supabase';
 import { colors, fonts, radius, spacing, typography } from '@/constants/theme';
 
 type WeekBoard = NonNullable<Awaited<ReturnType<typeof coachService.getWeekBoard>>>;
@@ -45,6 +49,7 @@ export default function ProgramsScreen() {
 
 function AdminWeekBoard({ profileId }: { profileId: string }) {
   const [programId, setProgramId] = useState<string | null>(null);
+  const [weekStart, setWeekStart] = useState(() => toWeekStartKey());
   const [board, setBoard] = useState<WeekBoard | null>(null);
   const [programs, setPrograms] = useState<Program[]>([]);
   const [exercises, setExercises] = useState<Exercise[]>([]);
@@ -52,14 +57,17 @@ function AdminWeekBoard({ profileId }: { profileId: string }) {
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
+  const [copying, setCopying] = useState(false);
 
-  const [activeDow, setActiveDow] = useState<number | null>(null);
+  const [activeSlot, setActiveSlot] = useState<DaySlot | null>(null);
   const [dayName, setDayName] = useState('');
   const [pickerOpen, setPickerOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [editExercise, setEditExercise] = useState<ProgramExercise | null>(null);
   const [pendingExercise, setPendingExercise] = useState<Exercise | null>(null);
   const [configSaving, setConfigSaving] = useState(false);
+  const [attendance, setAttendance] = useState<WeekDayAttendance[]>([]);
+  const [attendanceLoading, setAttendanceLoading] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -73,33 +81,92 @@ function AdminWeekBoard({ profileId }: { profileId: string }) {
       setProgramId(id);
       setPrograms(list);
       setExercises(library);
-      setBoard(await coachService.getWeekBoard(id));
+      setBoard(
+        await coachService.getWeekBoard(id, weekStart, { createdBy: profileId }),
+      );
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to load');
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [profileId, programId]);
+  }, [profileId, programId, weekStart]);
 
   useEffect(() => {
     load();
   }, [load]);
 
-  const activeSlot = board?.board.find((d) => d.dayOfWeek === activeDow) ?? null;
+  const refreshBoard = async (id: string, nextWeek = weekStart) => {
+    setBoard(
+      await coachService.getWeekBoard(id, nextWeek, { createdBy: profileId }),
+    );
+  };
 
-  const openDay = (slot: DaySlot) => {
-    setActiveDow(slot.dayOfWeek);
+  const shiftWeek = async (deltaWeeks: number) => {
+    if (!programId) return;
+    const next = format(addDays(parseISO(weekStart), deltaWeeks * 7), 'yyyy-MM-dd');
+    setWeekStart(next);
+    setActiveSlot(null);
+    try {
+      setBoard(
+        await coachService.advanceOrSelectWeek(programId, next, profileId),
+      );
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not change week');
+    }
+  };
+
+  const jumpToWeek = async (next: string) => {
+    if (!programId) return;
+    setWeekStart(next);
+    setActiveSlot(null);
+    try {
+      setBoard(
+        await coachService.advanceOrSelectWeek(programId, next, profileId),
+      );
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not change week');
+    }
+  };
+
+  const openDay = async (slot: DaySlot) => {
+    if (board?.isFutureWeek) return;
+    setActiveSlot(slot);
     setDayName(slot.day?.name ?? `${slot.label} workout`);
+
+    if (board?.isPastWeek || slot.isPast) {
+      if (!programId) return;
+      setAttendanceLoading(true);
+      try {
+        setAttendance(await coachService.getWeekDayAttendance(programId, slot.date));
+      } catch {
+        setAttendance([]);
+      } finally {
+        setAttendanceLoading(false);
+      }
+    } else {
+      setAttendance([]);
+    }
+  };
+
+  const closeDay = () => {
+    setActiveSlot(null);
+    setAttendance([]);
   };
 
   const saveDay = async () => {
-    if (programId == null || activeDow == null) return;
+    if (programId == null || activeSlot == null || !board?.isEditable) return;
     setSaving(true);
     try {
-      await coachService.upsertWorkoutForWeekday(programId, activeDow, dayName);
+      await coachService.upsertWorkoutForWeekday(programId, activeSlot.dayOfWeek, dayName);
       setToast('Saved — members see this on Workouts & Home');
-      setBoard(await coachService.getWeekBoard(programId));
+      await refreshBoard(programId);
+      const refreshed = await coachService.getWeekBoard(programId, weekStart, {
+        createdBy: profileId,
+      });
+      setBoard(refreshed);
+      const next = refreshed?.board.find((d) => d.dayOfWeek === activeSlot.dayOfWeek) ?? null;
+      setActiveSlot(next);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Could not save');
     } finally {
@@ -114,11 +181,15 @@ function AdminWeekBoard({ profileId }: { profileId: string }) {
 
   const ensureDayId = async (): Promise<string | null> => {
     if (activeSlot?.day) return activeSlot.day.id;
-    if (programId == null || activeDow == null) return null;
-    await coachService.upsertWorkoutForWeekday(programId, activeDow, dayName);
-    const refreshed = await coachService.getWeekBoard(programId);
+    if (programId == null || activeSlot == null) return null;
+    await coachService.upsertWorkoutForWeekday(programId, activeSlot.dayOfWeek, dayName);
+    const refreshed = await coachService.getWeekBoard(programId, weekStart, {
+      createdBy: profileId,
+    });
     setBoard(refreshed);
-    return refreshed?.board.find((d) => d.dayOfWeek === activeDow)?.day?.id ?? null;
+    const next = refreshed?.board.find((d) => d.dayOfWeek === activeSlot.dayOfWeek) ?? null;
+    setActiveSlot(next);
+    return next?.day?.id ?? null;
   };
 
   const submitNewExercise = async (patch: {
@@ -147,7 +218,17 @@ function AdminWeekBoard({ profileId }: { profileId: string }) {
         repRangeMin: patch.repRangeMin,
         repRangeMax: patch.repRangeMax,
       });
-      if (programId) setBoard(await coachService.getWeekBoard(programId));
+      if (programId) {
+        const refreshed = await coachService.getWeekBoard(programId, weekStart, {
+          createdBy: profileId,
+        });
+        setBoard(refreshed);
+        if (activeSlot) {
+          setActiveSlot(
+            refreshed?.board.find((d) => d.dayOfWeek === activeSlot.dayOfWeek) ?? null,
+          );
+        }
+      }
       setPendingExercise(null);
       setToast('Exercise added — live for members');
     } catch (e) {
@@ -171,7 +252,17 @@ function AdminWeekBoard({ profileId }: { profileId: string }) {
     setConfigSaving(true);
     try {
       await coachService.updateProgramExercise(editExercise.id, patch);
-      if (programId) setBoard(await coachService.getWeekBoard(programId));
+      if (programId) {
+        const refreshed = await coachService.getWeekBoard(programId, weekStart, {
+          createdBy: profileId,
+        });
+        setBoard(refreshed);
+        if (activeSlot) {
+          setActiveSlot(
+            refreshed?.board.find((d) => d.dayOfWeek === activeSlot.dayOfWeek) ?? null,
+          );
+        }
+      }
       setEditExercise(null);
       setToast('Prescription saved — members updated');
     } catch (e) {
@@ -183,19 +274,44 @@ function AdminWeekBoard({ profileId }: { profileId: string }) {
 
   const removeExercise = async (rowId: string) => {
     await coachService.removeProgramExercise(rowId);
-    if (programId) setBoard(await coachService.getWeekBoard(programId));
+    if (programId) {
+      const refreshed = await coachService.getWeekBoard(programId, weekStart, {
+        createdBy: profileId,
+      });
+      setBoard(refreshed);
+      if (activeSlot) {
+        setActiveSlot(
+          refreshed?.board.find((d) => d.dayOfWeek === activeSlot.dayOfWeek) ?? null,
+        );
+      }
+    }
     setToast('Exercise removed');
   };
 
   const clearDay = async () => {
     if (!activeSlot?.day) {
-      setActiveDow(null);
+      closeDay();
       return;
     }
     await coachService.removeProgramDay(activeSlot.day.id);
-    if (programId) setBoard(await coachService.getWeekBoard(programId));
-    setActiveDow(null);
+    if (programId) await refreshBoard(programId);
+    closeDay();
     setToast('Day cleared — members updated');
+  };
+
+  const copyPrevious = async () => {
+    if (!programId) return;
+    setCopying(true);
+    try {
+      const next = await coachService.copyPreviousWeek(programId, profileId);
+      setBoard(next);
+      setWeekStart(next?.weekStart ?? toWeekStartKey());
+      setToast('Previous week copied into this week');
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not copy week');
+    } finally {
+      setCopying(false);
+    }
   };
 
   if (loading) {
@@ -215,6 +331,19 @@ function AdminWeekBoard({ profileId }: { profileId: string }) {
     );
   }
 
+  const weekTitle = board?.isCurrentWeek
+    ? `This week · ${board.weekLabel}`
+    : board?.isPastWeek
+      ? `Past week · ${board.weekLabel}`
+      : `Upcoming · ${board?.weekLabel ?? ''}`;
+
+  const showHistorySheet = Boolean(
+    activeSlot && (board?.isPastWeek || activeSlot.isPast),
+  );
+  const showEditSheet = Boolean(
+    activeSlot && board?.isEditable && !activeSlot.isPast,
+  );
+
   return (
     <Screen
       refreshControl={
@@ -227,7 +356,7 @@ function AdminWeekBoard({ profileId }: { profileId: string }) {
           tintColor={colors.accent}
         />
       }>
-      <PrimaryButton title="← Studio" variant="ghost" onPress={() => router.back()} style={styles.back} />
+      <BackButton label="Studio" style={styles.back} />
 
       <View style={styles.hero}>
         <MediaImage uri={PLACEHOLDER_IMAGES.strength} style={styles.heroImage} overlay />
@@ -239,7 +368,7 @@ function AdminWeekBoard({ profileId }: { profileId: string }) {
           <Text style={styles.kicker}>WEEK PLAN</Text>
           <Text style={styles.heroTitle}>{board?.program.name ?? 'Workouts'}</Text>
           <Text style={styles.heroSub}>
-            Tap a day → name the workout → add exercises. Members see changes instantly.
+            Dated training weeks with archived history. Past days stay frozen — who trained stays with them.
           </Text>
         </View>
       </View>
@@ -265,9 +394,49 @@ function AdminWeekBoard({ profileId }: { profileId: string }) {
         </Pressable>
       ) : null}
 
+      <View style={styles.weekNav}>
+        <BackButton compact onPress={() => shiftWeek(-1)} />
+        <View style={styles.weekNavCopy}>
+          <Text style={styles.weekNavKicker}>
+            {board?.isCurrentWeek ? 'CURRENT' : board?.isPastWeek ? 'HISTORY' : 'UPCOMING'}
+          </Text>
+          <Text style={styles.weekNavTitle}>{weekTitle}</Text>
+        </View>
+        <Pressable
+          onPress={() => shiftWeek(1)}
+          hitSlop={12}
+          style={({ pressed }) => [styles.weekNavFwd, pressed && styles.pressed]}>
+          <Ionicons name="chevron-forward" size={18} color={colors.accent} />
+        </Pressable>
+      </View>
+
+      {board?.isCurrentWeek && board.isEmpty ? (
+        <View style={styles.copyCard}>
+          <Text style={styles.copyTitle}>Empty week</Text>
+          <Text style={styles.copySub}>Start blank, or pull last week’s plan forward.</Text>
+          <PrimaryButton
+            title={copying ? 'Copying…' : 'Copy previous week'}
+            onPress={copyPrevious}
+            disabled={copying}
+          />
+        </View>
+      ) : null}
+
+      {board?.isFutureWeek ? (
+        <View style={styles.copyCard}>
+          <Text style={styles.copyTitle}>Upcoming week</Text>
+          <Text style={styles.copySub}>
+            This week opens empty when it becomes current. Flip back to edit this week’s live plan.
+          </Text>
+          <PrimaryButton title="Jump to this week" variant="secondary" onPress={() => jumpToWeek(toWeekStartKey())} />
+        </View>
+      ) : null}
+
       <View style={styles.sectionHead}>
         <Text style={styles.sectionKicker}>SCHEDULE</Text>
-        <Text style={styles.sectionTitle}>Training week</Text>
+        <Text style={styles.sectionTitle}>
+          {board?.isPastWeek ? 'Archived week' : 'Training week'}
+        </Text>
       </View>
       <View style={styles.weekList}>
         {board?.board.map((slot) => {
@@ -275,9 +444,14 @@ function AdminWeekBoard({ profileId }: { profileId: string }) {
           const image = has ? workoutImageForDay(slot.day!.name) : PLACEHOLDER_IMAGES.studio;
           return (
             <Pressable
-              key={slot.dayOfWeek}
+              key={slot.date}
               onPress={() => openDay(slot)}
-              style={({ pressed }) => [styles.dayRow, has && styles.dayRowOn, pressed && styles.pressed]}>
+              style={({ pressed }) => [
+                styles.dayRow,
+                has && styles.dayRowOn,
+                slot.isToday && styles.dayRowToday,
+                pressed && styles.pressed,
+              ]}>
               {has ? (
                 <LinearGradient
                   colors={['rgba(200,255,0,0.06)', 'transparent']}
@@ -289,6 +463,7 @@ function AdminWeekBoard({ profileId }: { profileId: string }) {
               <View style={[styles.dayRail, has ? styles.dayRailOn : styles.dayRailOff]} />
               <View style={styles.dayShortWrap}>
                 <Text style={[styles.dayShort, has && styles.dayShortOn]}>{slot.short.toUpperCase()}</Text>
+                <Text style={styles.dayDate}>{slot.dateLabel}</Text>
               </View>
               <MediaImage uri={image} style={styles.dayThumb} rounded={radius.md} />
               <View style={styles.dayCopy}>
@@ -296,18 +471,49 @@ function AdminWeekBoard({ profileId }: { profileId: string }) {
                   {slot.day?.name ?? 'Rest / empty'}
                 </Text>
                 <Text style={styles.dayMeta}>
-                  {has ? `${slot.exercises.length} exercises` : 'Tap to add workout'}
+                  {has ? `${slot.exercises.length} exercises` : board.isPastWeek ? 'No workout logged' : 'Tap to add workout'}
                 </Text>
               </View>
-              <View style={[styles.dayBadge, has ? styles.dayBadgeOn : styles.dayBadgeOff]}>
-                <Text style={[styles.dayBadgeText, has && styles.dayBadgeTextOn]}>
-                  {has ? 'SET' : 'ADD'}
-                </Text>
-              </View>
+              {slot.isPast && slot.trainedCount > 0 ? (
+                <View style={styles.trainedChip}>
+                  <Text style={styles.trainedChipText}>trained {slot.trainedCount}</Text>
+                </View>
+              ) : (
+                <View style={[styles.dayBadge, has ? styles.dayBadgeOn : styles.dayBadgeOff]}>
+                  <Text style={[styles.dayBadgeText, has && styles.dayBadgeTextOn]}>
+                    {board.isPastWeek ? (has ? 'VIEW' : '—') : has ? 'SET' : 'ADD'}
+                  </Text>
+                </View>
+              )}
             </Pressable>
           );
         })}
       </View>
+
+      {(board?.recentWeeks.length ?? 0) > 0 ? (
+        <View style={styles.historyBlock}>
+          <Text style={styles.sectionLabel}>Week history</Text>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+            {board!.recentWeeks.map((w) => (
+              <Pressable
+                key={w.weekStart}
+                onPress={() => jumpToWeek(w.weekStart)}
+                style={[
+                  styles.historyChip,
+                  weekStart === w.weekStart && styles.historyChipOn,
+                ]}>
+                <Text
+                  style={[
+                    styles.historyChipText,
+                    weekStart === w.weekStart && styles.historyChipTextOn,
+                  ]}>
+                  {w.label}
+                </Text>
+              </Pressable>
+            ))}
+          </ScrollView>
+        </View>
+      ) : null}
 
       {programs.length > 1 ? (
         <>
@@ -318,7 +524,9 @@ function AdminWeekBoard({ profileId }: { profileId: string }) {
                 key={p.id}
                 onPress={async () => {
                   setProgramId(p.id);
-                  setBoard(await coachService.getWeekBoard(p.id));
+                  setBoard(
+                    await coachService.getWeekBoard(p.id, weekStart, { createdBy: profileId }),
+                  );
                 }}
                 style={[styles.planChip, programId === p.id && styles.planChipOn]}>
                 <Text style={[styles.planChipText, programId === p.id && styles.planChipTextOn]}>
@@ -330,11 +538,74 @@ function AdminWeekBoard({ profileId }: { profileId: string }) {
         </>
       ) : null}
 
-      {/* Day editor */}
-      <Modal visible={activeDow != null} animationType="slide" transparent>
+      {/* Past-day history sheet */}
+      <Modal visible={showHistorySheet} animationType="slide" transparent onRequestClose={closeDay}>
         <View style={styles.modalBackdrop}>
           <View style={styles.modalSheet}>
-            <Text style={styles.modalKicker}>{activeSlot?.label?.toUpperCase()}</Text>
+            <Text style={styles.modalKicker}>
+              {activeSlot?.short.toUpperCase()} · {activeSlot?.dateLabel}
+            </Text>
+            <Text style={styles.modalTitle}>{activeSlot?.day?.name ?? 'Rest day'}</Text>
+            <Text style={styles.modalHint}>Read-only archive for this calendar day</Text>
+
+            <Text style={styles.exHeading}>
+              Exercises · {activeSlot?.exercises.length ?? 0}
+            </Text>
+            <ScrollView style={styles.exScroll}>
+              {(activeSlot?.exercises ?? []).length === 0 ? (
+                <Text style={styles.exMeta}>No exercises in this snapshot.</Text>
+              ) : (
+                (activeSlot?.exercises ?? []).map((pe, idx) => (
+                  <View key={pe.id} style={styles.historyExRow}>
+                    <Text style={styles.exIndex}>{idx + 1}</Text>
+                    <View style={styles.exCopy}>
+                      <Text style={styles.exName}>{pe.exercise?.name ?? 'Exercise'}</Text>
+                      <Text style={styles.exMeta}>{formatPrescription(parsePrescription(pe))}</Text>
+                    </View>
+                  </View>
+                ))
+              )}
+            </ScrollView>
+
+            <Text style={styles.exHeading}>Trained · {attendance.length}</Text>
+            <ScrollView style={styles.exScroll}>
+              {attendanceLoading ? (
+                <Text style={styles.exMeta}>Loading…</Text>
+              ) : attendance.length === 0 ? (
+                <Text style={styles.exMeta}>No completed sessions that day.</Text>
+              ) : (
+                attendance.map((row) => (
+                  <View key={row.sessionId} style={styles.attendanceRow}>
+                    <View style={styles.attendanceAvatar}>
+                      <Text style={styles.attendanceInitial}>
+                        {row.fullName.slice(0, 1).toUpperCase()}
+                      </Text>
+                    </View>
+                    <View style={styles.exCopy}>
+                      <Text style={styles.exName}>{row.fullName}</Text>
+                      <Text style={styles.exMeta}>
+                        {row.finishedAt
+                          ? format(parseISO(row.finishedAt), 'HH:mm')
+                          : 'Completed'}
+                      </Text>
+                    </View>
+                  </View>
+                ))
+              )}
+            </ScrollView>
+
+            <PrimaryButton title="Done" variant="ghost" onPress={closeDay} />
+          </View>
+        </View>
+      </Modal>
+
+      {/* Current-week day editor */}
+      <Modal visible={showEditSheet} animationType="slide" transparent onRequestClose={closeDay}>
+        <View style={styles.modalBackdrop}>
+          <View style={styles.modalSheet}>
+            <Text style={styles.modalKicker}>
+              {activeSlot?.label?.toUpperCase()} · {activeSlot?.dateLabel}
+            </Text>
             <Text style={styles.modalTitle}>
               {activeSlot?.day ? 'Edit workout' : 'Add workout'}
             </Text>
@@ -351,10 +622,10 @@ function AdminWeekBoard({ profileId }: { profileId: string }) {
             />
 
             <Text style={styles.exHeading}>
-              Exercises · {(board?.board.find((d) => d.dayOfWeek === activeDow)?.exercises.length) ?? 0}
+              Exercises · {activeSlot?.exercises.length ?? 0}
             </Text>
             <ScrollView style={styles.exScroll}>
-              {(board?.board.find((d) => d.dayOfWeek === activeDow)?.exercises ?? []).map((pe, idx) => (
+              {(activeSlot?.exercises ?? []).map((pe, idx) => (
                 <View key={pe.id} style={styles.exRow}>
                   <Pressable
                     onPress={() => setEditExercise(pe)}
@@ -375,7 +646,7 @@ function AdminWeekBoard({ profileId }: { profileId: string }) {
 
             <PrimaryButton title="Add exercise" variant="secondary" onPress={() => setPickerOpen(true)} />
             <PrimaryButton title="Clear day" variant="ghost" onPress={clearDay} />
-            <PrimaryButton title="Done" variant="ghost" onPress={() => setActiveDow(null)} />
+            <PrimaryButton title="Done" variant="ghost" onPress={closeDay} />
           </View>
         </View>
       </Modal>
@@ -591,6 +862,63 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(200,255,0,0.35)',
   },
   toastText: { ...typography.caption, color: colors.accent },
+  weekNav: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    marginBottom: spacing.md,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.sm,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    borderColor: 'rgba(200,255,0,0.22)',
+    backgroundColor: colors.surfaceElevated,
+  },
+  weekNavCopy: { flex: 1, gap: 2 },
+  weekNavKicker: {
+    fontFamily: fonts.sansMedium,
+    fontSize: 10,
+    color: colors.accent,
+    letterSpacing: 2,
+  },
+  weekNavTitle: {
+    fontFamily: fonts.display,
+    fontSize: 22,
+    lineHeight: 24,
+    color: colors.text,
+    letterSpacing: 0.6,
+  },
+  weekNavFwd: {
+    width: 40,
+    height: 40,
+    borderRadius: radius.full,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.accentMuted,
+    borderWidth: 1,
+    borderColor: 'rgba(200,255,0,0.28)',
+  },
+  copyCard: {
+    marginBottom: spacing.md,
+    padding: spacing.md,
+    gap: spacing.sm,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
+  },
+  copyTitle: {
+    fontFamily: fonts.sansSemiBold,
+    fontSize: 16,
+    color: colors.text,
+  },
+  copySub: {
+    fontFamily: fonts.sansMedium,
+    fontSize: 13,
+    color: colors.textSecondary,
+    lineHeight: 18,
+    marginBottom: spacing.xs,
+  },
   sectionHead: {
     marginBottom: spacing.md,
     gap: 2,
@@ -631,6 +959,9 @@ const styles = StyleSheet.create({
   dayRowOn: {
     borderColor: 'rgba(200,255,0,0.22)',
   },
+  dayRowToday: {
+    borderColor: 'rgba(200,255,0,0.45)',
+  },
   dayGlow: {
     ...StyleSheet.absoluteFillObject,
   },
@@ -644,18 +975,25 @@ const styles = StyleSheet.create({
   dayRailOn: { backgroundColor: colors.accent },
   dayRailOff: { backgroundColor: colors.border },
   dayShortWrap: {
-    width: 36,
+    width: 44,
     alignItems: 'center',
+    gap: 2,
   },
   dayShort: {
     fontFamily: fonts.display,
-    fontSize: 20,
-    lineHeight: 22,
+    fontSize: 18,
+    lineHeight: 20,
     color: colors.textMuted,
     letterSpacing: 1,
   },
   dayShortOn: {
     color: colors.accent,
+  },
+  dayDate: {
+    fontFamily: fonts.sansMedium,
+    fontSize: 10,
+    color: colors.textMuted,
+    letterSpacing: 0.2,
   },
   pressed: { opacity: 0.88 },
   dayThumb: {
@@ -696,6 +1034,36 @@ const styles = StyleSheet.create({
     letterSpacing: 1,
   },
   dayBadgeTextOn: { color: colors.accent },
+  trainedChip: {
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: radius.full,
+    borderWidth: 1,
+    borderColor: 'rgba(200,255,0,0.35)',
+    backgroundColor: colors.accentMuted,
+  },
+  trainedChipText: {
+    fontFamily: fonts.sansMedium,
+    fontSize: 11,
+    color: colors.accent,
+    letterSpacing: 0.4,
+  },
+  historyBlock: { marginBottom: spacing.lg },
+  historyChip: {
+    marginRight: spacing.sm,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderRadius: radius.full,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.surfaceElevated,
+  },
+  historyChipOn: {
+    borderColor: colors.accent,
+    backgroundColor: colors.accentMuted,
+  },
+  historyChipText: { ...typography.caption, color: colors.textSecondary },
+  historyChipTextOn: { color: colors.accent, fontWeight: '700' },
   planScroll: { marginBottom: spacing.lg },
   planChip: {
     marginRight: spacing.sm,
@@ -734,6 +1102,37 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
     borderBottomWidth: 1,
     borderBottomColor: colors.border,
+  },
+  historyExRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    paddingVertical: spacing.sm,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+  },
+  attendanceRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    paddingVertical: spacing.sm,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+  },
+  attendanceAvatar: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.accentMuted,
+    borderWidth: 1,
+    borderColor: 'rgba(200,255,0,0.28)',
+  },
+  attendanceInitial: {
+    fontFamily: fonts.display,
+    fontSize: 16,
+    color: colors.accent,
   },
   exMain: {
     flex: 1,

@@ -19,6 +19,7 @@ import { PrimaryButton } from '@/components/ui/PrimaryButton';
 import { Screen } from '@/components/ui/Screen';
 import { SectionHeader } from '@/components/ui/SectionHeader';
 import { Skeleton } from '@/components/ui/Skeleton';
+import { BackButton } from '@/components/ui/BackButton';
 import { useAuth } from '@/hooks/useAuth';
 import { canManageStudio } from '@/lib/permissions';
 import { formatPrescription, parsePrescription } from '@/lib/workouts/prescription';
@@ -273,7 +274,7 @@ export default function ProgramDetailScreen() {
 
   return (
     <Screen>
-      <PrimaryButton title="← Programs" variant="ghost" onPress={() => router.back()} style={styles.back} />
+      <BackButton label="Programs" style={styles.back} />
 
       <View style={styles.hero}>
         <LinearGradient

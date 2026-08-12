@@ -99,6 +99,8 @@ export default function ClientsScreen() {
   >({});
   const [absencesByMember, setAbsencesByMember] = useState<Record<string, MemberAbsence[]>>({});
   const [addingBillingId, setAddingBillingId] = useState<string | null>(null);
+  const [removingMemberId, setRemovingMemberId] = useState<string | null>(null);
+  const [confirmRemoveId, setConfirmRemoveId] = useState<string | null>(null);
   const [billingAddOpen, setBillingAddOpen] = useState(false);
   const [billingName, setBillingName] = useState('');
   const [billingEmail, setBillingEmail] = useState('');
@@ -777,6 +779,17 @@ export default function ClientsScreen() {
                             </Text>
                           </Pressable>
                         )}
+                        <Pressable
+                          onPress={(e) => {
+                            // @ts-expect-error RN web event
+                            e?.stopPropagation?.();
+                            setConfirmRemoveId(c.member.id);
+                          }}
+                          hitSlop={8}
+                          style={styles.removeMemberBtn}>
+                          <Ionicons name="person-remove-outline" size={14} color={colors.danger} />
+                          <Text style={styles.removeMemberText}>Remove</Text>
+                        </Pressable>
                       </View>
                     ) : null}
                   </View>
@@ -1107,6 +1120,49 @@ export default function ClientsScreen() {
           );
         })}
         {formError ? <SheetFormError message={formError} /> : null}
+      </AppBottomSheet>
+
+      <AppBottomSheet
+        visible={Boolean(confirmRemoveId)}
+        onClose={() => setConfirmRemoveId(null)}
+        kicker="Roster"
+        title="Remove member"
+        hint="Soft-remove from the active roster. Their account stays — you can restore later from member detail."
+        icon="person-remove-outline"
+        footer={
+          <>
+            <PrimaryButton
+              title={removingMemberId ? 'Removing…' : 'Remove from roster'}
+              onPress={async () => {
+                if (!confirmRemoveId) return;
+                setRemovingMemberId(confirmRemoveId);
+                try {
+                  await adminService.removeMemberFromRoster(confirmRemoveId);
+                  setConfirmRemoveId(null);
+                  setToast('Member removed from roster');
+                  await load();
+                } catch (e) {
+                  setToast(e instanceof Error ? e.message : 'Could not remove member');
+                } finally {
+                  setRemovingMemberId(null);
+                }
+              }}
+              disabled={Boolean(removingMemberId)}
+            />
+            <PrimaryButton
+              title="Cancel"
+              variant="ghost"
+              onPress={() => setConfirmRemoveId(null)}
+              disabled={Boolean(removingMemberId)}
+            />
+          </>
+        }>
+        <Text style={styles.removeConfirmName}>
+          {clients.find((c) => c.member.id === confirmRemoveId)?.member.full_name ?? 'This member'}
+        </Text>
+        <Text style={styles.removeConfirmBody}>
+          They will disappear from the active roster. Coach and program links are cleared.
+        </Text>
       </AppBottomSheet>
     </Screen>
   );
@@ -1557,6 +1613,10 @@ const styles = StyleSheet.create({
   },
   billingRow: {
     marginTop: spacing.sm,
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'center',
+    gap: spacing.sm,
   },
   billingAddBtn: {
     flexDirection: 'row',
@@ -1576,6 +1636,35 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: colors.background,
     letterSpacing: 0.4,
+  },
+  removeMemberBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 7,
+    borderRadius: radius.full,
+    borderWidth: 1,
+    borderColor: 'rgba(255,77,77,0.4)',
+    backgroundColor: 'rgba(255,77,77,0.1)',
+  },
+  removeMemberText: {
+    fontFamily: fonts.sansSemiBold,
+    fontSize: 11,
+    color: colors.danger,
+    letterSpacing: 0.3,
+  },
+  removeConfirmName: {
+    fontFamily: fonts.sansBold,
+    fontSize: 18,
+    color: colors.text,
+    marginBottom: spacing.sm,
+  },
+  removeConfirmBody: {
+    fontFamily: fonts.sans,
+    fontSize: 14,
+    lineHeight: 20,
+    color: colors.textSecondary,
   },
   billingPill: {
     flexDirection: 'row',

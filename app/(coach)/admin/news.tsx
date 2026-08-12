@@ -19,6 +19,7 @@ import { PrimaryButton } from '@/components/ui/PrimaryButton';
 import { Screen } from '@/components/ui/Screen';
 import { SectionHeader } from '@/components/ui/SectionHeader';
 import { Skeleton } from '@/components/ui/Skeleton';
+import { BackButton } from '@/components/ui/BackButton';
 import { useAuth } from '@/hooks/useAuth';
 import {
   newsAudienceLabel,
@@ -124,12 +125,7 @@ export default function AdminNewsScreen() {
           tintColor={colors.accent}
         />
       }>
-      <PrimaryButton
-        title="← Studio"
-        variant="ghost"
-        onPress={() => router.back()}
-        style={styles.back}
-      />
+      <BackButton label="Studio" style={styles.back} />
 
       <View style={styles.hero}>
         <LinearGradient

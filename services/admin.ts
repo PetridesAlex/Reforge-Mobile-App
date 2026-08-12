@@ -37,12 +37,14 @@ import {
 import { useSupabaseAdmin } from '@/lib/admin/config';
 import { useSupabaseContent } from '@/lib/content/config';
 import { useSupabaseMemberships } from '@/lib/memberships/config';
+import { useSupabasePrograms } from '@/lib/programs/config';
 import type { MemberInvitePlacement, MemberPlacementSummary } from '@/lib/scheduling/placement';
 import { getSupabase } from '@/lib/supabase/client';
 import { formatTime } from '@/lib/utils/dates';
 import { format, parseISO } from 'date-fns';
 import * as membershipsSupabase from '@/services/memberships.supabase';
 import * as adminSupabase from '@/services/admin.supabase';
+import * as weeksSupabase from '@/services/weeks.supabase';
 import {
   newsAudienceLabel,
   resolveNewsAudienceMemberIds,
@@ -453,6 +455,9 @@ export async function assignMemberProgram(
 }
 
 export async function setMemberActive(memberId: string, active: boolean): Promise<void> {
+  if (useSupabaseAdmin()) {
+    return adminSupabase.setMemberActive(memberId, active);
+  }
   await delay(200);
   const member = mockProfiles.find((p) => p.id === memberId && p.role === 'member');
   if (!member) throw new Error('Member not found');
@@ -461,6 +466,16 @@ export async function setMemberActive(memberId: string, active: boolean): Promis
   } else {
     mockInactiveMemberIds.add(memberId);
   }
+}
+
+/** Soft-remove a member from the active studio roster (admin). */
+export async function removeMemberFromRoster(memberId: string): Promise<void> {
+  return setMemberActive(memberId, false);
+}
+
+/** Restore a previously removed member to the roster (admin). */
+export async function restoreMemberToRoster(memberId: string): Promise<void> {
+  return setMemberActive(memberId, true);
 }
 
 export async function getStudioSettings(): Promise<StudioSettings> {
@@ -571,6 +586,11 @@ export async function deleteNews(newsId: string): Promise<void> {
 }
 
 export async function getStudioProgramId(): Promise<string> {
+  if (useSupabasePrograms()) {
+    const id = await weeksSupabase.getStudioProgramId();
+    if (!id) throw new Error('Could not load or create the studio week plan');
+    return id;
+  }
   await delay(50);
   return mockPrograms.find((p) => p.is_template)?.id ?? mockPrograms[0]?.id ?? IDS.program;
 }

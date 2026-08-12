@@ -11,6 +11,7 @@ import { ErrorState } from '@/components/ui/ErrorState';
 import { PrimaryButton } from '@/components/ui/PrimaryButton';
 import { Screen } from '@/components/ui/Screen';
 import { Skeleton } from '@/components/ui/Skeleton';
+import { BackButton } from '@/components/ui/BackButton';
 import * as adminService from '@/services/admin';
 import type { Profile, Program } from '@/types';
 import { colors, radius, spacing, typography } from '@/constants/theme';
@@ -200,7 +201,7 @@ export default function AdminMembersScreen() {
           tintColor={colors.accent}
         />
       }>
-      <PrimaryButton title="← Studio" variant="ghost" onPress={() => router.back()} style={styles.back} />
+      <BackButton label="Studio" style={styles.back} />
       <Text style={styles.kicker}>STUDIO ROSTER</Text>
       <Text style={styles.title}>Members</Text>
       <Text style={styles.subtitle}>
@@ -382,11 +383,12 @@ export default function AdminMembersScreen() {
         footer={
           <>
             <PrimaryButton
-              title={managed?.active ? 'Deactivate member' : 'Reactivate member'}
+              title={managed?.active ? 'Remove from roster' : 'Restore to roster'}
               variant="secondary"
               onPress={async () => {
                 if (!managed) return;
                 await adminService.setMemberActive(managed.member.id, !managed.active);
+                setInviteSuccess(managed.active ? 'Removed from roster' : 'Restored to roster');
                 await load();
               }}
             />

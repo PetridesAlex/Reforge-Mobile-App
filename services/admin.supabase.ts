@@ -27,13 +27,32 @@ export async function listMembers(): Promise<AdminMemberRow[]> {
 
   return (members ?? []).map((row) => {
     const member = mapProfile(row);
+    const rosterActive = row.roster_active !== false;
     return {
-      member,
+      member: { ...member, roster_active: rosterActive },
       coach: coachForMember.get(member.id) ?? null,
       programName: null,
-      active: true,
+      active: rosterActive,
     };
   });
+}
+
+export async function setMemberActive(memberId: string, active: boolean): Promise<void> {
+  const supabase = getSupabase();
+  const { error } = await supabase
+    .from('profiles')
+    .update({ roster_active: active })
+    .eq('id', memberId)
+    .eq('role', 'member');
+  if (error) throw error;
+
+  if (!active) {
+    // Clean studio links when removing from roster
+    await Promise.all([
+      supabase.from('coach_clients').delete().eq('member_id', memberId),
+      supabase.from('client_programs').update({ is_active: false }).eq('client_id', memberId),
+    ]);
+  }
 }
 
 export async function listStaff(): Promise<AdminStaffRow[]> {

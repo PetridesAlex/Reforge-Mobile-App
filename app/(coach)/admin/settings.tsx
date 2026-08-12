@@ -8,6 +8,7 @@ import { ErrorState } from '@/components/ui/ErrorState';
 import { PrimaryButton } from '@/components/ui/PrimaryButton';
 import { Screen } from '@/components/ui/Screen';
 import { Skeleton } from '@/components/ui/Skeleton';
+import { BackButton } from '@/components/ui/BackButton';
 import * as adminService from '@/services/admin';
 import type { StudioSettings } from '@/services/mock/data';
 import { colors, radius, spacing, typography } from '@/constants/theme';
@@ -79,7 +80,7 @@ export default function AdminSettingsScreen() {
 
   return (
     <Screen>
-      <PrimaryButton title="← Studio" variant="ghost" onPress={() => router.back()} style={styles.back} />
+      <BackButton label="Studio" style={styles.back} />
       <Text style={styles.kicker}>STUDIO CONTROL</Text>
       <Text style={styles.title}>Settings</Text>
       <Text style={styles.subtitle}>Brand, working week, hours, and member access</Text>

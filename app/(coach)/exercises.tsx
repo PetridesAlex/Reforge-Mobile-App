@@ -7,6 +7,7 @@ import { AppInput } from '@/components/ui/AppInput';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { PrimaryButton } from '@/components/ui/PrimaryButton';
 import { Screen } from '@/components/ui/Screen';
+import { BackButton } from '@/components/ui/BackButton';
 import { useAuth } from '@/hooks/useAuth';
 import * as coachService from '@/services/coach';
 import type { Exercise, MuscleGroup } from '@/types';
@@ -59,7 +60,7 @@ export default function ExerciseLibraryScreen() {
 
   return (
     <Screen>
-      <PrimaryButton title="← Back" variant="ghost" onPress={() => router.back()} style={styles.back} />
+      <BackButton label="Programs" style={styles.back} />
       <Text style={styles.title}>Exercise Library</Text>
       <Text style={styles.subtitle}>Browse and create custom exercises</Text>
 

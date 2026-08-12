@@ -15,6 +15,7 @@ import { ErrorState } from '@/components/ui/ErrorState';
 import { PrimaryButton } from '@/components/ui/PrimaryButton';
 import { Screen } from '@/components/ui/Screen';
 import { Skeleton } from '@/components/ui/Skeleton';
+import { BackButton } from '@/components/ui/BackButton';
 import { useAuth } from '@/hooks/useAuth';
 import { canManageStudio } from '@/lib/permissions';
 import { useSupabaseProgress } from '@/lib/progress/config';
@@ -92,6 +93,9 @@ export default function ClientDetailScreen() {
   const [billingLoading, setBillingLoading] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
   const [memberAbsences, setMemberAbsences] = useState<MemberAbsence[]>([]);
+  const [rosterActive, setRosterActive] = useState(true);
+  const [rosterBusy, setRosterBusy] = useState(false);
+  const [confirmRemove, setConfirmRemove] = useState(false);
   const [athletePerformance, setAthletePerformance] = useState<{
     weeklyWorkouts: number;
     monthlyWorkouts: number;
@@ -134,7 +138,9 @@ export default function ClientDetailScreen() {
         ]);
         setCoaches(staff);
         setPrograms(programList);
-        setAssignedCoachId(members.find((m) => m.member.id === id)?.coach?.id ?? null);
+        const row = members.find((m) => m.member.id === id);
+        setAssignedCoachId(row?.coach?.id ?? null);
+        setRosterActive(row?.active !== false);
         setBilling(membership);
       }
     } catch (e) {
@@ -266,7 +272,7 @@ export default function ClientDetailScreen() {
 
   return (
     <Screen>
-      <PrimaryButton title="← Roster" variant="ghost" onPress={() => router.back()} style={styles.back} />
+      <BackButton label="Roster" style={styles.back} />
 
       {toast ? (
         <Pressable onPress={() => setToast(null)} style={styles.toast}>
@@ -631,6 +637,110 @@ export default function ClientDetailScreen() {
                   <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
                 </Pressable>
               )}
+
+              <View style={styles.rosterDangerCard}>
+                <View style={styles.rosterDangerHead}>
+                  <View style={styles.rosterDangerIcon}>
+                    <Ionicons
+                      name={rosterActive ? 'person-remove-outline' : 'person-add-outline'}
+                      size={18}
+                      color={rosterActive ? colors.danger : colors.accent}
+                    />
+                  </View>
+                  <View style={styles.rosterDangerCopy}>
+                    <Text style={styles.rosterDangerTitle}>
+                      {rosterActive ? 'Remove from roster' : 'Restore to roster'}
+                    </Text>
+                    <Text style={styles.rosterDangerSub}>
+                      {rosterActive
+                        ? 'Hides this member from the active roster and clears coach / program links. Account stays intact.'
+                        : 'Bring this member back onto the active studio roster.'}
+                    </Text>
+                  </View>
+                </View>
+
+                {!rosterActive ? (
+                  <View style={styles.rosterInactivePill}>
+                    <View style={styles.rosterInactiveDot} />
+                    <Text style={styles.rosterInactiveText}>Currently off roster</Text>
+                  </View>
+                ) : null}
+
+                {confirmRemove && rosterActive ? (
+                  <View style={styles.rosterConfirm}>
+                    <Text style={styles.rosterConfirmText}>
+                      Remove {data.member.full_name} from the active roster?
+                    </Text>
+                    <View style={styles.rosterConfirmActions}>
+                      <Pressable
+                        onPress={() => setConfirmRemove(false)}
+                        disabled={rosterBusy}
+                        style={styles.rosterConfirmGhost}>
+                        <Text style={styles.rosterConfirmGhostText}>Cancel</Text>
+                      </Pressable>
+                      <Pressable
+                        onPress={async () => {
+                          if (!id) return;
+                          setRosterBusy(true);
+                          try {
+                            await adminService.removeMemberFromRoster(id);
+                            setRosterActive(false);
+                            setConfirmRemove(false);
+                            setToast('Removed from roster');
+                            setTimeout(() => router.replace('/(coach)/clients'), 500);
+                          } catch (e) {
+                            setToast(e instanceof Error ? e.message : 'Could not remove member');
+                          } finally {
+                            setRosterBusy(false);
+                          }
+                        }}
+                        disabled={rosterBusy}
+                        style={styles.rosterConfirmDanger}>
+                        <Text style={styles.rosterConfirmDangerText}>
+                          {rosterBusy ? 'Removing…' : 'Confirm remove'}
+                        </Text>
+                      </Pressable>
+                    </View>
+                  </View>
+                ) : (
+                  <Pressable
+                    onPress={async () => {
+                      if (rosterActive) {
+                        setConfirmRemove(true);
+                        return;
+                      }
+                      if (!id) return;
+                      setRosterBusy(true);
+                      try {
+                        await adminService.restoreMemberToRoster(id);
+                        setRosterActive(true);
+                        setToast('Restored to roster');
+                        await load();
+                      } catch (e) {
+                        setToast(e instanceof Error ? e.message : 'Could not restore member');
+                      } finally {
+                        setRosterBusy(false);
+                      }
+                    }}
+                    disabled={rosterBusy}
+                    style={({ pressed }) => [
+                      rosterActive ? styles.rosterRemoveBtn : styles.rosterRestoreBtn,
+                      pressed && styles.pressed,
+                      rosterBusy && { opacity: 0.6 },
+                    ]}>
+                    <Text
+                      style={
+                        rosterActive ? styles.rosterRemoveBtnText : styles.rosterRestoreBtnText
+                      }>
+                      {rosterBusy
+                        ? 'Please wait…'
+                        : rosterActive
+                          ? 'Remove from roster'
+                          : 'Restore to roster'}
+                    </Text>
+                  </Pressable>
+                )}
+              </View>
             </View>
           ) : null}
         </>
@@ -932,7 +1042,7 @@ function KpiTile({
 }
 
 const styles = StyleSheet.create({
-  back: { alignSelf: 'flex-start', paddingHorizontal: 0, marginTop: spacing.sm },
+  back: { marginTop: spacing.sm, marginBottom: spacing.sm },
   toast: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1419,6 +1529,133 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surfaceElevated,
   },
   billingLinkText: { fontFamily: fonts.sansSemiBold, fontSize: 14, color: colors.accent, flex: 1 },
+  rosterDangerCard: {
+    marginTop: spacing.sm,
+    padding: spacing.md,
+    borderRadius: radius.xl,
+    borderWidth: 1,
+    borderColor: 'rgba(255,77,77,0.28)',
+    backgroundColor: 'rgba(255,77,77,0.06)',
+    gap: spacing.md,
+  },
+  rosterDangerHead: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: spacing.md,
+  },
+  rosterDangerIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: radius.full,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(255,77,77,0.12)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,77,77,0.22)',
+  },
+  rosterDangerCopy: { flex: 1, minWidth: 0, gap: 4 },
+  rosterDangerTitle: {
+    fontFamily: fonts.sansSemiBold,
+    fontSize: 15,
+    color: colors.text,
+  },
+  rosterDangerSub: {
+    fontFamily: fonts.sans,
+    fontSize: 12,
+    lineHeight: 17,
+    color: colors.textSecondary,
+  },
+  rosterInactivePill: {
+    alignSelf: 'flex-start',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: radius.full,
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  rosterInactiveDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: colors.danger,
+  },
+  rosterInactiveText: {
+    fontFamily: fonts.sansMedium,
+    fontSize: 11,
+    color: colors.textMuted,
+  },
+  rosterConfirm: {
+    gap: spacing.sm,
+    padding: spacing.sm,
+    borderRadius: radius.lg,
+    backgroundColor: 'rgba(0,0,0,0.25)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,77,77,0.25)',
+  },
+  rosterConfirmText: {
+    fontFamily: fonts.sansMedium,
+    fontSize: 13,
+    color: colors.text,
+    lineHeight: 18,
+  },
+  rosterConfirmActions: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+  },
+  rosterConfirmGhost: {
+    flex: 1,
+    alignItems: 'center',
+    paddingVertical: 10,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  rosterConfirmGhostText: {
+    fontFamily: fonts.sansSemiBold,
+    fontSize: 13,
+    color: colors.textSecondary,
+  },
+  rosterConfirmDanger: {
+    flex: 1,
+    alignItems: 'center',
+    paddingVertical: 10,
+    borderRadius: radius.md,
+    backgroundColor: colors.danger,
+  },
+  rosterConfirmDangerText: {
+    fontFamily: fonts.sansSemiBold,
+    fontSize: 13,
+    color: colors.text,
+  },
+  rosterRemoveBtn: {
+    alignItems: 'center',
+    paddingVertical: 12,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    borderColor: 'rgba(255,77,77,0.45)',
+    backgroundColor: 'rgba(255,77,77,0.12)',
+  },
+  rosterRemoveBtnText: {
+    fontFamily: fonts.sansSemiBold,
+    fontSize: 13,
+    letterSpacing: 0.4,
+    color: colors.danger,
+  },
+  rosterRestoreBtn: {
+    alignItems: 'center',
+    paddingVertical: 12,
+    borderRadius: radius.lg,
+    backgroundColor: colors.accent,
+  },
+  rosterRestoreBtnText: {
+    fontFamily: fonts.sansSemiBold,
+    fontSize: 13,
+    color: colors.background,
+  },
   pressed: { opacity: 0.92 },
   dayList: { gap: spacing.sm, marginBottom: spacing.lg },
   dayCard: {

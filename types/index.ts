@@ -27,6 +27,8 @@ export type Profile = {
   /** First-run app guide (Home, Workouts, Messages, etc.) */
   app_onboarding_complete?: boolean;
   share_activity?: boolean;
+  /** Soft roster flag — false hides member from active studio lists */
+  roster_active?: boolean;
   created_at: string;
 };
 
