@@ -6,6 +6,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 
 import { AppInput } from '@/components/ui/AppInput';
 import { Avatar } from '@/components/ui/Avatar';
+import { BackButton } from '@/components/ui/BackButton';
 import { PrimaryButton } from '@/components/ui/PrimaryButton';
 import { Screen } from '@/components/ui/Screen';
 import { useAuth } from '@/hooks/useAuth';
@@ -165,12 +166,7 @@ export default function FitnessSetupScreen() {
             style={styles.heroHeaderGlow}
           />
           <View style={styles.heroHeaderTop}>
-            <Pressable
-              onPress={() => router.back()}
-              hitSlop={10}
-              style={({ pressed }) => [styles.backBtn, pressed && styles.pressed]}>
-              <Ionicons name="chevron-back" size={20} color={colors.text} />
-            </Pressable>
+            <BackButton compact />
             <View style={styles.progressRing}>
               <Text style={styles.progressValue}>{progress}%</Text>
               <Text style={styles.progressLabel}>READY</Text>

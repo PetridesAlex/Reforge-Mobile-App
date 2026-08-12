@@ -251,3 +251,88 @@ export async function getPreviousSetsForExercise(
   }
   return [];
 }
+
+export async function updateProgramExercise(
+  exerciseRowId: string,
+  patch: {
+    sets?: number;
+    reps?: string;
+    restSeconds?: number;
+    coachNotes?: string | null;
+    targetWeightKg?: number | null;
+    progressionIncrementKg?: number | null;
+    repRangeMin?: number | null;
+    repRangeMax?: number | null;
+  },
+): Promise<ProgramExercise> {
+  const supabase = getSupabase();
+  const update: Record<string, unknown> = {};
+  if (patch.sets != null) update.sets = patch.sets;
+  if (patch.reps != null) update.reps = patch.reps;
+  if (patch.restSeconds != null) update.rest_seconds = patch.restSeconds;
+  if (patch.coachNotes !== undefined) update.coach_notes = patch.coachNotes;
+  if (patch.targetWeightKg !== undefined) update.target_weight_kg = patch.targetWeightKg;
+  if (patch.progressionIncrementKg !== undefined) {
+    update.progression_increment_kg = patch.progressionIncrementKg;
+  }
+  if (patch.repRangeMin !== undefined) update.rep_range_min = patch.repRangeMin;
+  if (patch.repRangeMax !== undefined) update.rep_range_max = patch.repRangeMax;
+
+  const { data, error } = await supabase
+    .from('program_exercises')
+    .update(update)
+    .eq('id', exerciseRowId)
+    .select('*, exercises(*)')
+    .single();
+  if (error) throw new Error(formatSupabaseError(error));
+  const exRow = data.exercises as Record<string, unknown> | null;
+  return mapProgramExercise(
+    data as Record<string, unknown>,
+    exRow ? mapExercise(exRow) : undefined,
+  );
+}
+
+export async function addProgramExercise(
+  dayId: string,
+  input: {
+    exerciseId: string;
+    sets: number;
+    reps: string;
+    restSeconds: number;
+    coachNotes?: string | null;
+    targetWeightKg?: number | null;
+    progressionIncrementKg?: number | null;
+    repRangeMin?: number | null;
+    repRangeMax?: number | null;
+  },
+): Promise<ProgramExercise> {
+  const supabase = getSupabase();
+  const { count } = await supabase
+    .from('program_exercises')
+    .select('*', { count: 'exact', head: true })
+    .eq('program_day_id', dayId);
+
+  const { data, error } = await supabase
+    .from('program_exercises')
+    .insert({
+      program_day_id: dayId,
+      exercise_id: input.exerciseId,
+      sets: input.sets,
+      reps: input.reps,
+      rest_seconds: input.restSeconds,
+      coach_notes: input.coachNotes ?? null,
+      order_index: count ?? 0,
+      target_weight_kg: input.targetWeightKg ?? null,
+      progression_increment_kg: input.progressionIncrementKg ?? null,
+      rep_range_min: input.repRangeMin ?? null,
+      rep_range_max: input.repRangeMax ?? null,
+    })
+    .select('*, exercises(*)')
+    .single();
+  if (error) throw new Error(formatSupabaseError(error));
+  const exRow = data.exercises as Record<string, unknown> | null;
+  return mapProgramExercise(
+    data as Record<string, unknown>,
+    exRow ? mapExercise(exRow) : undefined,
+  );
+}

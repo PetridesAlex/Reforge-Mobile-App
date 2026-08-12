@@ -35,6 +35,7 @@ const ADMIN_LINKS: LinkItem[] = [
   { key: 'workouts', title: 'Workouts', meta: 'Weekly training plan', mark: 'W', href: '/(coach)/programs' },
   { key: 'schedule', title: 'Schedule', meta: 'Premium week plan', mark: 'K', href: '/(coach)/admin/schedule' },
   { key: 'news', title: 'News', meta: 'Posts for members', mark: 'N', href: '/(coach)/admin/news' },
+  { key: 'challenges', title: 'Challenges', meta: 'Gym competitions', mark: 'G', href: '/(coach)/admin/challenges' },
   { key: 'staff', title: 'Staff', meta: 'Coaches and roles', mark: 'T', href: '/(coach)/admin/staff' },
 ];
 

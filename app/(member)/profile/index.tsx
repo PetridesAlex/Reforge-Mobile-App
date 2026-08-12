@@ -1,6 +1,8 @@
 import { router } from 'expo-router';
-import { useEffect, useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
+import * as Haptics from 'expo-haptics';
+import { useEffect, useRef, useState } from 'react';
+import { Animated, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
 import { MemberAppGuide } from '@/components/onboarding/MemberAppGuide';
@@ -9,7 +11,6 @@ import { AppCard } from '@/components/ui/AppCard';
 import { Avatar } from '@/components/ui/Avatar';
 import { MoreMenu } from '@/components/ui/MoreMenu';
 import { PersonIcon } from '@/components/ui/PersonIcon';
-import { PrimaryButton } from '@/components/ui/PrimaryButton';
 import { ReforgeLogo } from '@/components/ui/ReforgeLogo';
 import { Screen } from '@/components/ui/Screen';
 import { SectionHeader } from '@/components/ui/SectionHeader';
@@ -17,7 +18,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { pickAvatarImage } from '@/lib/utils/pickAvatar';
 import * as community from '@/services/community';
 import * as memberService from '@/services/member';
-import { colors, radius, spacing, typography } from '@/constants/theme';
+import { colors, fonts, radius, spacing, typography } from '@/constants/theme';
 
 const MENU_ITEMS = [
   { id: 'sessions', label: 'Sessions', icon: 'calendar-outline' as const, href: '/(member)/bookings' },
@@ -96,7 +97,47 @@ export default function ProfileScreen() {
     }
   };
 
+  const signOutScale = useRef(new Animated.Value(1)).current;
+  const brandOpacity = useRef(new Animated.Value(0)).current;
+  const brandY = useRef(new Animated.Value(10)).current;
+
+  useEffect(() => {
+    Animated.parallel([
+      Animated.timing(brandOpacity, {
+        toValue: 1,
+        duration: 700,
+        delay: 180,
+        useNativeDriver: true,
+      }),
+      Animated.spring(brandY, {
+        toValue: 0,
+        friction: 9,
+        tension: 60,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  }, [brandOpacity, brandY]);
+
+  const onSignOutPressIn = () => {
+    Animated.spring(signOutScale, {
+      toValue: 0.97,
+      friction: 6,
+      tension: 200,
+      useNativeDriver: true,
+    }).start();
+  };
+
+  const onSignOutPressOut = () => {
+    Animated.spring(signOutScale, {
+      toValue: 1,
+      friction: 5,
+      tension: 160,
+      useNativeDriver: true,
+    }).start();
+  };
+
   const onSignOut = async () => {
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     setSigningOut(true);
     try {
       await signOut();
@@ -133,15 +174,23 @@ export default function ProfileScreen() {
       </View>
 
       {/* Contact details below */}
-      <SectionHeader title="Contact" />
-      <AppCard style={styles.infoCard}>
+      <SectionHeader title="Contact" kicker="Account" />
+      <View style={styles.premiumCard}>
+        <LinearGradient
+          colors={['rgba(200,255,0,0.18)', 'transparent']}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 0 }}
+          style={styles.premiumCardSheen}
+        />
         <View style={styles.infoRow}>
           <View style={styles.infoIcon}>
             <Ionicons name="mail-outline" size={18} color={colors.accent} />
           </View>
           <View style={styles.infoCopy}>
             <Text style={styles.infoLabel}>Email</Text>
-            <Text style={styles.infoValue}>{profile?.email ?? '—'}</Text>
+            <Text style={styles.infoValue} numberOfLines={1}>
+              {profile?.email ?? '—'}
+            </Text>
           </View>
         </View>
         <View style={styles.divider} />
@@ -154,7 +203,7 @@ export default function ProfileScreen() {
             <Text style={styles.infoValue}>{profile?.phone ?? 'Not added'}</Text>
           </View>
         </View>
-      </AppCard>
+      </View>
 
       {/* Performance build profile */}
       <SectionHeader title="Performance build" kicker="Analytics" />
@@ -182,23 +231,41 @@ export default function ProfileScreen() {
         </View>
       </AppCard>
 
-      <SectionHeader title="Training" />
-      <AppCard style={styles.infoCard}>
-        <Pressable onPress={() => void onMessageCoach()} style={styles.infoRow}>
-          <View style={styles.infoIcon}>
-            <PersonIcon size={18} color={colors.accent} />
+      <SectionHeader title="Training" kicker="Studio" />
+      <View style={[styles.premiumCard, styles.trainingCard]}>
+        <LinearGradient
+          colors={['rgba(200,255,0,0.22)', 'transparent']}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 0.85, y: 1 }}
+          style={styles.premiumCardSheen}
+        />
+        <Pressable
+          onPress={() => void onMessageCoach()}
+          disabled={messagingCoach}
+          style={({ pressed }) => [
+            styles.coachRow,
+            pressed && styles.coachRowPressed,
+            messagingCoach && styles.coachRowDisabled,
+          ]}>
+          <View style={styles.coachIcon}>
+            <PersonIcon size={20} color={colors.background} />
           </View>
           <View style={styles.infoCopy}>
             <Text style={styles.infoLabel}>Coach</Text>
-            <Text style={styles.infoValue}>{coachName ?? 'Studio coach'}</Text>
+            <Text style={styles.coachName}>{coachName ?? 'Studio coach'}</Text>
             <Text style={styles.infoHint}>
               {messagingCoach ? 'Opening chat…' : 'Tap to message your coach'}
             </Text>
           </View>
-          <Ionicons name="chatbubble-ellipses-outline" size={18} color={colors.accent} />
+          <View style={styles.messagePill}>
+            <Ionicons name="chatbubble-ellipses" size={14} color={colors.background} />
+            <Text style={styles.messagePillText}>Message</Text>
+          </View>
         </Pressable>
-        <View style={styles.divider} />
-        <View style={styles.infoRow}>
+
+        <View style={styles.trainingDivider} />
+
+        <View style={styles.programRow}>
           <View style={styles.infoIcon}>
             <Ionicons name="barbell-outline" size={18} color={colors.accent} />
           </View>
@@ -206,8 +273,14 @@ export default function ProfileScreen() {
             <Text style={styles.infoLabel}>Program</Text>
             <Text style={styles.infoValue}>{plan ?? 'No active plan'}</Text>
           </View>
+          {plan ? (
+            <View style={styles.activeChip}>
+              <View style={styles.activeDot} />
+              <Text style={styles.activeChipText}>Active</Text>
+            </View>
+          ) : null}
         </View>
-      </AppCard>
+      </View>
 
       <SectionHeader title="Settings" />
       <View style={styles.menu}>
@@ -235,18 +308,56 @@ export default function ProfileScreen() {
         ))}
       </View>
 
-      <PrimaryButton
-        title={signingOut ? 'Signing out…' : 'Sign Out'}
-        variant="secondary"
-        onPress={onSignOut}
-        disabled={signingOut}
-        style={styles.signOut}
-      />
+      <Animated.View style={{ transform: [{ scale: signOutScale }] }}>
+        <Pressable
+          onPress={onSignOut}
+          onPressIn={onSignOutPressIn}
+          onPressOut={onSignOutPressOut}
+          disabled={signingOut}
+          accessibilityRole="button"
+          accessibilityLabel="Sign out"
+          style={({ pressed }) => [
+            styles.signOut,
+            pressed && styles.signOutPressed,
+            signingOut && styles.signOutDisabled,
+          ]}>
+          <LinearGradient
+            colors={['rgba(255,77,77,0.14)', 'rgba(255,77,77,0.04)']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={StyleSheet.absoluteFillObject}
+          />
+          <View style={styles.signOutInner}>
+            <View style={styles.signOutIconWrap}>
+              <Ionicons name="log-out-outline" size={18} color={colors.danger} />
+            </View>
+            <Text style={styles.signOutLabel}>
+              {signingOut ? 'Signing out…' : 'Sign Out'}
+            </Text>
+          </View>
+        </Pressable>
+      </Animated.View>
 
-      <View style={styles.brandFooter}>
-        <ReforgeLogo width={110} height={28} />
-        <Text style={styles.brandCaption}>REFORGE · Limassol</Text>
-      </View>
+      <Animated.View
+        style={[
+          styles.brandFooter,
+          { opacity: brandOpacity, transform: [{ translateY: brandY }] },
+        ]}>
+        <View style={styles.brandRuleRow}>
+          <LinearGradient
+            colors={['transparent', 'rgba(200,255,0,0.35)', 'transparent']}
+            start={{ x: 0, y: 0.5 }}
+            end={{ x: 1, y: 0.5 }}
+            style={styles.brandRule}
+          />
+        </View>
+        <ReforgeLogo width={128} height={32} />
+        <View style={styles.brandCaptionRow}>
+          <Text style={styles.brandWord}>REFORGE</Text>
+          <View style={styles.brandDot} />
+          <Text style={styles.brandPlace}>LIMASSOL</Text>
+        </View>
+      </Animated.View>
 
       <MemberAppGuide
         visible={guideOpen}
@@ -314,42 +425,152 @@ const styles = StyleSheet.create({
     marginBottom: spacing.lg,
     paddingVertical: spacing.sm,
   },
+  premiumCard: {
+    marginBottom: spacing.xl,
+    borderRadius: radius.xl,
+    borderWidth: 1,
+    borderColor: 'rgba(200,255,0,0.18)',
+    backgroundColor: colors.surfaceElevated,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm + 2,
+    overflow: 'hidden',
+  },
+  trainingCard: {
+    borderColor: 'rgba(200,255,0,0.28)',
+    paddingVertical: spacing.md,
+  },
+  premiumCardSheen: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    height: 48,
+  },
   infoRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.md,
+    paddingVertical: spacing.md - 2,
+  },
+  coachRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
     paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.xs,
+    borderRadius: radius.lg,
+  },
+  coachRowPressed: {
+    backgroundColor: 'rgba(200,255,0,0.08)',
+  },
+  coachRowDisabled: {
+    opacity: 0.7,
+  },
+  programRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.xs,
   },
   infoIcon: {
-    width: 36,
-    height: 36,
+    width: 42,
+    height: 42,
     borderRadius: radius.md,
     backgroundColor: colors.accentMuted,
+    borderWidth: 1,
+    borderColor: 'rgba(200,255,0,0.22)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  coachIcon: {
+    width: 46,
+    height: 46,
+    borderRadius: radius.full,
+    backgroundColor: colors.accent,
     alignItems: 'center',
     justifyContent: 'center',
   },
   infoCopy: {
     flex: 1,
-    gap: 2,
+    gap: 3,
+    minWidth: 0,
   },
   infoLabel: {
-    ...typography.label,
-    color: colors.textMuted,
+    fontFamily: fonts.sansMedium,
+    fontSize: 11,
+    letterSpacing: 1.8,
+    textTransform: 'uppercase',
+    color: colors.accent,
   },
   infoValue: {
-    ...typography.body,
+    fontFamily: fonts.sansSemiBold,
+    fontSize: 16,
     color: colors.text,
-    fontWeight: '600',
+    letterSpacing: -0.2,
+  },
+  coachName: {
+    fontFamily: fonts.sansBold,
+    fontSize: 17,
+    color: colors.text,
+    letterSpacing: -0.25,
   },
   infoHint: {
-    ...typography.caption,
+    fontFamily: fonts.sans,
+    fontSize: 12,
+    color: colors.textSecondary,
+    marginTop: 1,
+  },
+  messagePill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: colors.accent,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: radius.full,
+  },
+  messagePillText: {
+    fontFamily: fonts.sansSemiBold,
+    fontSize: 11,
+    letterSpacing: 0.6,
+    textTransform: 'uppercase',
+    color: colors.background,
+  },
+  activeChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: radius.full,
+    backgroundColor: colors.accentMuted,
+    borderWidth: 1,
+    borderColor: 'rgba(200,255,0,0.28)',
+  },
+  activeDot: {
+    width: 6,
+    height: 6,
+    borderRadius: radius.full,
+    backgroundColor: colors.accent,
+  },
+  activeChipText: {
+    fontFamily: fonts.sansSemiBold,
+    fontSize: 11,
+    letterSpacing: 0.8,
+    textTransform: 'uppercase',
     color: colors.accent,
-    marginTop: 2,
   },
   divider: {
-    height: 1,
-    backgroundColor: colors.border,
-    marginLeft: 52,
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    marginLeft: 58,
+  },
+  trainingDivider: {
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: 'rgba(200,255,0,0.16)',
+    marginVertical: spacing.sm,
+    marginLeft: 62,
   },
   menu: {
     gap: spacing.sm,
@@ -367,15 +588,84 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   signOut: {
-    marginBottom: spacing.lg,
+    marginBottom: spacing.xl,
+    marginTop: spacing.sm,
+    borderRadius: radius.lg,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: 'rgba(255,77,77,0.35)',
+    backgroundColor: 'rgba(255,77,77,0.06)',
+    minHeight: 56,
+    justifyContent: 'center',
+  },
+  signOutPressed: {
+    borderColor: 'rgba(255,77,77,0.55)',
+    backgroundColor: 'rgba(255,77,77,0.12)',
+  },
+  signOutDisabled: {
+    opacity: 0.55,
+  },
+  signOutInner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.sm,
+    paddingVertical: spacing.md + 2,
+    paddingHorizontal: spacing.lg,
+  },
+  signOutIconWrap: {
+    width: 32,
+    height: 32,
+    borderRadius: radius.full,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(255,77,77,0.12)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,77,77,0.22)',
+  },
+  signOutLabel: {
+    fontFamily: fonts.sansSemiBold,
+    fontSize: 15,
+    letterSpacing: 1.4,
+    textTransform: 'uppercase',
+    color: colors.danger,
   },
   brandFooter: {
     alignItems: 'center',
-    gap: spacing.sm,
-    marginBottom: spacing.xl,
+    gap: spacing.md,
+    marginBottom: spacing.xxl,
+    paddingTop: spacing.sm,
   },
-  brandCaption: {
-    ...typography.label,
-    color: colors.textMuted,
+  brandRuleRow: {
+    width: '100%',
+    alignItems: 'center',
+    marginBottom: spacing.xs,
+  },
+  brandRule: {
+    width: 160,
+    height: 1,
+  },
+  brandCaptionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  brandWord: {
+    fontFamily: fonts.display,
+    fontSize: 18,
+    letterSpacing: 3.2,
+    color: colors.text,
+  },
+  brandDot: {
+    width: 4,
+    height: 4,
+    borderRadius: radius.full,
+    backgroundColor: colors.accent,
+  },
+  brandPlace: {
+    fontFamily: fonts.sansMedium,
+    fontSize: 11,
+    letterSpacing: 2.8,
+    color: colors.accent,
   },
 });

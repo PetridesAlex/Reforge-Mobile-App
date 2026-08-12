@@ -10,6 +10,7 @@ import { MediaImage } from '@/components/ui/MediaImage';
 import { PrimaryButton } from '@/components/ui/PrimaryButton';
 import { Screen } from '@/components/ui/Screen';
 import { Skeleton } from '@/components/ui/Skeleton';
+import { BackButton } from '@/components/ui/BackButton';
 import { useAuth } from '@/hooks/useAuth';
 import { useStudioSync } from '@/hooks/useStudioSync';
 import {
@@ -179,12 +180,7 @@ export default function WorkoutCategoryScreen() {
           <MediaImage uri={config.image} style={styles.heroImage} rounded={0} overlay />
 
           <View style={styles.heroTop}>
-            <Pressable
-              onPress={() => router.back()}
-              hitSlop={10}
-              style={({ pressed }) => [styles.backBtn, pressed && styles.pressed]}>
-              <Ionicons name="chevron-back" size={20} color={colors.text} />
-            </Pressable>
+            <BackButton compact />
             <View style={styles.heroPill}>
               <Ionicons name="layers-outline" size={11} color={colors.accent} />
               <Text style={styles.heroPillText}>TRAINING CATEGORY</Text>

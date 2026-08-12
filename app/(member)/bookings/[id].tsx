@@ -10,6 +10,7 @@ import { ErrorState } from '@/components/ui/ErrorState';
 import { PrimaryButton } from '@/components/ui/PrimaryButton';
 import { Screen } from '@/components/ui/Screen';
 import { Skeleton } from '@/components/ui/Skeleton';
+import { BackButton } from '@/components/ui/BackButton';
 import { useAuth } from '@/hooks/useAuth';
 import { formatTime } from '@/lib/utils/dates';
 import * as memberService from '@/services/member';
@@ -195,12 +196,7 @@ export default function BookingDetailScreen() {
             style={styles.heroGlow}
           />
           <View style={styles.heroTop}>
-            <Pressable
-              onPress={() => router.back()}
-              hitSlop={10}
-              style={({ pressed }) => [styles.backBtn, pressed && styles.pressed]}>
-              <Ionicons name="chevron-back" size={20} color={colors.text} />
-            </Pressable>
+            <BackButton compact />
             <View style={styles.heroPill}>
               <Ionicons name="calendar-outline" size={11} color={colors.accent} />
               <Text style={styles.heroPillText}>PRIVATE SESSION</Text>

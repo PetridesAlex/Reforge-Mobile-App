@@ -112,6 +112,13 @@ export const ADMIN_MENU_ITEMS: readonly MoreMenuItem[] = [
     href: '/(coach)/admin/news',
   },
   {
+    id: 'challenges',
+    label: 'Challenges',
+    description: 'Gym competitions',
+    icon: 'trophy-outline',
+    href: '/(coach)/admin/challenges',
+  },
+  {
     id: 'settings',
     label: 'Settings',
     description: 'Hours, access & studio',

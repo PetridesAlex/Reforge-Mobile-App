@@ -11,6 +11,7 @@ import { ErrorState } from '@/components/ui/ErrorState';
 import { MediaImage } from '@/components/ui/MediaImage';
 import { Screen } from '@/components/ui/Screen';
 import { Skeleton } from '@/components/ui/Skeleton';
+import { BackButton } from '@/components/ui/BackButton';
 import { useAuth } from '@/hooks/useAuth';
 import { useActiveWorkout } from '@/hooks/useActiveWorkout';
 import { workoutImageForDay } from '@/constants/media';
@@ -132,9 +133,7 @@ export default function WorkoutDetailScreen() {
           colors={['transparent', 'rgba(10,10,10,0.95)']}
           style={StyleSheet.absoluteFillObject}
         />
-        <Pressable onPress={() => router.back()} style={styles.back}>
-          <Ionicons name="chevron-back" size={20} color={colors.text} />
-        </Pressable>
+        <BackButton compact style={styles.back} />
         <Text style={styles.kicker}>
           {program?.name ?? 'PROGRAM'}
           {program ? ` · WEEK ${program.duration_weeks}` : ''}

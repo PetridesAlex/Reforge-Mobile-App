@@ -10,6 +10,7 @@ import { PrimaryButton } from '@/components/ui/PrimaryButton';
 import { Screen } from '@/components/ui/Screen';
 import { SectionHeader } from '@/components/ui/SectionHeader';
 import { Skeleton } from '@/components/ui/Skeleton';
+import { BackButton } from '@/components/ui/BackButton';
 import { useAuth } from '@/hooks/useAuth';
 import * as memberService from '@/services/member';
 import type { AvailableSlot } from '@/types';
@@ -72,12 +73,7 @@ export default function BookSessionScreen() {
           style={styles.heroHeaderGlow}
         />
         <View style={styles.heroHeaderTop}>
-          <Pressable
-            onPress={() => router.back()}
-            hitSlop={10}
-            style={({ pressed }) => [styles.backBtn, pressed && styles.pressed]}>
-            <Ionicons name="chevron-back" size={20} color={colors.text} />
-          </Pressable>
+          <BackButton compact />
           <View style={styles.heroPill}>
             <Ionicons name="calendar-outline" size={11} color={colors.accent} />
             <Text style={styles.heroPillText}>PRIVATE SESSION</Text>

@@ -6,6 +6,7 @@ import { LineChart, BarChart } from 'react-native-gifted-charts';
 import { Ionicons } from '@expo/vector-icons';
 
 import { AnimatedCount } from '@/components/ui/AnimatedCount';
+import { NavChevron } from '@/components/ui/BackButton';
 import { PerformanceBuildProfile } from '@/components/performance/PerformanceBuildProfile';
 import { PeriodRecap } from '@/components/progress/PeriodRecap';
 import { AchievementRow } from '@/components/achievements/AchievementRow';
@@ -170,7 +171,7 @@ export default function ProgressScreen() {
             Review completed sessions — duration, type, volume, and every set.
           </Text>
         </View>
-        <Ionicons name="chevron-forward" size={18} color={colors.accent} />
+        <NavChevron />
       </Pressable>
 
       <SectionHeader title="Body composition" kicker="Metrics" />

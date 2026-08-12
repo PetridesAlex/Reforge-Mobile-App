@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 
 import { AppInput } from '@/components/ui/AppInput';
+import { BackButton } from '@/components/ui/BackButton';
 import { PrimaryButton } from '@/components/ui/PrimaryButton';
 import { Screen } from '@/components/ui/Screen';
 import { useAuth } from '@/hooks/useAuth';
@@ -46,7 +47,7 @@ export default function LogWeightScreen() {
 
   return (
     <Screen contentContainerStyle={styles.content}>
-      <PrimaryButton title="← Back" variant="ghost" onPress={() => router.back()} style={styles.back} />
+      <BackButton label="Progress" style={styles.back} />
       <Text style={styles.title}>Log Weight</Text>
       <View style={styles.form}>
         <AppInput label="Weight (kg)" keyboardType="decimal-pad" value={weight} onChangeText={setWeight} placeholder="78.5" />
@@ -65,8 +66,6 @@ const styles = StyleSheet.create({
     gap: spacing.lg,
   },
   back: {
-    alignSelf: 'flex-start',
-    paddingHorizontal: 0,
     marginTop: spacing.sm,
   },
   title: {

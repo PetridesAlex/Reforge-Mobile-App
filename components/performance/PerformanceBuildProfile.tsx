@@ -237,18 +237,45 @@ export function PerformanceBuildProfile({
         </View>
 
         {!coachMode ? (
-          <View style={styles.actions}>
-            <Pressable
-              onPress={() => router.push('/(member)/progress')}
-              style={({ pressed }) => [styles.actionGhost, pressed && styles.pressed]}>
-              <Text style={styles.actionGhostText}>Full analytics</Text>
-              <Ionicons name="arrow-forward" size={14} color={colors.accent} />
-            </Pressable>
-            <Pressable
-              onPress={() => router.push('/(member)/progress/setup')}
-              style={({ pressed }) => [styles.actionGhost, pressed && styles.pressed]}>
-              <Text style={styles.actionGhostText}>Edit profile</Text>
-            </Pressable>
+          <View style={styles.actionsBlock}>
+            <View style={styles.actionsRule} />
+            <View style={styles.actions}>
+              <Pressable
+                onPress={() => router.push('/(member)/progress')}
+                accessibilityRole="button"
+                accessibilityLabel="Open full analytics"
+                style={({ pressed }) => [
+                  styles.actionPrimary,
+                  pressed && styles.actionPrimaryPressed,
+                ]}>
+                <View style={styles.actionIconPrimary}>
+                  <Ionicons name="stats-chart-outline" size={15} color={colors.background} />
+                </View>
+                <View style={styles.actionCopy}>
+                  <Text style={styles.actionPrimaryTitle}>Full analytics</Text>
+                  <Text style={styles.actionPrimarySub}>Progress hub</Text>
+                </View>
+                <Ionicons name="chevron-forward" size={14} color={colors.background} />
+              </Pressable>
+
+              <Pressable
+                onPress={() => router.push('/(member)/progress/setup')}
+                accessibilityRole="button"
+                accessibilityLabel="Edit performance profile"
+                style={({ pressed }) => [
+                  styles.actionSecondary,
+                  pressed && styles.actionSecondaryPressed,
+                ]}>
+                <View style={styles.actionIconSecondary}>
+                  <Ionicons name="create-outline" size={15} color={colors.accent} />
+                </View>
+                <View style={styles.actionCopy}>
+                  <Text style={styles.actionSecondaryTitle}>Edit profile</Text>
+                  <Text style={styles.actionSecondarySub}>Goals & metrics</Text>
+                </View>
+                <Ionicons name="chevron-forward" size={14} color={colors.accent} />
+              </Pressable>
+            </View>
           </View>
         ) : null}
       </LinearGradient>
@@ -607,19 +634,94 @@ const styles = StyleSheet.create({
     lineHeight: 17,
     color: colors.textSecondary,
   },
+  actionsBlock: {
+    marginTop: spacing.xs,
+    gap: spacing.sm,
+  },
+  actionsRule: {
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: 'rgba(200,255,0,0.18)',
+    marginBottom: 2,
+  },
   actions: {
     flexDirection: 'row',
-    gap: spacing.md,
+    gap: spacing.sm,
   },
-  actionGhost: {
+  actionPrimary: {
+    flex: 1,
+    minWidth: 0,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
+    gap: spacing.sm,
+    paddingVertical: 10,
+    paddingHorizontal: 10,
+    borderRadius: radius.lg,
+    backgroundColor: colors.accent,
   },
-  actionGhostText: {
+  actionPrimaryPressed: {
+    opacity: 0.9,
+    transform: [{ scale: 0.985 }],
+  },
+  actionSecondary: {
+    flex: 1,
+    minWidth: 0,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    paddingVertical: 10,
+    paddingHorizontal: 10,
+    borderRadius: radius.lg,
+    backgroundColor: colors.accentMuted,
+    borderWidth: 1,
+    borderColor: 'rgba(200,255,0,0.32)',
+  },
+  actionSecondaryPressed: {
+    backgroundColor: 'rgba(200,255,0,0.22)',
+    transform: [{ scale: 0.985 }],
+  },
+  actionIconPrimary: {
+    width: 28,
+    height: 28,
+    borderRadius: radius.full,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(0,0,0,0.18)',
+  },
+  actionIconSecondary: {
+    width: 28,
+    height: 28,
+    borderRadius: radius.full,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(0,0,0,0.25)',
+    borderWidth: 1,
+    borderColor: 'rgba(200,255,0,0.2)',
+  },
+  actionCopy: {
+    flex: 1,
+    minWidth: 0,
+    gap: 1,
+  },
+  actionPrimaryTitle: {
     fontFamily: fonts.sansSemiBold,
-    fontSize: 13,
+    fontSize: 12,
+    letterSpacing: 0.2,
+    color: colors.background,
+  },
+  actionPrimarySub: {
+    fontFamily: fonts.sans,
+    fontSize: 10,
+    color: 'rgba(10,10,10,0.62)',
+  },
+  actionSecondaryTitle: {
+    fontFamily: fonts.sansSemiBold,
+    fontSize: 12,
+    letterSpacing: 0.2,
     color: colors.accent,
   },
-  pressed: { opacity: 0.88 },
+  actionSecondarySub: {
+    fontFamily: fonts.sans,
+    fontSize: 10,
+    color: colors.textSecondary,
+  },
 });

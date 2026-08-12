@@ -4,6 +4,7 @@ import { addDays, format, isSameDay, startOfWeek } from 'date-fns';
 import { Ionicons } from '@expo/vector-icons';
 
 import { colors, radius, spacing, typography } from '@/constants/theme';
+import { BackButton } from '@/components/ui/BackButton';
 
 export type CalendarWorkoutDay = {
   id: string;
@@ -57,18 +58,13 @@ export function WeekCalendar({
     <View style={[styles.wrap, compact && styles.wrapCompact]}>
       {!compact ? (
         <View style={styles.header}>
-          <Pressable
-            onPress={() => onWeekChange(addDays(weekStart, -7))}
-            hitSlop={12}
-            style={styles.navBtn}>
-            <Ionicons name="chevron-back" size={18} color={colors.text} />
-          </Pressable>
+          <BackButton compact onPress={() => onWeekChange(addDays(weekStart, -7))} />
           <Text style={styles.monthLabel}>{format(selectedDate, 'MMMM yyyy')}</Text>
           <Pressable
             onPress={() => onWeekChange(addDays(weekStart, 7))}
             hitSlop={12}
-            style={styles.navBtn}>
-            <Ionicons name="chevron-forward" size={18} color={colors.text} />
+            style={({ pressed }) => [styles.navBtn, pressed && styles.navBtnPressed]}>
+            <Ionicons name="chevron-forward" size={18} color={colors.accent} />
           </Pressable>
         </View>
       ) : null}
@@ -158,14 +154,19 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   navBtn: {
-    width: 34,
-    height: 34,
+    width: 40,
+    height: 40,
     borderRadius: radius.full,
-    backgroundColor: colors.surfaceElevated,
+    backgroundColor: colors.accentMuted,
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: 'rgba(200,255,0,0.28)',
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  navBtnPressed: {
+    backgroundColor: 'rgba(200,255,0,0.28)',
+    borderColor: 'rgba(200,255,0,0.5)',
+    transform: [{ scale: 0.96 }],
   },
   monthLabel: {
     ...typography.subtitle,

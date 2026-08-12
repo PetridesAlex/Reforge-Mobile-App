@@ -11,6 +11,7 @@ import { PrimaryButton } from '@/components/ui/PrimaryButton';
 import { Screen } from '@/components/ui/Screen';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { WodPrescriptionList } from '@/components/workouts/WodPrescriptionList';
+import { BackButton } from '@/components/ui/BackButton';
 import { useAuth } from '@/hooks/useAuth';
 import { workoutImageForDay } from '@/constants/media';
 import { normalizeMovements } from '@/lib/workouts/wod';
@@ -80,9 +81,7 @@ export default function WodWorkoutScreen() {
   return (
     <Screen scrollable>
       <View style={[styles.hero, { paddingTop: insets.top + spacing.sm }]}>
-        <Pressable onPress={() => router.back()} style={styles.backBtn} hitSlop={12}>
-          <Ionicons name="chevron-back" size={22} color={colors.text} />
-        </Pressable>
+        <BackButton compact />
 
         <View style={styles.heroMedia}>
           <MediaImage uri={workoutImageForDay(wod.title)} style={styles.heroImage} overlay />

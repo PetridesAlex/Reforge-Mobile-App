@@ -8,6 +8,10 @@ export type ExercisePrescription = {
   workSeconds: number;
   tempo: string;
   notes: string;
+  targetWeightKg: number | null;
+  progressionIncrementKg: number | null;
+  repRangeMin: number | null;
+  repRangeMax: number | null;
 };
 
 export type PrescriptionPreset = {
@@ -45,7 +49,19 @@ function parseMeta(raw: string | null | undefined): Pick<ExercisePrescription, '
   return { ...meta, notes: (match[2] ?? '').trim() };
 }
 
-export function parsePrescription(pe: Pick<ProgramExercise, 'sets' | 'reps' | 'rest_seconds' | 'coach_notes'>): ExercisePrescription {
+export function parsePrescription(
+  pe: Pick<
+    ProgramExercise,
+    | 'sets'
+    | 'reps'
+    | 'rest_seconds'
+    | 'coach_notes'
+    | 'target_weight_kg'
+    | 'progression_increment_kg'
+    | 'rep_range_min'
+    | 'rep_range_max'
+  >,
+): ExercisePrescription {
   const meta = parseMeta(pe.coach_notes);
   return {
     sets: Math.max(1, pe.sets),
@@ -55,6 +71,10 @@ export function parsePrescription(pe: Pick<ProgramExercise, 'sets' | 'reps' | 'r
     workSeconds: meta.workSeconds,
     tempo: meta.tempo,
     notes: meta.notes,
+    targetWeightKg: pe.target_weight_kg ?? null,
+    progressionIncrementKg: pe.progression_increment_kg ?? null,
+    repRangeMin: pe.rep_range_min ?? null,
+    repRangeMax: pe.rep_range_max ?? null,
   };
 }
 
@@ -117,6 +137,10 @@ export function defaultPrescription(): ExercisePrescription {
     workSeconds: 0,
     tempo: '',
     notes: '',
+    targetWeightKg: null,
+    progressionIncrementKg: null,
+    repRangeMin: null,
+    repRangeMax: null,
   };
 }
 
@@ -126,5 +150,9 @@ export function toProgramExercisePatch(p: ExercisePrescription) {
     reps: p.reps.trim() || '8',
     restSeconds: Math.max(0, p.restSeconds),
     coachNotes: encodeCoachNotes(p),
+    targetWeightKg: p.targetWeightKg,
+    progressionIncrementKg: p.progressionIncrementKg,
+    repRangeMin: p.repRangeMin,
+    repRangeMax: p.repRangeMax,
   };
 }

@@ -12,6 +12,7 @@ import { ErrorState } from '@/components/ui/ErrorState';
 import { PrimaryButton } from '@/components/ui/PrimaryButton';
 import { Screen } from '@/components/ui/Screen';
 import { Skeleton } from '@/components/ui/Skeleton';
+import { BackButton } from '@/components/ui/BackButton';
 import { useAuth } from '@/hooks/useAuth';
 import { useActiveWorkout } from '@/hooks/useActiveWorkout';
 import { displayCoachNotes } from '@/lib/workouts/prescription';
@@ -170,9 +171,7 @@ export default function ActiveSessionScreen() {
         colors={['rgba(200,255,0,0.08)', 'transparent']}
         style={styles.hero}>
         <View style={styles.topRow}>
-          <Pressable onPress={() => router.back()} hitSlop={10} style={styles.backBtn}>
-            <Ionicons name="chevron-back" size={20} color={colors.text} />
-          </Pressable>
+          <BackButton compact />
           <Text style={styles.progressLabel}>{progressPct}% COMPLETE</Text>
           <View style={{ width: 40 }} />
         </View>

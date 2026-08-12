@@ -10,6 +10,7 @@ import { ErrorState } from '@/components/ui/ErrorState';
 import { MediaImage } from '@/components/ui/MediaImage';
 import { Screen } from '@/components/ui/Screen';
 import { Skeleton } from '@/components/ui/Skeleton';
+import { BackButton } from '@/components/ui/BackButton';
 import { PLACEHOLDER_IMAGES, workoutImageForDay } from '@/constants/media';
 import * as adminService from '@/services/admin';
 import type { StudioSettings } from '@/services/mock/data';
@@ -118,15 +119,7 @@ export default function AdminScheduleScreen() {
           tintColor={colors.accent}
         />
       }>
-      <Pressable
-        onPress={() => router.back()}
-        hitSlop={8}
-        style={({ pressed }) => [styles.backRow, pressed && styles.pressed]}>
-        <View style={styles.backPill}>
-          <Ionicons name="chevron-back" size={16} color={colors.accent} />
-          <Text style={styles.backText}>Studio</Text>
-        </View>
-      </Pressable>
+      <BackButton label="Studio" style={styles.backRow} />
 
       <View style={styles.hero}>
         <MediaImage uri={PLACEHOLDER_IMAGES.studio} style={styles.heroImage} rounded={radius.xl} />

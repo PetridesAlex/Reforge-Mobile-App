@@ -2,11 +2,13 @@ import { format, isSameDay, parseISO } from 'date-fns';
 
 import type { MemberPlacementSummary } from '@/lib/scheduling/placement';
 import { useSupabaseAdmin } from '@/lib/admin/config';
+import { useSupabasePrograms } from '@/lib/programs/config';
 import { getSupabase } from '@/lib/supabase/client';
 import { formatSupabaseError } from '@/lib/supabase/errors';
 import { formatTime, relativeTime } from '@/lib/utils/dates';
 import * as adminSupabase from '@/services/admin.supabase';
 import { getMembersPlacementMap } from '@/services/admin';
+import * as programsSupabase from '@/services/programs.supabase';
 import * as scheduleService from '@/services/schedule';
 import {
   delay,
@@ -422,8 +424,20 @@ export async function removeProgramDay(dayId: string): Promise<void> {
 
 export async function updateProgramExercise(
   exerciseRowId: string,
-  patch: { sets?: number; reps?: string; restSeconds?: number; coachNotes?: string | null },
+  patch: {
+    sets?: number;
+    reps?: string;
+    restSeconds?: number;
+    coachNotes?: string | null;
+    targetWeightKg?: number | null;
+    progressionIncrementKg?: number | null;
+    repRangeMin?: number | null;
+    repRangeMax?: number | null;
+  },
 ): Promise<ProgramExercise> {
+  if (useSupabasePrograms()) {
+    return programsSupabase.updateProgramExercise(exerciseRowId, patch);
+  }
   await delay(150);
   const row = mockProgramExercises.find((e) => e.id === exerciseRowId);
   if (!row) throw new Error('Exercise not found');
@@ -431,6 +445,12 @@ export async function updateProgramExercise(
   if (patch.reps != null) row.reps = patch.reps;
   if (patch.restSeconds != null) row.rest_seconds = patch.restSeconds;
   if (patch.coachNotes !== undefined) row.coach_notes = patch.coachNotes;
+  if (patch.targetWeightKg !== undefined) row.target_weight_kg = patch.targetWeightKg;
+  if (patch.progressionIncrementKg !== undefined) {
+    row.progression_increment_kg = patch.progressionIncrementKg;
+  }
+  if (patch.repRangeMin !== undefined) row.rep_range_min = patch.repRangeMin;
+  if (patch.repRangeMax !== undefined) row.rep_range_max = patch.repRangeMax;
   return { ...row };
 }
 
@@ -493,9 +513,16 @@ export async function addProgramExercise(
     sets: number;
     reps: string;
     restSeconds: number;
-    coachNotes?: string;
+    coachNotes?: string | null;
+    targetWeightKg?: number | null;
+    progressionIncrementKg?: number | null;
+    repRangeMin?: number | null;
+    repRangeMax?: number | null;
   },
 ): Promise<ProgramExercise> {
+  if (useSupabasePrograms()) {
+    return programsSupabase.addProgramExercise(dayId, input);
+  }
   await delay(200);
   const pe: ProgramExercise = {
     id: newId('pe'),
@@ -506,6 +533,10 @@ export async function addProgramExercise(
     rest_seconds: input.restSeconds,
     coach_notes: input.coachNotes ?? null,
     order_index: mockProgramExercises.filter((e) => e.program_day_id === dayId).length,
+    target_weight_kg: input.targetWeightKg ?? null,
+    progression_increment_kg: input.progressionIncrementKg ?? null,
+    rep_range_min: input.repRangeMin ?? null,
+    rep_range_max: input.repRangeMax ?? null,
   };
   mockProgramExercises.push(pe);
   return pe;

@@ -114,6 +114,14 @@ const ADMIN_ACTIONS: Action[] = [
     icon: 'newspaper-outline',
   },
   {
+    key: 'challenges',
+    title: 'Challenges',
+    meta: 'Gym competitions',
+    href: '/(coach)/admin/challenges',
+    icon: 'trophy-outline',
+    accent: true,
+  },
+  {
     key: 'staff',
     title: 'Staff',
     meta: 'Coaches & roles',

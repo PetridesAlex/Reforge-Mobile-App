@@ -1,10 +1,11 @@
-import { router, useLocalSearchParams } from 'expo-router';
+import { useLocalSearchParams } from 'expo-router';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 import { format, parseISO } from 'date-fns';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 
+import { BackButton } from '@/components/ui/BackButton';
 import { ErrorState } from '@/components/ui/ErrorState';
 import { Screen } from '@/components/ui/Screen';
 import { Skeleton } from '@/components/ui/Skeleton';
@@ -118,10 +119,7 @@ export default function WorkoutHistoryDetailScreen() {
 
   return (
     <Screen>
-      <Pressable onPress={() => router.back()} style={styles.back} hitSlop={10}>
-        <Ionicons name="chevron-back" size={20} color={colors.text} />
-        <Text style={styles.backText}>History</Text>
-      </Pressable>
+      <BackButton label="History" style={styles.back} />
 
       <View style={styles.hero}>
         <LinearGradient
@@ -255,17 +253,8 @@ function SummaryStat({
 
 const styles = StyleSheet.create({
   back: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
     marginTop: spacing.md,
     marginBottom: spacing.md,
-    alignSelf: 'flex-start',
-  },
-  backText: {
-    fontFamily: fonts.sansMedium,
-    fontSize: 14,
-    color: colors.textSecondary,
   },
   hero: {
     borderRadius: radius.xl,

@@ -5,6 +5,7 @@ import { format, parseISO } from 'date-fns';
 import { Ionicons } from '@expo/vector-icons';
 import type { ComponentProps } from 'react';
 
+import { BackButton, NavChevron } from '@/components/ui/BackButton';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { ErrorState } from '@/components/ui/ErrorState';
 import { Screen } from '@/components/ui/Screen';
@@ -90,10 +91,7 @@ export default function WorkoutHistoryScreen() {
           tintColor={colors.accent}
         />
       }>
-      <Pressable onPress={() => router.back()} style={styles.back} hitSlop={10}>
-        <Ionicons name="chevron-back" size={20} color={colors.text} />
-        <Text style={styles.backText}>Progress</Text>
-      </Pressable>
+      <BackButton label="Progress" style={styles.back} />
 
       <Text style={styles.kicker}>YOUR TRAINING</Text>
       <Text style={styles.title}>Workout history</Text>
@@ -134,7 +132,7 @@ export default function WorkoutHistoryScreen() {
               </View>
               <View style={styles.cardFooter}>
                 <Text style={styles.footerHint}>View session detail</Text>
-                <Ionicons name="chevron-forward" size={16} color={colors.accent} />
+                <NavChevron size="sm" />
               </View>
             </Pressable>
           );
@@ -161,17 +159,8 @@ function Meta({
 
 const styles = StyleSheet.create({
   back: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
     marginTop: spacing.md,
     marginBottom: spacing.md,
-    alignSelf: 'flex-start',
-  },
-  backText: {
-    fontFamily: fonts.sansMedium,
-    fontSize: 14,
-    color: colors.textSecondary,
   },
   kicker: {
     fontFamily: fonts.sansMedium,

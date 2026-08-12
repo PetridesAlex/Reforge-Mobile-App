@@ -22,6 +22,7 @@
    - [`migrations/019_coach_feedback_notifications.sql`](migrations/019_coach_feedback_notifications.sql) — **session feedback + program realtime**
    - [`migrations/020_activity_feed.sql`](migrations/020_activity_feed.sql) — **opt-in gym activity feed**
    - [`migrations/021_coach_dm_ensure.sql`](migrations/021_coach_dm_ensure.sql) — **member → coach DM (auto-assign studio coach)**
+   - [`migrations/022_fix_profiles_select_recursion.sql`](migrations/022_fix_profiles_select_recursion.sql) — **fixes profiles RLS recursion (sign-in / profile load)**
 3. In **Authentication → Providers**, enable **Email** and **Google**
 4. In **Authentication → URL configuration**:
    - **Site URL:** `reforge://auth/callback` (not `http://localhost:3000`)

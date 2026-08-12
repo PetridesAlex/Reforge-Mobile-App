@@ -167,6 +167,10 @@ export default function ProgramDetailScreen() {
     reps: string;
     restSeconds: number;
     coachNotes: string | null;
+    targetWeightKg?: number | null;
+    progressionIncrementKg?: number | null;
+    repRangeMin?: number | null;
+    repRangeMax?: number | null;
   }) => {
     if (!editExercise) return;
     setConfigSaving(true);
@@ -197,6 +201,10 @@ export default function ProgramDetailScreen() {
     reps: string;
     restSeconds: number;
     coachNotes: string | null;
+    targetWeightKg?: number | null;
+    progressionIncrementKg?: number | null;
+    repRangeMin?: number | null;
+    repRangeMax?: number | null;
   }) => {
     if (!pendingExercise) return;
     setConfigSaving(true);
@@ -207,6 +215,10 @@ export default function ProgramDetailScreen() {
         reps: patch.reps,
         restSeconds: patch.restSeconds,
         coachNotes: patch.coachNotes ?? undefined,
+        targetWeightKg: patch.targetWeightKg,
+        progressionIncrementKg: patch.progressionIncrementKg,
+        repRangeMin: patch.repRangeMin,
+        repRangeMax: patch.repRangeMax,
       });
       setPendingExercise(null);
       setMessage('Exercise added');

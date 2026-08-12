@@ -12,6 +12,7 @@ import { Screen } from '@/components/ui/Screen';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { WodMovementEditor } from '@/components/workouts/WodMovementEditor';
 import { WodPrescriptionList } from '@/components/workouts/WodPrescriptionList';
+import { BackButton } from '@/components/ui/BackButton';
 import { useAuth } from '@/hooks/useAuth';
 import { workoutImageForDay } from '@/constants/media';
 import {
@@ -192,12 +193,7 @@ export default function AdminWodScreen() {
           style={styles.heroHeaderGlow}
         />
         <View style={styles.heroHeaderTop}>
-          <Pressable
-            onPress={() => router.back()}
-            hitSlop={10}
-            style={({ pressed }) => [styles.backBtn, pressed && styles.pressed]}>
-            <Ionicons name="chevron-back" size={20} color={colors.text} />
-          </Pressable>
+          <BackButton compact />
           {wod ? (
             <View style={styles.livePill}>
               <View style={styles.liveDot} />

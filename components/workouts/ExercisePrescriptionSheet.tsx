@@ -19,7 +19,17 @@ import { colors, fonts, radius, spacing, typography } from '@/constants/theme';
 
 type Props = {
   exerciseName: string;
-  initial?: Pick<ProgramExercise, 'sets' | 'reps' | 'rest_seconds' | 'coach_notes'>;
+  initial?: Pick<
+    ProgramExercise,
+    | 'sets'
+    | 'reps'
+    | 'rest_seconds'
+    | 'coach_notes'
+    | 'target_weight_kg'
+    | 'progression_increment_kg'
+    | 'rep_range_min'
+    | 'rep_range_max'
+  >;
   saving?: boolean;
   mode?: 'create' | 'edit';
   onSave: (patch: ReturnType<typeof toProgramExercisePatch>) => void | Promise<void>;
@@ -178,6 +188,61 @@ export function ExercisePrescriptionSheet({
         onChangeText={(tempo) => setRx((p) => ({ ...p, tempo }))}
         placeholder="3-1-1, slow eccentric…"
       />
+
+      <Text style={styles.sectionLabel}>Progression (optional)</Text>
+      <View style={styles.metricGrid}>
+        <AppInput
+          label="Target kg"
+          value={rx.targetWeightKg != null ? String(rx.targetWeightKg) : ''}
+          onChangeText={(v) =>
+            setRx((p) => ({
+              ...p,
+              targetWeightKg: v.trim() === '' ? null : Number(v) || null,
+            }))
+          }
+          keyboardType="decimal-pad"
+          placeholder="80"
+        />
+        <AppInput
+          label="Add kg / week"
+          value={rx.progressionIncrementKg != null ? String(rx.progressionIncrementKg) : ''}
+          onChangeText={(v) =>
+            setRx((p) => ({
+              ...p,
+              progressionIncrementKg: v.trim() === '' ? null : Number(v) || null,
+            }))
+          }
+          keyboardType="decimal-pad"
+          placeholder="2.5"
+        />
+      </View>
+      <View style={styles.metricGrid}>
+        <AppInput
+          label="Rep min"
+          value={rx.repRangeMin != null ? String(rx.repRangeMin) : ''}
+          onChangeText={(v) =>
+            setRx((p) => ({
+              ...p,
+              repRangeMin: v.trim() === '' ? null : Math.max(1, Number(v) || 0) || null,
+            }))
+          }
+          keyboardType="number-pad"
+          placeholder="6"
+        />
+        <AppInput
+          label="Rep max"
+          value={rx.repRangeMax != null ? String(rx.repRangeMax) : ''}
+          onChangeText={(v) =>
+            setRx((p) => ({
+              ...p,
+              repRangeMax: v.trim() === '' ? null : Math.max(1, Number(v) || 0) || null,
+            }))
+          }
+          keyboardType="number-pad"
+          placeholder="10"
+        />
+      </View>
+
       <AppInput
         label="Coach notes"
         value={rx.notes}

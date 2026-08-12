@@ -52,7 +52,11 @@ export async function listActiveChallenges(): Promise<GymChallenge[]> {
     .gte('ends_on', today)
     .order('ends_on', { ascending: true });
   if (error) throw new Error(formatSupabaseError(error));
-  return (data ?? []).map((row) => ({
+  return (data ?? []).map(mapChallenge);
+}
+
+function mapChallenge(row: Record<string, unknown>): GymChallenge {
+  return {
     id: row.id as string,
     title: row.title as string,
     description: (row.description as string) ?? null,
@@ -62,7 +66,68 @@ export async function listActiveChallenges(): Promise<GymChallenge[]> {
     ends_on: row.ends_on as string,
     active: Boolean(row.active),
     created_by: row.created_by as string,
-  }));
+  };
+}
+
+/** Admin: all challenges including inactive / upcoming. */
+export async function listAllChallenges(): Promise<GymChallenge[]> {
+  const supabase = getSupabase();
+  const { data, error } = await supabase
+    .from('gym_challenges')
+    .select('*')
+    .order('starts_on', { ascending: false });
+  if (error) throw new Error(formatSupabaseError(error));
+  return (data ?? []).map((row) => mapChallenge(row as Record<string, unknown>));
+}
+
+export async function createChallenge(input: {
+  title: string;
+  description?: string;
+  metric: GymChallenge['metric'];
+  target: number;
+  startsOn: string;
+  endsOn: string;
+  createdBy: string;
+}): Promise<GymChallenge> {
+  const supabase = getSupabase();
+  const { data, error } = await supabase
+    .from('gym_challenges')
+    .insert({
+      title: input.title.trim(),
+      description: input.description?.trim() || null,
+      metric: input.metric,
+      target: Math.max(1, input.target),
+      starts_on: input.startsOn,
+      ends_on: input.endsOn,
+      active: true,
+      created_by: input.createdBy,
+    })
+    .select('*')
+    .single();
+  if (error) throw new Error(formatSupabaseError(error));
+  return mapChallenge(data as Record<string, unknown>);
+}
+
+export async function setChallengeActive(challengeId: string, active: boolean): Promise<void> {
+  const supabase = getSupabase();
+  const { error } = await supabase.from('gym_challenges').update({ active }).eq('id', challengeId);
+  if (error) throw new Error(formatSupabaseError(error));
+}
+
+export async function deleteChallenge(challengeId: string): Promise<void> {
+  const supabase = getSupabase();
+  const { error } = await supabase.from('gym_challenges').delete().eq('id', challengeId);
+  if (error) throw new Error(formatSupabaseError(error));
+}
+
+export async function getChallengeEnrollmentCount(challengeId: string): Promise<number> {
+  const supabase = getSupabase();
+  const { count, error } = await supabase
+    .from('challenge_enrollments')
+    .select('*', { count: 'exact', head: true })
+    .eq('challenge_id', challengeId);
+  if (error) throw new Error(formatSupabaseError(error));
+  return count ?? 0;
 }
 
 export async function getMyChallengeProgress(

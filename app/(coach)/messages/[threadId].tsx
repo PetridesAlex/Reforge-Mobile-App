@@ -15,6 +15,7 @@ import { Ionicons } from '@expo/vector-icons';
 
 import { ErrorState } from '@/components/ui/ErrorState';
 import { Skeleton } from '@/components/ui/Skeleton';
+import { BackButton } from '@/components/ui/BackButton';
 import { useAuth } from '@/hooks/useAuth';
 import { useStudioSync } from '@/hooks/useStudioSync';
 import { formatTime } from '@/lib/utils/dates';
@@ -186,9 +187,7 @@ export default function ChatThreadScreen() {
       keyboardVerticalOffset={Platform.OS === 'ios' ? 8 : 0}>
       {/* Compact premium header */}
       <View style={[styles.header, { paddingTop: Math.max(insets.top, spacing.sm) + spacing.xs }]}>
-        <Pressable onPress={() => router.back()} style={styles.backBtn} hitSlop={10}>
-          <Ionicons name="chevron-back" size={22} color={colors.text} />
-        </Pressable>
+        <BackButton compact />
 
         <View style={styles.headerAvatar}>
           <Ionicons name={headerIcon} size={18} color={colors.accent} />
