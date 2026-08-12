@@ -480,12 +480,36 @@ export async function getWeekBoard(
   const isCurrentWeek = weekKey === currentKey;
   const isPastWeek = weekKey < currentKey;
   const isFutureWeek = weekKey > currentKey;
-  const isEditable = isCurrentWeek;
+  /** Coaches/admins can plan any calendar week (current, past, or upcoming). */
+  const isEditable = true;
 
   let slots: Array<{ dayOfWeek: number; day: ProgramDay | null; exercises: ProgramExercise[] }>;
   let fromSnapshot = false;
 
-  if (isPastWeek) {
+  if (isCurrentWeek) {
+    const live = await loadLiveDaysWithExercises(programId);
+    slots = [0, 1, 2, 3, 4, 5, 6].map((dow) => {
+      const day = live.find((d) => d.day_of_week === dow) ?? null;
+      return {
+        dayOfWeek: dow,
+        day: day
+          ? {
+              id: day.id,
+              program_id: day.program_id,
+              name: day.name,
+              day_of_week: day.day_of_week,
+              order_index: day.order_index,
+            }
+          : null,
+        exercises: day?.exercises ?? [],
+      };
+    });
+    if (live.some((d) => d.day_of_week != null)) {
+      void ensureWeekSnapshot(programId, weekKey, options?.createdBy, { overwrite: true }).catch(
+        () => undefined,
+      );
+    }
+  } else {
     const snapBoard = await loadSnapshotBoard(programId, weekKey);
     slots = snapBoard ?? [0, 1, 2, 3, 4, 5, 6].map((dow) => ({
       dayOfWeek: dow,
@@ -493,28 +517,6 @@ export async function getWeekBoard(
       exercises: [],
     }));
     fromSnapshot = Boolean(snapBoard);
-  } else if (isFutureWeek) {
-    slots = [0, 1, 2, 3, 4, 5, 6].map((dow) => ({
-      dayOfWeek: dow,
-      day: null,
-      exercises: [],
-    }));
-  } else {
-    const live = await loadLiveDaysWithExercises(programId);
-    slots = [0, 1, 2, 3, 4, 5, 6].map((dow) => {
-      const day = live.find((d) => d.day_of_week === dow) ?? null;
-      return {
-        dayOfWeek: dow,
-        day: day ? { id: day.id, program_id: day.program_id, name: day.name, day_of_week: day.day_of_week, order_index: day.order_index } : null,
-        exercises: day?.exercises ?? [],
-      };
-    });
-    // Keep current-week snapshot warm so history is ready when the week ends
-    if (live.some((d) => d.day_of_week != null)) {
-      void ensureWeekSnapshot(programId, weekKey, options?.createdBy, { overwrite: true }).catch(
-        () => undefined,
-      );
-    }
   }
 
   const trained = isPastWeek || isCurrentWeek ? await trainedCountsForWeek(programId, weekKey) : {};
@@ -678,6 +680,395 @@ export async function upsertWorkoutForWeekday(
     .single();
   if (error) throw new Error(formatSupabaseError(error));
   return mapDay(data as Record<string, unknown>);
+}
+
+async function ensureSnapshotHeader(
+  programId: string,
+  weekKey: string,
+  createdBy?: string | null,
+): Promise<string> {
+  const supabase = getSupabase();
+  const { data: existing, error } = await supabase
+    .from('program_week_snapshots')
+    .select('id')
+    .eq('program_id', programId)
+    .eq('week_start', weekKey)
+    .maybeSingle();
+  if (error) throw new Error(formatSupabaseError(error));
+  if (existing?.id) return existing.id as string;
+
+  const { data: created, error: createError } = await supabase
+    .from('program_week_snapshots')
+    .insert({
+      program_id: programId,
+      week_start: weekKey,
+      label: formatWeekRangeLabel(weekKey),
+      created_by: createdBy ?? null,
+    })
+    .select('id')
+    .single();
+  if (createError) throw new Error(formatSupabaseError(createError));
+  return created.id as string;
+}
+
+/** Create/update a workout on any calendar week (live for current, snapshot for other weeks). */
+export async function upsertDatedWorkoutDay(
+  programId: string,
+  weekStart: string,
+  dayOfWeek: number,
+  name: string,
+  createdBy?: string | null,
+): Promise<ProgramDay> {
+  const weekKey = toWeekStartKey(weekStart);
+  const currentKey = toWeekStartKey();
+  const trimmed = name.trim() || DAY_LABELS[dayOfWeek];
+
+  if (weekKey === currentKey) {
+    const day = await upsertWorkoutForWeekday(programId, dayOfWeek, trimmed);
+    await ensureWeekSnapshot(programId, weekKey, createdBy, { overwrite: true });
+    return day;
+  }
+
+  const supabase = getSupabase();
+  const snapshotId = await ensureSnapshotHeader(programId, weekKey, createdBy);
+  const workoutDate = format(addDays(parseISO(weekKey), dayOfWeek), 'yyyy-MM-dd');
+
+  const { data: existing, error: findError } = await supabase
+    .from('program_week_day_snapshots')
+    .select('*')
+    .eq('week_snapshot_id', snapshotId)
+    .eq('workout_date', workoutDate)
+    .maybeSingle();
+  if (findError) throw new Error(formatSupabaseError(findError));
+
+  if (existing) {
+    const { data, error } = await supabase
+      .from('program_week_day_snapshots')
+      .update({ name: trimmed })
+      .eq('id', existing.id)
+      .select('*')
+      .single();
+    if (error) throw new Error(formatSupabaseError(error));
+    return {
+      id: data.id as string,
+      program_id: programId,
+      name: data.name as string,
+      day_of_week: dayOfWeek,
+      order_index: dayOfWeek,
+    };
+  }
+
+  const { data, error } = await supabase
+    .from('program_week_day_snapshots')
+    .insert({
+      week_snapshot_id: snapshotId,
+      workout_date: workoutDate,
+      day_of_week: dayOfWeek,
+      name: trimmed,
+      exercise_count: 0,
+      exercises_json: [],
+    })
+    .select('*')
+    .single();
+  if (error) throw new Error(formatSupabaseError(error));
+  return {
+    id: data.id as string,
+    program_id: programId,
+    name: data.name as string,
+    day_of_week: dayOfWeek,
+    order_index: dayOfWeek,
+  };
+}
+
+export async function addDatedProgramExercise(
+  programId: string,
+  weekStart: string,
+  dayOfWeek: number,
+  input: {
+    exerciseId: string;
+    sets: number;
+    reps: string;
+    restSeconds: number;
+    coachNotes?: string | null;
+    targetWeightKg?: number | null;
+    progressionIncrementKg?: number | null;
+    repRangeMin?: number | null;
+    repRangeMax?: number | null;
+  },
+  createdBy?: string | null,
+): Promise<ProgramExercise> {
+  const weekKey = toWeekStartKey(weekStart);
+  const currentKey = toWeekStartKey();
+
+  if (weekKey === currentKey) {
+    const live = await loadLiveDaysWithExercises(programId);
+    const existing = live.find((d) => d.day_of_week === dayOfWeek);
+    const day = await upsertWorkoutForWeekday(
+      programId,
+      dayOfWeek,
+      existing?.name ?? DAY_LABELS[dayOfWeek],
+    );
+    const { addProgramExercise } = await import('@/services/programs.supabase');
+    const pe = await addProgramExercise(day.id, input);
+    await ensureWeekSnapshot(programId, weekKey, createdBy, { overwrite: true });
+    return pe;
+  }
+
+  const supabase = getSupabase();
+  const snapshotId = await ensureSnapshotHeader(programId, weekKey, createdBy);
+  const workoutDate = format(addDays(parseISO(weekKey), dayOfWeek), 'yyyy-MM-dd');
+
+  const { data: existingDay, error: findDayError } = await supabase
+    .from('program_week_day_snapshots')
+    .select('*')
+    .eq('week_snapshot_id', snapshotId)
+    .eq('workout_date', workoutDate)
+    .maybeSingle();
+  if (findDayError) throw new Error(formatSupabaseError(findDayError));
+
+  let dayId = existingDay?.id as string | undefined;
+  if (!dayId) {
+    const created = await upsertDatedWorkoutDay(
+      programId,
+      weekKey,
+      dayOfWeek,
+      DAY_LABELS[dayOfWeek],
+      createdBy,
+    );
+    dayId = created.id;
+  }
+
+  const { data: dayRow, error: dayError } = await supabase
+    .from('program_week_day_snapshots')
+    .select('*')
+    .eq('id', dayId)
+    .single();
+  if (dayError) throw new Error(formatSupabaseError(dayError));
+
+  const { data: exRow } = await supabase
+    .from('exercises')
+    .select('id, name, muscle_group, image_url')
+    .eq('id', input.exerciseId)
+    .maybeSingle();
+
+  const existing = Array.isArray(dayRow.exercises_json)
+    ? ([...(dayRow.exercises_json as SnapshotExercise[])] as SnapshotExercise[])
+    : [];
+  const next: SnapshotExercise = {
+    name: (exRow?.name as string) || 'Exercise',
+    exercise_id: input.exerciseId,
+    sets: input.sets,
+    reps: input.reps,
+    rest_seconds: input.restSeconds,
+    coach_notes: input.coachNotes ?? null,
+    order_index: existing.length,
+    target_weight_kg: input.targetWeightKg ?? null,
+    progression_increment_kg: input.progressionIncrementKg ?? null,
+    rep_range_min: input.repRangeMin ?? null,
+    rep_range_max: input.repRangeMax ?? null,
+    image_url: (exRow?.image_url as string) ?? null,
+    muscle_group: (exRow?.muscle_group as string) ?? null,
+  };
+  existing.push(next);
+
+  const { error: updateError } = await supabase
+    .from('program_week_day_snapshots')
+    .update({
+      exercises_json: existing,
+      exercise_count: existing.length,
+    })
+    .eq('id', dayId);
+  if (updateError) throw new Error(formatSupabaseError(updateError));
+
+  const mapped = snapshotJsonToExercises(existing, dayId);
+  return mapped[mapped.length - 1]!;
+}
+
+export async function updateDatedProgramExercise(
+  programId: string,
+  weekStart: string,
+  dayOfWeek: number,
+  exerciseRowId: string,
+  patch: {
+    sets?: number;
+    reps?: string;
+    restSeconds?: number;
+    coachNotes?: string | null;
+    targetWeightKg?: number | null;
+    progressionIncrementKg?: number | null;
+    repRangeMin?: number | null;
+    repRangeMax?: number | null;
+  },
+): Promise<void> {
+  const weekKey = toWeekStartKey(weekStart);
+  if (weekKey === toWeekStartKey()) {
+    const { updateProgramExercise } = await import('@/services/programs.supabase');
+    await updateProgramExercise(exerciseRowId, patch);
+    await ensureWeekSnapshot(programId, weekKey, null, { overwrite: true });
+    return;
+  }
+
+  const supabase = getSupabase();
+  const workoutDate = format(addDays(parseISO(weekKey), dayOfWeek), 'yyyy-MM-dd');
+  const snapshotId = await ensureSnapshotHeader(programId, weekKey);
+  const { data: dayRow, error } = await supabase
+    .from('program_week_day_snapshots')
+    .select('*')
+    .eq('week_snapshot_id', snapshotId)
+    .eq('workout_date', workoutDate)
+    .maybeSingle();
+  if (error) throw new Error(formatSupabaseError(error));
+  if (!dayRow) throw new Error('Day not found');
+
+  const list = snapshotJsonToExercises(dayRow.exercises_json, dayRow.id as string);
+  const idx = list.findIndex((pe) => pe.id === exerciseRowId);
+  if (idx < 0) throw new Error('Exercise not found');
+  const pe = list[idx]!;
+  if (patch.sets != null) pe.sets = patch.sets;
+  if (patch.reps != null) pe.reps = patch.reps;
+  if (patch.restSeconds != null) pe.rest_seconds = patch.restSeconds;
+  if (patch.coachNotes !== undefined) pe.coach_notes = patch.coachNotes;
+  if (patch.targetWeightKg !== undefined) pe.target_weight_kg = patch.targetWeightKg;
+  if (patch.progressionIncrementKg !== undefined) {
+    pe.progression_increment_kg = patch.progressionIncrementKg;
+  }
+  if (patch.repRangeMin !== undefined) pe.rep_range_min = patch.repRangeMin;
+  if (patch.repRangeMax !== undefined) pe.rep_range_max = patch.repRangeMax;
+
+  const json = list.map(exerciseToSnapshotJson);
+  const { error: updateError } = await supabase
+    .from('program_week_day_snapshots')
+    .update({ exercises_json: json, exercise_count: json.length })
+    .eq('id', dayRow.id);
+  if (updateError) throw new Error(formatSupabaseError(updateError));
+}
+
+export async function removeDatedProgramExercise(
+  programId: string,
+  weekStart: string,
+  dayOfWeek: number,
+  exerciseRowId: string,
+): Promise<void> {
+  const weekKey = toWeekStartKey(weekStart);
+  if (weekKey === toWeekStartKey()) {
+    await removeProgramExercise(exerciseRowId);
+    await ensureWeekSnapshot(programId, weekKey, null, { overwrite: true });
+    return;
+  }
+
+  const supabase = getSupabase();
+  const workoutDate = format(addDays(parseISO(weekKey), dayOfWeek), 'yyyy-MM-dd');
+  const snapshotId = await ensureSnapshotHeader(programId, weekKey);
+  const { data: dayRow, error } = await supabase
+    .from('program_week_day_snapshots')
+    .select('*')
+    .eq('week_snapshot_id', snapshotId)
+    .eq('workout_date', workoutDate)
+    .maybeSingle();
+  if (error) throw new Error(formatSupabaseError(error));
+  if (!dayRow) return;
+
+  const list = snapshotJsonToExercises(dayRow.exercises_json, dayRow.id as string).filter(
+    (pe) => pe.id !== exerciseRowId,
+  );
+  const json = list.map(exerciseToSnapshotJson);
+  const { error: updateError } = await supabase
+    .from('program_week_day_snapshots')
+    .update({ exercises_json: json, exercise_count: json.length })
+    .eq('id', dayRow.id);
+  if (updateError) throw new Error(formatSupabaseError(updateError));
+}
+
+export async function clearDatedWorkoutDay(
+  programId: string,
+  weekStart: string,
+  dayOfWeek: number,
+  dayId?: string | null,
+): Promise<void> {
+  const weekKey = toWeekStartKey(weekStart);
+  if (weekKey === toWeekStartKey()) {
+    if (dayId) await removeProgramDay(dayId);
+    await ensureWeekSnapshot(programId, weekKey, null, { overwrite: true });
+    return;
+  }
+
+  const supabase = getSupabase();
+  const workoutDate = format(addDays(parseISO(weekKey), dayOfWeek), 'yyyy-MM-dd');
+  const { data: snap } = await supabase
+    .from('program_week_snapshots')
+    .select('id')
+    .eq('program_id', programId)
+    .eq('week_start', weekKey)
+    .maybeSingle();
+  if (!snap?.id) return;
+  const { error } = await supabase
+    .from('program_week_day_snapshots')
+    .delete()
+    .eq('week_snapshot_id', snap.id)
+    .eq('workout_date', workoutDate);
+  if (error) throw new Error(formatSupabaseError(error));
+}
+
+/** Copy previous week into the target week (live if current, otherwise snapshot). */
+export async function copyWeekInto(
+  programId: string,
+  targetWeekStart: string,
+  createdBy?: string | null,
+): Promise<WeekBoardResult | null> {
+  const targetKey = toWeekStartKey(targetWeekStart);
+  const currentKey = toWeekStartKey();
+  const prevKey = format(addDays(parseISO(targetKey), -7), 'yyyy-MM-dd');
+
+  if (targetKey === currentKey) {
+    return copyPreviousWeek(programId, createdBy);
+  }
+
+  let source = await loadSnapshotBoard(programId, prevKey);
+  if (!source?.some((s) => s.day)) {
+    if (prevKey === currentKey) {
+      const live = await loadLiveDaysWithExercises(programId);
+      source = [0, 1, 2, 3, 4, 5, 6].map((dow) => {
+        const day = live.find((d) => d.day_of_week === dow) ?? null;
+        return {
+          dayOfWeek: dow,
+          day: day
+            ? {
+                id: day.id,
+                program_id: day.program_id,
+                name: day.name,
+                day_of_week: day.day_of_week,
+                order_index: day.order_index,
+              }
+            : null,
+          exercises: day?.exercises ?? [],
+        };
+      });
+    }
+  }
+
+  if (!source?.some((s) => s.day)) {
+    throw new Error('No previous week to copy');
+  }
+
+  const supabase = getSupabase();
+  const snapshotId = await ensureSnapshotHeader(programId, targetKey, createdBy);
+  await supabase.from('program_week_day_snapshots').delete().eq('week_snapshot_id', snapshotId);
+
+  for (const slot of source) {
+    if (!slot.day) continue;
+    const workoutDate = format(addDays(parseISO(targetKey), slot.dayOfWeek), 'yyyy-MM-dd');
+    const { error } = await supabase.from('program_week_day_snapshots').insert({
+      week_snapshot_id: snapshotId,
+      workout_date: workoutDate,
+      day_of_week: slot.dayOfWeek,
+      name: slot.day.name,
+      exercise_count: slot.exercises.length,
+      exercises_json: slot.exercises.map(exerciseToSnapshotJson),
+    });
+    if (error) throw new Error(formatSupabaseError(error));
+  }
+
+  return getWeekBoard(programId, targetKey, { createdBy });
 }
 
 export async function removeProgramDay(dayId: string): Promise<void> {

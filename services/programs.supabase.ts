@@ -336,3 +336,145 @@ export async function addProgramExercise(
     exRow ? mapExercise(exRow) : undefined,
   );
 }
+
+export async function removeProgramExercise(exerciseRowId: string): Promise<void> {
+  const supabase = getSupabase();
+  const { error } = await supabase.from('program_exercises').delete().eq('id', exerciseRowId);
+  if (error) throw new Error(formatSupabaseError(error));
+}
+
+export async function getProgramDetail(programId: string) {
+  const supabase = getSupabase();
+  const { data: programRow, error } = await supabase
+    .from('programs')
+    .select('*')
+    .eq('id', programId)
+    .maybeSingle();
+  if (error) throw new Error(formatSupabaseError(error));
+  if (!programRow) return null;
+
+  const program: Program = {
+    id: programRow.id as string,
+    name: programRow.name as string,
+    description: (programRow.description as string) ?? null,
+    duration_weeks: Number(programRow.duration_weeks ?? 8),
+    coach_id: programRow.coach_id as string,
+    is_template: Boolean(programRow.is_template),
+    created_at: programRow.created_at as string,
+    updated_at: programRow.updated_at as string,
+  };
+
+  const { data: dayRows, error: daysError } = await supabase
+    .from('program_days')
+    .select('*')
+    .eq('program_id', programId)
+    .order('order_index', { ascending: true });
+  if (daysError) throw new Error(formatSupabaseError(daysError));
+
+  const days = await Promise.all(
+    (dayRows ?? []).map(async (day) => {
+      const exercises = await loadExercisesForDay(day.id as string);
+      return {
+        id: day.id as string,
+        program_id: day.program_id as string,
+        name: day.name as string,
+        day_of_week: day.day_of_week != null ? Number(day.day_of_week) : null,
+        order_index: Number(day.order_index ?? 0),
+        exercises,
+      };
+    }),
+  );
+
+  return { program, days };
+}
+
+export async function addProgramDay(
+  programId: string,
+  name: string,
+  dayOfWeek?: number,
+): Promise<ProgramDay> {
+  const supabase = getSupabase();
+  const { count } = await supabase
+    .from('program_days')
+    .select('*', { count: 'exact', head: true })
+    .eq('program_id', programId);
+
+  const { data, error } = await supabase
+    .from('program_days')
+    .insert({
+      program_id: programId,
+      name: name.trim() || 'Training day',
+      day_of_week: dayOfWeek ?? null,
+      order_index: count ?? 0,
+    })
+    .select('*')
+    .single();
+  if (error) throw new Error(formatSupabaseError(error));
+  return {
+    id: data.id as string,
+    program_id: data.program_id as string,
+    name: data.name as string,
+    day_of_week: data.day_of_week != null ? Number(data.day_of_week) : null,
+    order_index: Number(data.order_index ?? 0),
+  };
+}
+
+export async function updateProgramDay(
+  dayId: string,
+  patch: { name?: string; dayOfWeek?: number | null },
+): Promise<ProgramDay> {
+  const supabase = getSupabase();
+  const update: Record<string, unknown> = {};
+  if (patch.name != null) update.name = patch.name.trim();
+  if (patch.dayOfWeek !== undefined) update.day_of_week = patch.dayOfWeek;
+
+  const { data, error } = await supabase
+    .from('program_days')
+    .update(update)
+    .eq('id', dayId)
+    .select('*')
+    .single();
+  if (error) throw new Error(formatSupabaseError(error));
+  return {
+    id: data.id as string,
+    program_id: data.program_id as string,
+    name: data.name as string,
+    day_of_week: data.day_of_week != null ? Number(data.day_of_week) : null,
+    order_index: Number(data.order_index ?? 0),
+  };
+}
+
+export async function updateProgram(
+  programId: string,
+  patch: { name?: string; description?: string | null; durationWeeks?: number },
+): Promise<Program> {
+  const supabase = getSupabase();
+  const update: Record<string, unknown> = { updated_at: new Date().toISOString() };
+  if (patch.name != null) update.name = patch.name.trim();
+  if (patch.description !== undefined) update.description = patch.description;
+  if (patch.durationWeeks != null) update.duration_weeks = patch.durationWeeks;
+
+  const { data, error } = await supabase
+    .from('programs')
+    .update(update)
+    .eq('id', programId)
+    .select('*')
+    .single();
+  if (error) throw new Error(formatSupabaseError(error));
+  return {
+    id: data.id as string,
+    name: data.name as string,
+    description: (data.description as string) ?? null,
+    duration_weeks: Number(data.duration_weeks ?? 8),
+    coach_id: data.coach_id as string,
+    is_template: Boolean(data.is_template),
+    created_at: data.created_at as string,
+    updated_at: data.updated_at as string,
+  };
+}
+
+export async function removeProgramDay(dayId: string): Promise<void> {
+  const supabase = getSupabase();
+  const { error } = await supabase.from('program_days').delete().eq('id', dayId);
+  if (error) throw new Error(formatSupabaseError(error));
+}

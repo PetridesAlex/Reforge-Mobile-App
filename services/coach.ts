@@ -305,6 +305,9 @@ export async function getPrograms(
 }
 
 export async function getProgramDetail(programId: string) {
+  if (useSupabasePrograms()) {
+    return programsSupabase.getProgramDetail(programId);
+  }
   await delay();
   const program = mockPrograms.find((p) => p.id === programId);
   if (!program) return null;
@@ -394,6 +397,9 @@ export async function deleteProgram(programId: string): Promise<void> {
 }
 
 export async function addProgramDay(programId: string, name: string, dayOfWeek?: number): Promise<ProgramDay> {
+  if (useSupabasePrograms()) {
+    return programsSupabase.addProgramDay(programId, name, dayOfWeek);
+  }
   await delay(200);
   const day: ProgramDay = {
     id: newId('day'),
@@ -410,6 +416,9 @@ export async function updateProgram(
   programId: string,
   patch: { name?: string; description?: string | null; durationWeeks?: number },
 ): Promise<Program> {
+  if (useSupabasePrograms()) {
+    return programsSupabase.updateProgram(programId, patch);
+  }
   await delay(200);
   const program = mockPrograms.find((p) => p.id === programId);
   if (!program) throw new Error('Program not found');
@@ -424,6 +433,9 @@ export async function updateProgramDay(
   dayId: string,
   patch: { name?: string; dayOfWeek?: number | null },
 ): Promise<ProgramDay> {
+  if (useSupabasePrograms()) {
+    return programsSupabase.updateProgramDay(dayId, patch);
+  }
   await delay(200);
   const day = mockProgramDays.find((d) => d.id === dayId);
   if (!day) throw new Error('Training day not found');
@@ -434,7 +446,7 @@ export async function updateProgramDay(
 
 export async function removeProgramDay(dayId: string): Promise<void> {
   if (useSupabasePrograms()) {
-    return weeksSupabase.removeProgramDay(dayId);
+    return programsSupabase.removeProgramDay(dayId);
   }
   await delay(200);
   const idx = mockProgramDays.findIndex((d) => d.id === dayId);
@@ -478,7 +490,7 @@ export async function updateProgramExercise(
 
 export async function removeProgramExercise(exerciseRowId: string): Promise<void> {
   if (useSupabasePrograms()) {
-    return weeksSupabase.removeProgramExercise(exerciseRowId);
+    return programsSupabase.removeProgramExercise(exerciseRowId);
   }
   await delay(150);
   const idx = mockProgramExercises.findIndex((e) => e.id === exerciseRowId);
@@ -613,11 +625,22 @@ function mockBuildBoard(programId: string, weekStart?: string | Date): WeekBoard
       };
     });
   } else if (isFutureWeek) {
-    slotData = [0, 1, 2, 3, 4, 5, 6].map(() => ({
-      day: null,
-      exercises: [],
-      fromSnapshot: false,
-    }));
+    const snap = mockWeekSnapshots.get(mockSnapKey(programId, weekKey));
+    slotData = [0, 1, 2, 3, 4, 5, 6].map((dow) => {
+      const row = snap?.days.find((d) => d.dayOfWeek === dow);
+      if (!row) return { day: null, exercises: [], fromSnapshot: false };
+      return {
+        day: {
+          id: `mock-snap-${weekKey}-${dow}`,
+          program_id: programId,
+          name: row.name,
+          day_of_week: dow,
+          order_index: dow,
+        },
+        exercises: row.exercises,
+        fromSnapshot: true,
+      };
+    });
   } else {
     const days = mockProgramDays.filter((d) => d.program_id === programId);
     slotData = [0, 1, 2, 3, 4, 5, 6].map((dow) => {
@@ -682,7 +705,7 @@ function mockBuildBoard(programId: string, weekStart?: string | Date): WeekBoard
     isCurrentWeek,
     isPastWeek,
     isFutureWeek,
-    isEditable: isCurrentWeek,
+    isEditable: true,
     isEmpty: board.every((s) => !s.day),
     board,
     recentWeeks: recentWeeks.slice(0, 8),
@@ -792,6 +815,219 @@ export async function copyPreviousWeek(
     }
   }
   return mockBuildBoard(programId, currentKey);
+}
+
+export async function upsertDatedWorkoutDay(
+  programId: string,
+  weekStart: string,
+  dayOfWeek: number,
+  name: string,
+  createdBy?: string | null,
+): Promise<ProgramDay> {
+  if (useSupabasePrograms()) {
+    return weeksSupabase.upsertDatedWorkoutDay(programId, weekStart, dayOfWeek, name, createdBy);
+  }
+  const weekKey = toWeekStartKey(weekStart);
+  if (weekKey === toWeekStartKey()) {
+    return upsertWorkoutForWeekday(programId, dayOfWeek, name);
+  }
+  mockEnsureSnapshot(programId, weekKey, true);
+  const snap = mockWeekSnapshots.get(mockSnapKey(programId, weekKey));
+  if (!snap) throw new Error('Could not create week');
+  const existing = snap.days.find((d) => d.dayOfWeek === dayOfWeek);
+  if (existing) {
+    existing.name = name.trim() || existing.name;
+  } else {
+    snap.days.push({
+      dayOfWeek,
+      workoutDate: format(addDays(parseISO(weekKey), dayOfWeek), 'yyyy-MM-dd'),
+      name: name.trim() || DAY_LABELS[dayOfWeek],
+      exercises: [],
+    });
+  }
+  return {
+    id: `mock-snap-${weekKey}-${dayOfWeek}`,
+    program_id: programId,
+    name: name.trim() || DAY_LABELS[dayOfWeek],
+    day_of_week: dayOfWeek,
+    order_index: dayOfWeek,
+  };
+}
+
+export async function addDatedProgramExercise(
+  programId: string,
+  weekStart: string,
+  dayOfWeek: number,
+  input: {
+    exerciseId: string;
+    sets: number;
+    reps: string;
+    restSeconds: number;
+    coachNotes?: string | null;
+    targetWeightKg?: number | null;
+    progressionIncrementKg?: number | null;
+    repRangeMin?: number | null;
+    repRangeMax?: number | null;
+  },
+  createdBy?: string | null,
+): Promise<ProgramExercise> {
+  if (useSupabasePrograms()) {
+    return weeksSupabase.addDatedProgramExercise(
+      programId,
+      weekStart,
+      dayOfWeek,
+      input,
+      createdBy,
+    );
+  }
+  if (toWeekStartKey(weekStart) === toWeekStartKey()) {
+    const day = await upsertWorkoutForWeekday(
+      programId,
+      dayOfWeek,
+      mockProgramDays.find((d) => d.program_id === programId && d.day_of_week === dayOfWeek)
+        ?.name ?? DAY_LABELS[dayOfWeek],
+    );
+    return addProgramExercise(day.id, input);
+  }
+  await upsertDatedWorkoutDay(programId, weekStart, dayOfWeek, DAY_LABELS[dayOfWeek], createdBy);
+  const snap = mockWeekSnapshots.get(mockSnapKey(programId, toWeekStartKey(weekStart)));
+  const row = snap?.days.find((d) => d.dayOfWeek === dayOfWeek);
+  if (!row) throw new Error('Day not found');
+  const pe: ProgramExercise = {
+    id: newId('pe'),
+    program_day_id: `mock-snap-${toWeekStartKey(weekStart)}-${dayOfWeek}`,
+    exercise_id: input.exerciseId,
+    sets: input.sets,
+    reps: input.reps,
+    rest_seconds: input.restSeconds,
+    coach_notes: input.coachNotes ?? null,
+    order_index: row.exercises.length,
+    target_weight_kg: input.targetWeightKg ?? null,
+    progression_increment_kg: input.progressionIncrementKg ?? null,
+    rep_range_min: input.repRangeMin ?? null,
+    rep_range_max: input.repRangeMax ?? null,
+    exercise: mockExercises.find((e) => e.id === input.exerciseId),
+  };
+  row.exercises.push(pe);
+  return pe;
+}
+
+export async function updateDatedProgramExercise(
+  programId: string,
+  weekStart: string,
+  dayOfWeek: number,
+  exerciseRowId: string,
+  patch: {
+    sets?: number;
+    reps?: string;
+    restSeconds?: number;
+    coachNotes?: string | null;
+    targetWeightKg?: number | null;
+    progressionIncrementKg?: number | null;
+    repRangeMin?: number | null;
+    repRangeMax?: number | null;
+  },
+): Promise<void> {
+  if (useSupabasePrograms()) {
+    await weeksSupabase.updateDatedProgramExercise(
+      programId,
+      weekStart,
+      dayOfWeek,
+      exerciseRowId,
+      patch,
+    );
+    return;
+  }
+  if (toWeekStartKey(weekStart) === toWeekStartKey()) {
+    await updateProgramExercise(exerciseRowId, patch);
+    return;
+  }
+  const snap = mockWeekSnapshots.get(mockSnapKey(programId, toWeekStartKey(weekStart)));
+  const row = snap?.days.find((d) => d.dayOfWeek === dayOfWeek);
+  const pe = row?.exercises.find((e) => e.id === exerciseRowId);
+  if (!pe) throw new Error('Exercise not found');
+  if (patch.sets != null) pe.sets = patch.sets;
+  if (patch.reps != null) pe.reps = patch.reps;
+  if (patch.restSeconds != null) pe.rest_seconds = patch.restSeconds;
+  if (patch.coachNotes !== undefined) pe.coach_notes = patch.coachNotes;
+  if (patch.targetWeightKg !== undefined) pe.target_weight_kg = patch.targetWeightKg;
+  if (patch.progressionIncrementKg !== undefined) {
+    pe.progression_increment_kg = patch.progressionIncrementKg;
+  }
+  if (patch.repRangeMin !== undefined) pe.rep_range_min = patch.repRangeMin;
+  if (patch.repRangeMax !== undefined) pe.rep_range_max = patch.repRangeMax;
+}
+
+export async function removeDatedProgramExercise(
+  programId: string,
+  weekStart: string,
+  dayOfWeek: number,
+  exerciseRowId: string,
+): Promise<void> {
+  if (useSupabasePrograms()) {
+    await weeksSupabase.removeDatedProgramExercise(
+      programId,
+      weekStart,
+      dayOfWeek,
+      exerciseRowId,
+    );
+    return;
+  }
+  if (toWeekStartKey(weekStart) === toWeekStartKey()) {
+    await removeProgramExercise(exerciseRowId);
+    return;
+  }
+  const snap = mockWeekSnapshots.get(mockSnapKey(programId, toWeekStartKey(weekStart)));
+  const row = snap?.days.find((d) => d.dayOfWeek === dayOfWeek);
+  if (!row) return;
+  row.exercises = row.exercises.filter((e) => e.id !== exerciseRowId);
+}
+
+export async function clearDatedWorkoutDay(
+  programId: string,
+  weekStart: string,
+  dayOfWeek: number,
+  dayId?: string | null,
+): Promise<void> {
+  if (useSupabasePrograms()) {
+    await weeksSupabase.clearDatedWorkoutDay(programId, weekStart, dayOfWeek, dayId);
+    return;
+  }
+  if (toWeekStartKey(weekStart) === toWeekStartKey()) {
+    if (dayId) await removeProgramDay(dayId);
+    return;
+  }
+  const snap = mockWeekSnapshots.get(mockSnapKey(programId, toWeekStartKey(weekStart)));
+  if (!snap) return;
+  snap.days = snap.days.filter((d) => d.dayOfWeek !== dayOfWeek);
+}
+
+export async function copyWeekInto(
+  programId: string,
+  targetWeekStart: string,
+  createdBy?: string | null,
+): Promise<WeekBoardResult | null> {
+  if (useSupabasePrograms()) {
+    return weeksSupabase.copyWeekInto(programId, targetWeekStart, createdBy);
+  }
+  const targetKey = toWeekStartKey(targetWeekStart);
+  if (targetKey === toWeekStartKey()) {
+    return copyPreviousWeek(programId, createdBy);
+  }
+  const prevKey = format(addDays(parseISO(targetKey), -7), 'yyyy-MM-dd');
+  const prev = mockWeekSnapshots.get(mockSnapKey(programId, prevKey));
+  if (!prev?.days.length) throw new Error('No previous week to copy');
+  mockWeekSnapshots.set(mockSnapKey(programId, targetKey), {
+    weekStart: targetKey,
+    label: formatWeekRangeLabel(targetKey),
+    createdAt: new Date().toISOString(),
+    days: prev.days.map((d) => ({
+      ...d,
+      workoutDate: format(addDays(parseISO(targetKey), d.dayOfWeek), 'yyyy-MM-dd'),
+      exercises: d.exercises.map((pe) => ({ ...pe, id: newId('pe') })),
+    })),
+  });
+  return mockBuildBoard(programId, targetKey);
 }
 
 export async function addProgramExercise(

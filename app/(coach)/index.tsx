@@ -405,10 +405,16 @@ export default function CoachDashboardScreen() {
                 />
               </View>
               <View style={styles.actionCopy}>
-                <Text style={[styles.actionTitle, action.accent && styles.actionTitleAccent]}>
+                <Text
+                  style={[styles.actionTitle, action.accent && styles.actionTitleAccent]}
+                  numberOfLines={1}
+                  adjustsFontSizeToFit
+                  minimumFontScale={0.72}>
                   {action.title}
                 </Text>
-                <Text style={styles.actionMeta}>{action.meta}</Text>
+                <Text style={styles.actionMeta} numberOfLines={1}>
+                  {action.meta}
+                </Text>
               </View>
               <Text style={[styles.actionArrow, action.accent && styles.actionArrowAccent]}>›</Text>
             </Pressable>
@@ -1023,13 +1029,15 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     width: '48%',
     flexGrow: 1,
-    minWidth: 156,
-    minHeight: 96,
+    flexBasis: '46%',
+    maxWidth: '48%',
+    minWidth: 0,
+    minHeight: 88,
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm,
     paddingVertical: spacing.md,
-    paddingHorizontal: spacing.md,
+    paddingHorizontal: spacing.sm + 2,
     borderRadius: radius.lg,
     backgroundColor: colors.surfaceElevated,
   },
@@ -1054,28 +1062,29 @@ const styles = StyleSheet.create({
     backgroundColor: colors.accent,
   },
   actionIconWrap: {
-    width: 40,
-    height: 40,
+    width: 36,
+    height: 36,
     borderRadius: radius.md,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: 'rgba(255,255,255,0.04)',
     marginLeft: 4,
+    flexShrink: 0,
   },
   actionIconWrapAccent: {
     backgroundColor: 'rgba(200,255,0,0.1)',
   },
   actionCopy: {
     flex: 1,
-    gap: 3,
+    gap: 2,
     minWidth: 0,
   },
   actionTitle: {
     fontFamily: fonts.display,
     color: colors.text,
-    fontSize: 22,
-    lineHeight: 24,
-    letterSpacing: 0.8,
+    fontSize: 18,
+    lineHeight: 20,
+    letterSpacing: 0.6,
     textTransform: 'uppercase',
   },
   actionTitleAccent: {
@@ -1083,16 +1092,17 @@ const styles = StyleSheet.create({
   },
   actionMeta: {
     fontFamily: fonts.sans,
-    fontSize: 12,
-    lineHeight: 16,
+    fontSize: 11,
+    lineHeight: 14,
     color: colors.textMuted,
   },
   actionArrow: {
     fontFamily: fonts.sans,
-    fontSize: 22,
-    lineHeight: 22,
+    fontSize: 20,
+    lineHeight: 20,
     color: colors.textMuted,
     marginRight: 2,
+    flexShrink: 0,
   },
   actionArrowAccent: {
     color: 'rgba(200,255,0,0.55)',

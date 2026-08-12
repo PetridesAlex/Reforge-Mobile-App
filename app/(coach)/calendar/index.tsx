@@ -410,25 +410,71 @@ export default function CoachCalendarScreen() {
       )}
 
       {isAdmin ? (
-        <View style={styles.addRow}>
-          <PrimaryButton
-            title="+ Publish WOD"
-            onPress={() =>
-              router.push(`/(coach)/admin/wod?date=${selectedDate}` as never)
-            }
-            style={styles.addBtn}
-          />
-          <PrimaryButton
-            title="+ Group class"
-            onPress={() => openAddForDay('group')}
-            style={styles.addBtn}
-          />
-          <PrimaryButton
-            title="+ Private"
-            variant="secondary"
-            onPress={() => openAddForDay('private')}
-            style={styles.addBtn}
-          />
+        <View style={styles.quickActions}>
+          <Text style={styles.quickActionsKicker}>QUICK ADD</Text>
+          <View style={styles.quickActionsRow}>
+            <Pressable
+              onPress={() =>
+                router.push(`/(coach)/admin/wod?date=${selectedDate}` as never)
+              }
+              style={({ pressed }) => [
+                styles.quickAction,
+                styles.quickActionPrimary,
+                pressed && styles.quickActionPressed,
+              ]}>
+              <LinearGradient
+                colors={['rgba(200,255,0,0.22)', 'rgba(200,255,0,0.04)']}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={styles.quickActionGlow}
+              />
+              <View style={[styles.quickActionIcon, styles.quickActionIconPrimary]}>
+                <Ionicons name="flash" size={16} color={colors.background} />
+              </View>
+              <Text style={[styles.quickActionTitle, styles.quickActionTitlePrimary]} numberOfLines={1}>
+                WOD
+              </Text>
+              <Text style={styles.quickActionMeta} numberOfLines={1}>
+                Publish
+              </Text>
+            </Pressable>
+
+            <Pressable
+              onPress={() => openAddForDay('group')}
+              style={({ pressed }) => [
+                styles.quickAction,
+                styles.quickActionGroup,
+                pressed && styles.quickActionPressed,
+              ]}>
+              <View style={[styles.quickActionIcon, styles.quickActionIconGroup]}>
+                <Ionicons name="people" size={16} color="#93C5FD" />
+              </View>
+              <Text style={styles.quickActionTitle} numberOfLines={1}>
+                Class
+              </Text>
+              <Text style={styles.quickActionMeta} numberOfLines={1}>
+                Group
+              </Text>
+            </Pressable>
+
+            <Pressable
+              onPress={() => openAddForDay('private')}
+              style={({ pressed }) => [
+                styles.quickAction,
+                styles.quickActionPrivate,
+                pressed && styles.quickActionPressed,
+              ]}>
+              <View style={[styles.quickActionIcon, styles.quickActionIconPrivate]}>
+                <Ionicons name="person" size={16} color={colors.accent} />
+              </View>
+              <Text style={styles.quickActionTitle} numberOfLines={1}>
+                Private
+              </Text>
+              <Text style={styles.quickActionMeta} numberOfLines={1}>
+                1:1
+              </Text>
+            </Pressable>
+          </View>
         </View>
       ) : null}
 
@@ -862,6 +908,88 @@ const styles = StyleSheet.create({
   navBtn: { paddingHorizontal: spacing.md, paddingVertical: spacing.sm },
   addRow: { flexDirection: 'row', gap: spacing.sm, marginBottom: spacing.lg },
   addBtn: { flex: 1 },
+  quickActions: {
+    marginBottom: spacing.lg,
+    gap: spacing.sm,
+  },
+  quickActionsKicker: {
+    fontFamily: fonts.sansMedium,
+    fontSize: 10,
+    color: colors.textMuted,
+    letterSpacing: 2,
+  },
+  quickActionsRow: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+  },
+  quickAction: {
+    position: 'relative',
+    overflow: 'hidden',
+    flex: 1,
+    minWidth: 0,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 4,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.xs,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.08)',
+    backgroundColor: colors.surfaceElevated,
+  },
+  quickActionPrimary: {
+    borderColor: 'rgba(200,255,0,0.35)',
+    backgroundColor: '#141a10',
+  },
+  quickActionGroup: {
+    borderColor: 'rgba(147,197,253,0.22)',
+  },
+  quickActionPrivate: {
+    borderColor: 'rgba(200,255,0,0.18)',
+  },
+  quickActionPressed: {
+    opacity: 0.9,
+    transform: [{ scale: 0.98 }],
+  },
+  quickActionGlow: {
+    ...StyleSheet.absoluteFillObject,
+  },
+  quickActionIcon: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(255,255,255,0.05)',
+    marginBottom: 2,
+  },
+  quickActionIconPrimary: {
+    backgroundColor: colors.accent,
+  },
+  quickActionIconGroup: {
+    backgroundColor: 'rgba(147,197,253,0.12)',
+  },
+  quickActionIconPrivate: {
+    backgroundColor: 'rgba(200,255,0,0.1)',
+  },
+  quickActionTitle: {
+    fontFamily: fonts.display,
+    fontSize: 18,
+    lineHeight: 20,
+    letterSpacing: 0.8,
+    color: colors.text,
+    textTransform: 'uppercase',
+  },
+  quickActionTitlePrimary: {
+    color: colors.accent,
+  },
+  quickActionMeta: {
+    fontFamily: fonts.sansMedium,
+    fontSize: 10,
+    lineHeight: 12,
+    color: colors.textMuted,
+    letterSpacing: 0.4,
+  },
   entryCard: {
     position: 'relative',
     overflow: 'hidden',
