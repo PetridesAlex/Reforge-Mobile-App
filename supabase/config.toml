@@ -1,0 +1,5 @@
+# Supabase local/dev config — see https://supabase.com/docs/guides/cli/config
+# Deploy the invite function: supabase functions deploy invite-user
+
+[functions.invite-user]
+verify_jwt = true

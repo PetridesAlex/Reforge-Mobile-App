@@ -1,0 +1,52 @@
+import type { UserRole } from '@/types';
+
+export function isAdmin(role: UserRole | null | undefined): boolean {
+  return role === 'admin';
+}
+
+export function isCoachOrAdmin(role: UserRole | null | undefined): boolean {
+  return role === 'coach' || role === 'admin';
+}
+
+/** Full studio control: members, staff, roles, settings, chat, classes, WOD, news. */
+export function canManageStudio(role: UserRole | null | undefined): boolean {
+  return role === 'admin';
+}
+
+/** See and manage every member in the studio (not only assigned clients). */
+export function canManageAllClients(role: UserRole | null | undefined): boolean {
+  return role === 'admin';
+}
+
+export function canEditPrograms(role: UserRole | null | undefined): boolean {
+  return role === 'coach' || role === 'admin';
+}
+
+export function canManageClasses(role: UserRole | null | undefined): boolean {
+  return role === 'coach' || role === 'admin';
+}
+
+export function canManageMemberships(role: UserRole | null | undefined): boolean {
+  return role === 'admin';
+}
+
+export function canManageStaff(role: UserRole | null | undefined): boolean {
+  return role === 'admin';
+}
+
+export function canManageNews(role: UserRole | null | undefined): boolean {
+  return role === 'admin';
+}
+
+export function canManageWod(role: UserRole | null | undefined): boolean {
+  return role === 'coach' || role === 'admin';
+}
+
+/** Admin sees every group chat; coaches see groups they lead. */
+export function canManageAllChats(role: UserRole | null | undefined): boolean {
+  return role === 'admin';
+}
+
+export function canAccessGroupChat(role: UserRole | null | undefined): boolean {
+  return role === 'member' || role === 'coach' || role === 'admin';
+}
