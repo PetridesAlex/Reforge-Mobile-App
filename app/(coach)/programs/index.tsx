@@ -1,7 +1,9 @@
 import { router } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
 import {
+  Alert,
   Modal,
+  Platform,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -294,20 +296,24 @@ function AdminWeekBoard({ profileId }: { profileId: string }) {
 
   const removeExercise = async (rowId: string) => {
     if (!programId || activeSlot == null) return;
-    await coachService.removeDatedProgramExercise(
-      programId,
-      weekStart,
-      activeSlot.dayOfWeek,
-      rowId,
-    );
-    const refreshed = await coachService.getWeekBoard(programId, weekStart, {
-      createdBy: profileId,
-    });
-    setBoard(refreshed);
-    setActiveSlot(
-      refreshed?.board.find((d) => d.dayOfWeek === activeSlot.dayOfWeek) ?? null,
-    );
-    setToast('Exercise removed');
+    try {
+      await coachService.removeDatedProgramExercise(
+        programId,
+        weekStart,
+        activeSlot.dayOfWeek,
+        rowId,
+      );
+      const refreshed = await coachService.getWeekBoard(programId, weekStart, {
+        createdBy: profileId,
+      });
+      setBoard(refreshed);
+      setActiveSlot(
+        refreshed?.board.find((d) => d.dayOfWeek === activeSlot.dayOfWeek) ?? null,
+      );
+      setToast('Exercise removed');
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not remove exercise');
+    }
   };
 
   const clearDay = async () => {
@@ -315,15 +321,66 @@ function AdminWeekBoard({ profileId }: { profileId: string }) {
       closeDay();
       return;
     }
-    await coachService.clearDatedWorkoutDay(
-      programId,
-      weekStart,
-      activeSlot.dayOfWeek,
-      activeSlot.day?.id,
-    );
-    await refreshBoard(programId);
-    closeDay();
-    setToast('Day cleared');
+    try {
+      await coachService.clearDatedWorkoutDay(
+        programId,
+        weekStart,
+        activeSlot.dayOfWeek,
+        activeSlot.day?.id,
+      );
+      const refreshed = await coachService.getWeekBoard(programId, weekStart, {
+        createdBy: profileId,
+      });
+      setBoard(refreshed);
+      closeDay();
+      setToast('Workout removed from this day');
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not remove workout');
+    }
+  };
+
+  const confirmClearDay = (slot?: DaySlot | null) => {
+    const target = slot ?? activeSlot;
+    if (!target?.day) {
+      if (target) openDay(target);
+      return;
+    }
+
+    const title = 'Remove workout?';
+    const message = `Clear “${target.day.name}” on ${target.dateLabel}? This cannot be undone.`;
+
+    const runRemove = async () => {
+      if (!programId) return;
+      setActiveSlot(target);
+      try {
+        await coachService.clearDatedWorkoutDay(
+          programId,
+          weekStart,
+          target.dayOfWeek,
+          target.day?.id,
+        );
+        const refreshed = await coachService.getWeekBoard(programId, weekStart, {
+          createdBy: profileId,
+        });
+        setBoard(refreshed);
+        closeDay();
+        setToast('Workout removed from this day');
+      } catch (e) {
+        setError(e instanceof Error ? e.message : 'Could not remove workout');
+      }
+    };
+
+    if (Platform.OS === 'web') {
+      if (typeof window !== 'undefined' && window.confirm(`${title}\n\n${message}`)) {
+        void runRemove();
+      }
+      return;
+    }
+
+    Alert.alert(title, message, [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Remove', style: 'destructive', onPress: () => void runRemove() },
+    ]);
   };
 
   const copyPrevious = async () => {
@@ -457,49 +514,62 @@ function AdminWeekBoard({ profileId }: { profileId: string }) {
           const has = Boolean(slot.day);
           const image = has ? workoutImageForDay(slot.day!.name) : PLACEHOLDER_IMAGES.studio;
           return (
-            <Pressable
-              key={slot.date}
-              onPress={() => openDay(slot)}
-              style={({ pressed }) => [
-                styles.dayRow,
-                has && styles.dayRowOn,
-                slot.isToday && styles.dayRowToday,
-                pressed && styles.pressed,
-              ]}>
-              {has ? (
-                <LinearGradient
-                  colors={['rgba(200,255,0,0.06)', 'transparent']}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 1 }}
-                  style={styles.dayGlow}
-                />
-              ) : null}
-              <View style={[styles.dayRail, has ? styles.dayRailOn : styles.dayRailOff]} />
-              <View style={styles.dayShortWrap}>
-                <Text style={[styles.dayShort, has && styles.dayShortOn]}>{slot.short.toUpperCase()}</Text>
-                <Text style={styles.dayDate}>{slot.dateLabel}</Text>
-              </View>
-              <MediaImage uri={image} style={styles.dayThumb} rounded={radius.md} />
-              <View style={styles.dayCopy}>
-                <Text style={styles.dayName} numberOfLines={1}>
-                  {slot.day?.name ?? 'Rest / empty'}
-                </Text>
-                <Text style={styles.dayMeta}>
-                  {has ? `${slot.exercises.length} exercises` : 'Tap to add workout'}
-                </Text>
-              </View>
-              {slot.isPast && slot.trainedCount > 0 ? (
-                <View style={styles.trainedChip}>
-                  <Text style={styles.trainedChipText}>trained {slot.trainedCount}</Text>
+            <View key={slot.date} style={styles.dayRowWrap}>
+              <Pressable
+                onPress={() => openDay(slot)}
+                style={({ pressed }) => [
+                  styles.dayRow,
+                  styles.dayRowMain,
+                  has && styles.dayRowOn,
+                  slot.isToday && styles.dayRowToday,
+                  pressed && styles.pressed,
+                ]}>
+                {has ? (
+                  <LinearGradient
+                    colors={['rgba(200,255,0,0.06)', 'transparent']}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 1 }}
+                    style={styles.dayGlow}
+                  />
+                ) : null}
+                <View style={[styles.dayRail, has ? styles.dayRailOn : styles.dayRailOff]} />
+                <View style={styles.dayShortWrap}>
+                  <Text style={[styles.dayShort, has && styles.dayShortOn]}>
+                    {slot.short.toUpperCase()}
+                  </Text>
+                  <Text style={styles.dayDate}>{slot.dateLabel}</Text>
                 </View>
-              ) : (
-                <View style={[styles.dayBadge, has ? styles.dayBadgeOn : styles.dayBadgeOff]}>
-                  <Text style={[styles.dayBadgeText, has && styles.dayBadgeTextOn]}>
-                    {has ? 'EDIT' : 'ADD'}
+                <MediaImage uri={image} style={styles.dayThumb} rounded={radius.md} />
+                <View style={styles.dayCopy}>
+                  <Text style={styles.dayName} numberOfLines={1}>
+                    {slot.day?.name ?? 'Rest / empty'}
+                  </Text>
+                  <Text style={styles.dayMeta}>
+                    {has ? `${slot.exercises.length} exercises` : 'Tap to add workout'}
                   </Text>
                 </View>
-              )}
-            </Pressable>
+                {slot.isPast && slot.trainedCount > 0 ? (
+                  <View style={styles.trainedChip}>
+                    <Text style={styles.trainedChipText}>trained {slot.trainedCount}</Text>
+                  </View>
+                ) : (
+                  <View style={[styles.dayBadge, has ? styles.dayBadgeOn : styles.dayBadgeOff]}>
+                    <Text style={[styles.dayBadgeText, has && styles.dayBadgeTextOn]}>
+                      {has ? 'EDIT' : 'ADD'}
+                    </Text>
+                  </View>
+                )}
+              </Pressable>
+              {has ? (
+                <Pressable
+                  onPress={() => confirmClearDay(slot)}
+                  hitSlop={8}
+                  accessibilityLabel={`Remove ${slot.day?.name ?? 'workout'}`}
+                  style={({ pressed }) => [styles.dayRemoveBtn, pressed && styles.pressed]}>
+                  <Ionicons name="trash-outline" size={16} color={colors.danger} />
+                </Pressable>
+              ) : null}
+            </View>
           );
         })}
       </View>
@@ -606,7 +676,11 @@ function AdminWeekBoard({ profileId }: { profileId: string }) {
             </ScrollView>
 
             <PrimaryButton title="Add exercise" variant="secondary" onPress={() => setPickerOpen(true)} />
-            <PrimaryButton title="Clear day" variant="ghost" onPress={clearDay} />
+            <PrimaryButton
+              title="Remove workout"
+              variant="ghost"
+              onPress={() => confirmClearDay(activeSlot)}
+            />
 
             {activeSlot?.isPast || board?.isPastWeek ? (
               <>
@@ -864,6 +938,11 @@ const styles = StyleSheet.create({
     marginBottom: spacing.sm,
   },
   weekList: { gap: spacing.sm, marginBottom: spacing.lg },
+  dayRowWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
   dayRow: {
     position: 'relative',
     overflow: 'hidden',
@@ -877,6 +956,10 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surfaceElevated,
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.06)',
+  },
+  dayRowMain: {
+    flex: 1,
+    minWidth: 0,
   },
   dayRowOn: {
     borderColor: 'rgba(200,255,0,0.22)',
@@ -956,6 +1039,16 @@ const styles = StyleSheet.create({
     letterSpacing: 1,
   },
   dayBadgeTextOn: { color: colors.accent },
+  dayRemoveBtn: {
+    width: 34,
+    height: 34,
+    borderRadius: radius.full,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(239,68,68,0.12)',
+    borderWidth: 1,
+    borderColor: 'rgba(239,68,68,0.35)',
+  },
   trainedChip: {
     paddingHorizontal: 10,
     paddingVertical: 6,

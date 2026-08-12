@@ -950,7 +950,10 @@ export async function removeDatedProgramExercise(
   exerciseRowId: string,
 ): Promise<void> {
   const weekKey = toWeekStartKey(weekStart);
-  if (weekKey === toWeekStartKey()) {
+  const isSynthetic =
+    exerciseRowId.startsWith('snap-') || exerciseRowId.startsWith('mock-snap-');
+
+  if (weekKey === toWeekStartKey() && !isSynthetic) {
     await removeProgramExercise(exerciseRowId);
     await ensureWeekSnapshot(programId, weekKey, null, { overwrite: true });
     return;
@@ -966,7 +969,14 @@ export async function removeDatedProgramExercise(
     .eq('workout_date', workoutDate)
     .maybeSingle();
   if (error) throw new Error(formatSupabaseError(error));
-  if (!dayRow) return;
+  if (!dayRow) {
+    // Fallback: current-week live row may still hold a real exercise id
+    if (!isSynthetic) {
+      await removeProgramExercise(exerciseRowId);
+      await ensureWeekSnapshot(programId, toWeekStartKey(), null, { overwrite: true });
+    }
+    return;
+  }
 
   const list = snapshotJsonToExercises(dayRow.exercises_json, dayRow.id as string).filter(
     (pe) => pe.id !== exerciseRowId,
@@ -977,6 +987,11 @@ export async function removeDatedProgramExercise(
     .update({ exercises_json: json, exercise_count: json.length })
     .eq('id', dayRow.id);
   if (updateError) throw new Error(formatSupabaseError(updateError));
+
+  // If this is also the live current week, mirror deletion into program_exercises when possible
+  if (weekKey === toWeekStartKey() && !isSynthetic) {
+    await removeProgramExercise(exerciseRowId).catch(() => undefined);
+  }
 }
 
 export async function clearDatedWorkoutDay(
@@ -986,13 +1001,44 @@ export async function clearDatedWorkoutDay(
   dayId?: string | null,
 ): Promise<void> {
   const weekKey = toWeekStartKey(weekStart);
-  if (weekKey === toWeekStartKey()) {
-    if (dayId) await removeProgramDay(dayId);
+  const currentKey = toWeekStartKey();
+  const supabase = getSupabase();
+
+  if (weekKey === currentKey) {
+    // Prefer weekday match — dayId can be stale/synthetic after week switches
+    const { error: byDowError } = await supabase
+      .from('program_days')
+      .delete()
+      .eq('program_id', programId)
+      .eq('day_of_week', dayOfWeek);
+    if (byDowError) throw new Error(formatSupabaseError(byDowError));
+
+    if (dayId && !dayId.startsWith('snap-') && !dayId.startsWith('mock-snap-')) {
+      const { error } = await supabase.from('program_days').delete().eq('id', dayId);
+      if (error && !/0 rows|No rows/i.test(error.message)) {
+        // Already removed via weekday delete is fine
+      }
+    }
+
+    // Keep the warm snapshot in sync so the day doesn't reappear from archive
+    const workoutDate = format(addDays(parseISO(weekKey), dayOfWeek), 'yyyy-MM-dd');
+    const { data: snap } = await supabase
+      .from('program_week_snapshots')
+      .select('id')
+      .eq('program_id', programId)
+      .eq('week_start', weekKey)
+      .maybeSingle();
+    if (snap?.id) {
+      await supabase
+        .from('program_week_day_snapshots')
+        .delete()
+        .eq('week_snapshot_id', snap.id)
+        .eq('workout_date', workoutDate);
+    }
     await ensureWeekSnapshot(programId, weekKey, null, { overwrite: true });
     return;
   }
 
-  const supabase = getSupabase();
   const workoutDate = format(addDays(parseISO(weekKey), dayOfWeek), 'yyyy-MM-dd');
   const { data: snap } = await supabase
     .from('program_week_snapshots')
@@ -1001,6 +1047,15 @@ export async function clearDatedWorkoutDay(
     .eq('week_start', weekKey)
     .maybeSingle();
   if (!snap?.id) return;
+
+  if (dayId) {
+    const { error: byIdError } = await supabase
+      .from('program_week_day_snapshots')
+      .delete()
+      .eq('id', dayId);
+    if (byIdError) throw new Error(formatSupabaseError(byIdError));
+  }
+
   const { error } = await supabase
     .from('program_week_day_snapshots')
     .delete()
