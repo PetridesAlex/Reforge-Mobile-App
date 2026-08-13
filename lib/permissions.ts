@@ -38,6 +38,11 @@ export function canManageNews(role: UserRole | null | undefined): boolean {
   return role === 'admin';
 }
 
+/** REFORGE Store catalog, inventory, and fulfillment — admin only (Phase 1). */
+export function canManageStore(role: UserRole | null | undefined): boolean {
+  return role === 'admin';
+}
+
 export function canManageWod(role: UserRole | null | undefined): boolean {
   return role === 'coach' || role === 'admin';
 }

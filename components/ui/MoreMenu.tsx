@@ -39,6 +39,13 @@ export type MoreMenuItem = {
 
 const MEMBER_MENU_ITEMS: readonly MoreMenuItem[] = [
   {
+    id: 'store',
+    label: 'Store',
+    description: 'REFORGE merchandise',
+    icon: 'bag-handle-outline',
+    href: '/(member)/store',
+  },
+  {
     id: 'sessions',
     label: 'Sessions',
     description: 'Private lessons & classes',
@@ -103,6 +110,13 @@ export const ADMIN_MENU_ITEMS: readonly MoreMenuItem[] = [
     description: 'Paid & unpaid status',
     icon: 'card-outline',
     href: '/(coach)/admin/memberships',
+  },
+  {
+    id: 'store',
+    label: 'Store',
+    description: 'Merch, products & inventory',
+    icon: 'bag-handle-outline',
+    href: '/(coach)/admin/store',
   },
   {
     id: 'news',
@@ -260,7 +274,7 @@ export function MoreMenu({
         <LinearGradient
           colors={['rgba(200,255,0,0.22)', 'rgba(200,255,0,0.08)']}
           style={styles.triggerGradient}>
-          <Ionicons name="menu" size={compact ? 20 : 22} color={colors.accent} />
+          <Ionicons name="menu" size={20} color={colors.accent} />
         </LinearGradient>
       </AnimatedPressable>
 
@@ -394,20 +408,22 @@ const styles = StyleSheet.create({
   trigger: {
     width: 44,
     height: 44,
-    borderRadius: radius.md,
+    minWidth: 44,
+    minHeight: 44,
+    borderRadius: 4,
     overflow: 'hidden',
     borderWidth: 1,
     borderColor: 'rgba(200,255,0,0.32)',
   },
   triggerCompact: {
-    width: 40,
-    height: 40,
+    width: 44,
+    height: 44,
   },
   triggerGradient: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: colors.surfaceElevated,
+    backgroundColor: 'rgba(200,255,0,0.1)',
   },
   pressed: { opacity: 0.88 },
   modalRoot: {

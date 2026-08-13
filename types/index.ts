@@ -204,6 +204,13 @@ export type AppNotificationType =
   | 'rest_complete'
   | 'class_reminder'
   | 'week_complete'
+  | 'store_order_paid'
+  | 'store_order_processing'
+  | 'store_ready_pickup'
+  | 'store_order_shipped'
+  | 'store_order_delivered'
+  | 'store_new_drop'
+  | 'store_low_stock'
   | 'general';
 
 export type AppNotification = {
@@ -556,3 +563,302 @@ export type MemberAbsence = {
   created_at: string;
   updated_at: string;
 };
+
+// ---------------------------------------------------------------------------
+// REFORGE Store
+// ---------------------------------------------------------------------------
+
+export type StoreProductStatus = 'draft' | 'active' | 'archived';
+
+export type StoreInventoryReason =
+  | 'restock'
+  | 'adjustment'
+  | 'order'
+  | 'return'
+  | 'correction';
+
+export type StoreCategory = {
+  id: string;
+  slug: string;
+  name: string;
+  sort_order: number;
+  active: boolean;
+  created_at: string;
+  updated_at: string;
+};
+
+export type StoreCollection = {
+  id: string;
+  slug: string;
+  name: string;
+  description: string | null;
+  release_at: string | null;
+  featured: boolean;
+  active: boolean;
+  created_at: string;
+  updated_at: string;
+};
+
+export type StoreSizeGuide = {
+  id: string;
+  name: string;
+  description: string | null;
+  published: boolean;
+  created_at: string;
+  updated_at: string;
+  rows?: StoreSizeGuideRow[];
+};
+
+export type StoreSizeGuideRow = {
+  id: string;
+  size_guide_id: string;
+  size_label: string;
+  chest_cm: number | null;
+  length_cm: number | null;
+  waist_cm: number | null;
+  hip_cm: number | null;
+  sort_order: number;
+  created_at: string;
+};
+
+export type StoreProductImage = {
+  id: string;
+  product_id: string;
+  storage_path: string;
+  public_url: string;
+  alt_text: string | null;
+  sort_order: number;
+  is_primary: boolean;
+  created_at: string;
+};
+
+export type StoreProductVariant = {
+  id: string;
+  product_id: string;
+  sku: string;
+  size_label: string | null;
+  color_label: string | null;
+  color_hex: string | null;
+  stock_qty: number;
+  price_override_cents: number | null;
+  image_url: string | null;
+  active: boolean;
+  created_at: string;
+  updated_at: string;
+};
+
+export type StoreProduct = {
+  id: string;
+  slug: string;
+  name: string;
+  subtitle: string | null;
+  description: string | null;
+  category_id: string | null;
+  collection_id: string | null;
+  size_guide_id: string | null;
+  status: StoreProductStatus;
+  price_cents: number;
+  compare_at_cents: number | null;
+  currency: string;
+  featured: boolean;
+  is_new: boolean;
+  is_limited: boolean;
+  /** Merchandising flags (client/demo or future admin fields). */
+  is_bestseller?: boolean;
+  is_best_of_month?: boolean;
+  details: string | null;
+  materials: string | null;
+  care_instructions: string | null;
+  release_at: string | null;
+  published_at: string | null;
+  created_at: string;
+  updated_at: string;
+  category?: StoreCategory | null;
+  collection?: StoreCollection | null;
+  images?: StoreProductImage[];
+  variants?: StoreProductVariant[];
+  primary_image_url?: string | null;
+  total_stock?: number;
+};
+
+export type StoreInventoryMovement = {
+  id: string;
+  variant_id: string;
+  delta: number;
+  reason: StoreInventoryReason;
+  note: string | null;
+  order_id: string | null;
+  created_by: string | null;
+  created_at: string;
+};
+
+export type StoreHomeHero = {
+  kicker: string;
+  title: string;
+  headline: string;
+  subtitle: string;
+  cta: string;
+};
+
+export type StoreFulfillmentSettings = {
+  pickup_label: string;
+  pickup_location: string;
+  standard_delivery_cents: number;
+  currency: string;
+};
+
+export type StoreInventorySettings = {
+  low_stock_threshold: number;
+  show_exact_stock: boolean;
+};
+
+export type StoreDashboardStats = {
+  activeProducts: number;
+  draftProducts: number;
+  archivedProducts: number;
+  lowStockVariants: number;
+  outOfStockVariants: number;
+  totalUnits: number;
+  openOrders: number;
+  awaitingPaymentOrders: number;
+  paidOrders: number;
+  revenueCents: number;
+};
+
+/** Future payment provider contract — Stripe wires in Phase 5. Never put secrets in the client. */
+export type StorePaymentProviderId = 'none' | 'mock' | 'stripe';
+
+export type StorePaymentProvider = {
+  readonly id: 'mock' | 'stripe';
+  createCheckoutSession(input: {
+    orderId: string;
+    amountCents: number;
+    currency: string;
+  }): Promise<{ clientSecret?: string; checkoutUrl?: string; mockComplete?: boolean }>;
+};
+
+export type StoreFulfillmentMethod = 'delivery' | 'pickup';
+
+export type StoreOrderStatus =
+  | 'pending'
+  | 'awaiting_payment'
+  | 'paid'
+  | 'processing'
+  | 'ready_for_pickup'
+  | 'shipped'
+  | 'delivered'
+  | 'cancelled'
+  | 'refunded';
+
+export type StorePaymentStatus = 'unpaid' | 'pending' | 'paid' | 'failed' | 'refunded';
+
+export type StoreCartLine = {
+  id: string;
+  product_id: string;
+  variant_id: string;
+  product_name: string;
+  size_label: string | null;
+  color_label: string | null;
+  sku: string | null;
+  unit_price_cents: number;
+  quantity: number;
+  image_url: string | null;
+};
+
+export type StoreCartValidationIssue = {
+  variant_id: string;
+  code: string;
+  message: string;
+  previous_cents?: number;
+  current_cents?: number;
+  available?: number;
+};
+
+export type StoreOrderItem = {
+  id: string;
+  order_id: string;
+  product_id: string | null;
+  variant_id: string | null;
+  product_name: string;
+  sku: string | null;
+  size_label: string | null;
+  color_label: string | null;
+  unit_price_cents: number;
+  quantity: number;
+  line_total_cents: number;
+  created_at: string;
+};
+
+export type StoreOrderEvent = {
+  id: string;
+  order_id: string;
+  status: string;
+  note: string | null;
+  created_by: string | null;
+  created_at: string;
+};
+
+export type StoreOrder = {
+  id: string;
+  order_number: string;
+  user_id: string;
+  status: StoreOrderStatus;
+  fulfillment_method: StoreFulfillmentMethod;
+  currency: string;
+  subtotal_cents: number;
+  delivery_cents: number;
+  discount_cents: number;
+  total_cents: number;
+  discount_code: string | null;
+  contact_email: string;
+  contact_phone: string | null;
+  shipping_first_name: string | null;
+  shipping_last_name: string | null;
+  shipping_line1: string | null;
+  shipping_line2: string | null;
+  shipping_city: string | null;
+  shipping_postal_code: string | null;
+  shipping_country: string | null;
+  pickup_location: string | null;
+  payment_provider: StorePaymentProviderId;
+  payment_status: StorePaymentStatus;
+  paid_at: string | null;
+  internal_notes: string | null;
+  created_at: string;
+  updated_at: string;
+  items?: StoreOrderItem[];
+  events?: StoreOrderEvent[];
+  customer_name?: string;
+};
+
+export type StoreAddress = {
+  id: string;
+  user_id: string;
+  label: string | null;
+  first_name: string;
+  last_name: string;
+  line1: string;
+  line2: string | null;
+  city: string;
+  postal_code: string;
+  country: string;
+  phone: string | null;
+  is_default: boolean;
+  created_at: string;
+  updated_at: string;
+};
+
+export type StoreDiscountKind = 'percent' | 'fixed' | 'free_delivery';
+
+export type StoreDiscount = {
+  id: string;
+  code: string;
+  kind: StoreDiscountKind;
+  value_bps: number | null;
+  value_cents: number | null;
+  min_subtotal_cents: number;
+  member_only: boolean;
+  active: boolean;
+};
+
+

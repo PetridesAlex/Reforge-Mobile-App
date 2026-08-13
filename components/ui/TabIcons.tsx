@@ -8,7 +8,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import Svg, { Circle, Path, Rect } from 'react-native-svg';
 
-import { colors, fonts, radius } from '@/constants/theme';
+import { colors, fonts } from '@/constants/theme';
 
 type IconProps = { color: string; size?: number; filled?: boolean };
 
@@ -90,17 +90,19 @@ export function ProfileTabIcon({ color, size = 22, filled }: IconProps) {
     <Svg width={size} height={size} viewBox="0 0 24 24">
       <Circle
         cx="12"
-        cy="8"
-        r="3.2"
+        cy="7.8"
+        r="3.4"
         fill={filled ? color : 'none'}
         stroke={color}
-        strokeWidth={1.7}
+        strokeWidth={filled ? 1.9 : 1.75}
+        fillOpacity={filled ? 0.95 : 0}
       />
       <Path
-        d="M5.2 19.2c.8-3.2 3.4-5 6.8-5s6 1.8 6.8 5"
-        fill="none"
+        d="M4.8 19.4c.9-3.5 3.6-5.4 7.2-5.4s6.3 1.9 7.2 5.4"
+        fill={filled ? color : 'none'}
+        fillOpacity={filled ? 0.18 : 0}
         stroke={color}
-        strokeWidth={1.7}
+        strokeWidth={filled ? 1.9 : 1.75}
         strokeLinecap="round"
       />
     </Svg>
@@ -148,14 +150,14 @@ type TabItemProps = {
   children: ReactNode;
 };
 
-/** Premium tab chip: lime active glow, uppercase label, spring icon scale. */
+/** Premium tab chip: lime active well, strong label, spring icon scale. */
 export function TabItem({ label, focused, children }: TabItemProps) {
-  const scale = useSharedValue(focused ? 1 : 0.94);
-  const barWidth = useSharedValue(focused ? 20 : 0);
+  const scale = useSharedValue(focused ? 1 : 0.92);
+  const barWidth = useSharedValue(focused ? 22 : 0);
 
   useEffect(() => {
-    scale.value = withSpring(focused ? 1 : 0.94, { damping: 16, stiffness: 280 });
-    barWidth.value = withTiming(focused ? 20 : 0, { duration: 220 });
+    scale.value = withSpring(focused ? 1 : 0.92, { damping: 15, stiffness: 260 });
+    barWidth.value = withTiming(focused ? 22 : 0, { duration: 240 });
   }, [barWidth, focused, scale]);
 
   const iconStyle = useAnimatedStyle(() => ({
@@ -169,14 +171,15 @@ export function TabItem({ label, focused, children }: TabItemProps) {
 
   return (
     <View style={styles.item}>
-      <Animated.View style={[styles.iconWrap, focused && styles.iconWrapActive, iconStyle]}>
-        {children}
+      <Animated.View style={[styles.iconWell, focused && styles.iconWellActive, iconStyle]}>
+        <View style={[styles.iconInner, focused && styles.iconInnerActive]}>{children}</View>
       </Animated.View>
       <Text style={[styles.label, focused && styles.labelActive]} numberOfLines={1}>
         {label}
       </Text>
-      <Animated.View style={[styles.activeBar, barStyle]} />
-      {!focused ? <View style={styles.activeBarSpacer} /> : null}
+      <View style={styles.activeBarTrack}>
+        <Animated.View style={[styles.activeBar, barStyle]} />
+      </View>
     </View>
   );
 }
@@ -186,48 +189,66 @@ const styles = StyleSheet.create({
     width: '100%',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 4,
+    gap: 5,
   },
-  iconWrap: {
-    width: 38,
-    height: 30,
-    borderRadius: radius.sm,
+  iconWell: {
+    width: 44,
+    height: 34,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.04)',
+    backgroundColor: 'rgba(255,255,255,0.02)',
+  },
+  iconWellActive: {
+    borderColor: 'rgba(200,255,0,0.45)',
+    backgroundColor: 'rgba(200,255,0,0.14)',
+    shadowColor: colors.accent,
+    shadowOpacity: 0.4,
+    shadowRadius: 14,
+    shadowOffset: { width: 0, height: 0 },
+  },
+  iconInner: {
+    width: 28,
+    height: 28,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  iconWrapActive: {
-    backgroundColor: colors.accentMuted,
-    borderWidth: 1,
-    borderColor: 'rgba(200,255,0,0.42)',
+  iconInnerActive: {
     shadowColor: colors.accent,
-    shadowOpacity: 0.45,
-    shadowRadius: 12,
+    shadowOpacity: 0.55,
+    shadowRadius: 10,
     shadowOffset: { width: 0, height: 0 },
   },
   label: {
-    fontFamily: fonts.sansSemiBold,
+    fontFamily: fonts.sansBold,
     fontSize: 10,
-    letterSpacing: 0.7,
-    color: colors.textMuted,
+    letterSpacing: 1.15,
+    color: 'rgba(163,163,163,0.72)',
     textTransform: 'uppercase',
     textAlign: 'center',
   },
   labelActive: {
     color: colors.accent,
+    letterSpacing: 1.35,
+    textShadowColor: 'rgba(200,255,0,0.35)',
+    textShadowOffset: { width: 0, height: 0 },
+    textShadowRadius: 8,
+  },
+  activeBarTrack: {
+    height: 2.5,
+    marginTop: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   activeBar: {
-    height: 2,
-    borderRadius: 1,
+    height: 2.5,
+    borderRadius: 2,
     backgroundColor: colors.accent,
-    marginTop: 1,
     shadowColor: colors.accent,
-    shadowOpacity: 0.85,
-    shadowRadius: 6,
+    shadowOpacity: 0.9,
+    shadowRadius: 8,
     shadowOffset: { width: 0, height: 0 },
-  },
-  activeBarSpacer: {
-    width: 20,
-    height: 2,
-    marginTop: 1,
   },
 });

@@ -25,6 +25,11 @@
    - [`migrations/022_fix_profiles_select_recursion.sql`](migrations/022_fix_profiles_select_recursion.sql) — **fixes profiles RLS recursion (sign-in / profile load)**
    - [`migrations/023_roster_active.sql`](migrations/023_roster_active.sql) — **admin soft-remove / restore members on the roster**
    - [`migrations/024_program_week_history.sql`](migrations/024_program_week_history.sql) — **dated training weeks + archived workout history**
+   - [`migrations/025_store_catalog.sql`](migrations/025_store_catalog.sql) — **REFORGE Store catalog, variants, inventory, images & storage**
+   - [`migrations/026_store_carts_favorites.sql`](migrations/026_store_carts_favorites.sql) — **carts & wishlist**
+   - [`migrations/027_store_orders.sql`](migrations/027_store_orders.sql) — **orders, addresses, checkout RPCs**
+   - [`migrations/028_store_discounts_drops.sql`](migrations/028_store_discounts_drops.sql) — **promo codes, drop fields, store notification prefs**
+   - Optional demo catalogue: [`seed/004_store_example_products.sql`](seed/004_store_example_products.sql) — **12 Essentials products (3 per category)**
 3. In **Authentication → Providers**, enable **Email** and **Google**
 4. In **Authentication → URL configuration**:
    - **Site URL:** `reforge://auth/callback` (not `http://localhost:3000`)

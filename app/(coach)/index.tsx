@@ -55,6 +55,14 @@ const ADMIN_ACTIONS: Action[] = [
     accent: true,
   },
   {
+    key: 'store',
+    title: 'Store',
+    meta: 'Merch & inventory',
+    href: '/(coach)/admin/store',
+    icon: 'bag-handle-outline',
+    accent: true,
+  },
+  {
     key: 'classes',
     title: 'Classes',
     meta: 'Group & private',

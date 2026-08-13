@@ -21,6 +21,9 @@ import * as memberService from '@/services/member';
 import { colors, fonts, radius, spacing, typography } from '@/constants/theme';
 
 const MENU_ITEMS = [
+  { id: 'orders', label: 'My Orders', icon: 'receipt-outline' as const, href: '/(member)/store/orders' },
+  { id: 'favorites', label: 'Favorites', icon: 'heart-outline' as const, href: '/(member)/store/favorites' },
+  { id: 'store', label: 'Store', icon: 'bag-handle-outline' as const, href: '/(member)/store' },
   { id: 'sessions', label: 'Sessions', icon: 'calendar-outline' as const, href: '/(member)/bookings' },
   { id: 'absence', label: 'Report absence', icon: 'calendar-clear-outline' as const, href: '/(member)/workouts/absences' },
   { id: 'chat', label: 'Group Chat', icon: 'chatbubbles-outline' as const, href: '/(member)/messages' },

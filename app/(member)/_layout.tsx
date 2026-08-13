@@ -2,6 +2,7 @@ import { Redirect, Tabs } from 'expo-router';
 import { useCallback, useState } from 'react';
 import { ActivityIndicator, View } from 'react-native';
 
+import { MessageToast } from '@/components/community/MessageToast';
 import { MemberAppGuide } from '@/components/onboarding/MemberAppGuide';
 import { AppTabBar } from '@/components/ui/AppTabBar';
 import {
@@ -11,11 +12,16 @@ import {
   ProgressTabIcon,
 } from '@/components/ui/TabIcons';
 import { useAuth } from '@/hooks/useAuth';
+import { useMessageToast } from '@/hooks/useMessageToast';
+import { StoreCartProvider } from '@/hooks/useStoreCart';
 import { hasCompletedAppOnboarding, completeMemberAppOnboarding } from '@/services/onboarding';
 import { colors } from '@/constants/theme';
 
 export default function MemberLayout() {
   const { isLoading, isAuthenticated, role, profile, refreshProfile } = useAuth();
+  const { toast, dismiss, open } = useMessageToast(
+    role === 'member' ? profile?.id : undefined,
+  );
   const [guideDismissed, setGuideDismissed] = useState(false);
 
   const showAppGuide =
@@ -52,7 +58,7 @@ export default function MemberLayout() {
   }
 
   return (
-    <>
+    <StoreCartProvider userId={profile?.id}>
       <Tabs
         tabBar={(props) => <AppTabBar {...props} />}
         screenOptions={{
@@ -104,7 +110,10 @@ export default function MemberLayout() {
         {/* Available via top-right More menu */}
         <Tabs.Screen name="bookings" options={{ href: null }} />
         <Tabs.Screen name="messages" options={{ href: null }} />
+        <Tabs.Screen name="store" options={{ href: null }} />
       </Tabs>
+
+      <MessageToast notification={toast} onPress={open} onDismiss={dismiss} />
 
       <MemberAppGuide
         visible={showAppGuide}
@@ -112,6 +121,6 @@ export default function MemberLayout() {
         onComplete={finishGuide}
         onSkip={finishGuide}
       />
-    </>
+    </StoreCartProvider>
   );
 }

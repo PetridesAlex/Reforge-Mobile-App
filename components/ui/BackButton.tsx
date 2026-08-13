@@ -69,9 +69,11 @@ export function NavChevron({ direction = 'forward', size = 'md', style }: NavChe
 
 const styles = StyleSheet.create({
   iconBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: radius.full,
+    width: 44,
+    height: 44,
+    minWidth: 44,
+    minHeight: 44,
+    borderRadius: 4,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: colors.accentMuted,
