@@ -194,6 +194,9 @@ function statusVisuals(status: string) {
 export default function CoachDashboardScreen() {
   const { profile } = useAuth();
   const isAdmin = canManageStudio(profile?.role);
+  const studioMenuItems = ADMIN_MENU_ITEMS.filter(
+    (item) => item.id !== 'community-mod' || isAdmin,
+  );
   const [data, setData] = useState<CoachDashboard | null>(null);
   const [staff, setStaff] = useState<Profile[]>([]);
   const [settings, setSettings] = useState<StudioSettings | null>(null);
@@ -287,7 +290,7 @@ export default function CoachDashboardScreen() {
                   accessibilityLabel="Open class chats">
                   <Ionicons name="chatbubbles-outline" size={20} color={colors.accent} />
                 </Pressable>
-                <MoreMenu items={ADMIN_MENU_ITEMS} title="Studio" />
+                <MoreMenu items={studioMenuItems} title="Studio" />
                 <View style={styles.heroAvatarWrap}>
                   <Avatar
                     name={profile?.full_name ?? 'Andreas Petrides'}

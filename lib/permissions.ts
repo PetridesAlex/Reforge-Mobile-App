@@ -55,3 +55,13 @@ export function canManageAllChats(role: UserRole | null | undefined): boolean {
 export function canAccessGroupChat(role: UserRole | null | undefined): boolean {
   return role === 'member' || role === 'coach' || role === 'admin';
 }
+
+/** Member-style community feed, compose, likes, comments, saves. */
+export function canAccessCommunity(role: UserRole | null | undefined): boolean {
+  return role === 'member' || role === 'coach' || role === 'admin';
+}
+
+/** Pin / remove / hide any community post — admin only. */
+export function canModerateCommunity(role: UserRole | null | undefined): boolean {
+  return role === 'admin';
+}

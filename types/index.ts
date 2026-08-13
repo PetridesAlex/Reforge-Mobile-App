@@ -29,6 +29,9 @@ export type Profile = {
   share_activity?: boolean;
   /** Soft roster flag — false hides member from active studio lists */
   roster_active?: boolean;
+  username?: string | null;
+  community_bio?: string | null;
+  community_visible?: boolean;
   created_at: string;
 };
 
@@ -211,6 +214,8 @@ export type AppNotificationType =
   | 'store_order_delivered'
   | 'store_new_drop'
   | 'store_low_stock'
+  | 'community_like'
+  | 'community_comment'
   | 'general';
 
 export type AppNotification = {
@@ -859,6 +864,89 @@ export type StoreDiscount = {
   min_subtotal_cents: number;
   member_only: boolean;
   active: boolean;
+};
+
+/** REFORGE Community Phase 1 */
+export type CommunityPostVisibility = 'community' | 'private';
+export type CommunityPostType =
+  | 'status'
+  | 'media'
+  | 'workout'
+  | 'pr'
+  | 'achievement'
+  | 'announcement';
+export type CommunityMediaType = 'image' | 'video';
+
+export type CommunityPostMedia = {
+  id: string;
+  post_id: string;
+  storage_path: string;
+  public_url: string | null;
+  media_type: CommunityMediaType;
+  width: number | null;
+  height: number | null;
+  duration_seconds: number | null;
+  sort_order: number;
+  created_at: string;
+};
+
+export type CommunityPost = {
+  id: string;
+  author_id: string;
+  author_name: string;
+  author_username: string | null;
+  author_avatar_url: string | null;
+  author_role: UserRole;
+  body: string;
+  visibility: CommunityPostVisibility;
+  post_type: CommunityPostType;
+  like_count: number;
+  comment_count: number;
+  is_pinned: boolean;
+  created_at: string;
+  updated_at: string;
+  deleted_at: string | null;
+  media?: CommunityPostMedia[];
+  liked_by_me?: boolean;
+  saved_by_me?: boolean;
+};
+
+export type CommunityComment = {
+  id: string;
+  post_id: string;
+  author_id: string;
+  author_name: string;
+  author_username: string | null;
+  author_avatar_url: string | null;
+  author_role: UserRole;
+  parent_comment_id: string | null;
+  body: string;
+  like_count: number;
+  created_at: string;
+  updated_at: string;
+  deleted_at: string | null;
+  liked_by_me?: boolean;
+  replies?: CommunityComment[];
+};
+
+export type CommunityProfilePublic = {
+  id: string;
+  full_name: string;
+  username: string | null;
+  avatar_url: string | null;
+  role: UserRole;
+  community_bio: string | null;
+  created_at: string;
+};
+
+export type CommunityFeedCursor = {
+  created_at: string;
+  id: string;
+};
+
+export type CommunityFeedPage = {
+  posts: CommunityPost[];
+  nextCursor: CommunityFeedCursor | null;
 };
 
 

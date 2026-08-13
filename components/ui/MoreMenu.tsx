@@ -54,8 +54,8 @@ const MEMBER_MENU_ITEMS: readonly MoreMenuItem[] = [
   },
   {
     id: 'chat',
-    label: 'Group Chat',
-    description: 'Trainer community feed',
+    label: 'Messages',
+    description: 'DMs & group chats from Community',
     icon: 'chatbubbles-outline',
     href: '/(member)/messages',
   },
@@ -69,6 +69,20 @@ const MEMBER_MENU_ITEMS: readonly MoreMenuItem[] = [
 ];
 
 export const ADMIN_MENU_ITEMS: readonly MoreMenuItem[] = [
+  {
+    id: 'community',
+    label: 'Community',
+    description: 'Feed, posts & gym activity',
+    icon: 'people-outline',
+    href: '/(coach)/community',
+  },
+  {
+    id: 'community-mod',
+    label: 'Moderate community',
+    description: 'Pin, hide or remove posts',
+    icon: 'shield-checkmark-outline',
+    href: '/(coach)/admin/community',
+  },
   {
     id: 'chat',
     label: 'Class chats',

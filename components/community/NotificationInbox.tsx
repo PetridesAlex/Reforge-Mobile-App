@@ -18,6 +18,8 @@ function iconForType(type?: AppNotification['type']): React.ComponentProps<typeo
   if (type === 'chat_invite') return 'people-circle-outline';
   if (type === 'chat_request') return 'chatbubble-ellipses-outline';
   if (type === 'chat_message') return 'mail-unread-outline';
+  if (type === 'community_like') return 'heart-outline';
+  if (type === 'community_comment') return 'chatbubble-outline';
   return 'notifications-outline';
 }
 
@@ -25,6 +27,7 @@ function accentForType(type?: AppNotification['type']) {
   if (type === 'chat_invite') return '#60A5FA';
   if (type === 'chat_request') return colors.accent;
   if (type === 'chat_message') return colors.success;
+  if (type === 'community_like' || type === 'community_comment') return colors.accent;
   return colors.textMuted;
 }
 

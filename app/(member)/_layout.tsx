@@ -7,6 +7,7 @@ import { MemberAppGuide } from '@/components/onboarding/MemberAppGuide';
 import { AppTabBar } from '@/components/ui/AppTabBar';
 import {
   BarbellTabIcon,
+  ChatTabIcon,
   HomeTabIcon,
   ProfileTabIcon,
   ProgressTabIcon,
@@ -80,10 +81,20 @@ export default function MemberLayout() {
         <Tabs.Screen
           name="workouts"
           options={{
-            title: 'Workouts',
-            tabBarLabel: 'Workouts',
+            title: 'Train',
+            tabBarLabel: 'Train',
             tabBarIcon: ({ color, focused }) => (
               <BarbellTabIcon color={color} filled={focused} />
+            ),
+          }}
+        />
+        <Tabs.Screen
+          name="community"
+          options={{
+            title: 'Community',
+            tabBarLabel: 'Community',
+            tabBarIcon: ({ color, focused }) => (
+              <ChatTabIcon color={color} filled={focused} />
             ),
           }}
         />
@@ -107,7 +118,7 @@ export default function MemberLayout() {
             ),
           }}
         />
-        {/* Available via top-right More menu */}
+        {/* Available via Community hub / More menu */}
         <Tabs.Screen name="bookings" options={{ href: null }} />
         <Tabs.Screen name="messages" options={{ href: null }} />
         <Tabs.Screen name="store" options={{ href: null }} />

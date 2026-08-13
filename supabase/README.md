@@ -29,6 +29,12 @@
    - [`migrations/026_store_carts_favorites.sql`](migrations/026_store_carts_favorites.sql) — **carts & wishlist**
    - [`migrations/027_store_orders.sql`](migrations/027_store_orders.sql) — **orders, addresses, checkout RPCs**
    - [`migrations/028_store_discounts_drops.sql`](migrations/028_store_discounts_drops.sql) — **promo codes, drop fields, store notification prefs**
+   - [`migrations/029_store_merchandising_flags.sql`](migrations/029_store_merchandising_flags.sql) — **store merchandising flags**
+   - [`migrations/030_community_posts.sql`](migrations/030_community_posts.sql) — **Community posts, media, likes, comments, saves, profiles, storage buckets**
+   - [`migrations/031_chat_rls_harden.sql`](migrations/031_chat_rls_harden.sql) — **harden chat membership / message / notify RLS**
+   - [`migrations/032_fix_profiles_rls_recursion.sql`](migrations/032_fix_profiles_rls_recursion.sql) — **fix profiles RLS recursion on community post create**
+   - [`migrations/033_fix_profiles_update_recursion.sql`](migrations/033_fix_profiles_update_recursion.sql) — **fix profiles UPDATE WITH CHECK recursion + claim username RPC**
+   - [`migrations/034_author_soft_delete_post.sql`](migrations/034_author_soft_delete_post.sql) — **author/admin soft-delete post RPC**
    - Optional demo catalogue: [`seed/004_store_example_products.sql`](seed/004_store_example_products.sql) — **12 Essentials products (3 per category)**
 3. In **Authentication → Providers**, enable **Email** and **Google**
 4. In **Authentication → URL configuration**:

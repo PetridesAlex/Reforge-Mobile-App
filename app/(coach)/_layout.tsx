@@ -5,6 +5,7 @@ import { AppTabBar } from '@/components/ui/AppTabBar';
 import {
   BarbellTabIcon,
   CalendarTabIcon,
+  ChatTabIcon,
   GridTabIcon,
   PeopleTabIcon,
 } from '@/components/ui/TabIcons';
@@ -57,6 +58,16 @@ export default function CoachLayout() {
           tabBarLabel: isAdmin(role) ? 'Roster' : 'Clients',
           tabBarIcon: ({ color, focused }) => (
             <PeopleTabIcon color={color} filled={focused} />
+          ),
+        }}
+      />
+      <Tabs.Screen
+        name="community"
+        options={{
+          title: 'Community',
+          tabBarLabel: 'Community',
+          tabBarIcon: ({ color, focused }) => (
+            <ChatTabIcon color={color} filled={focused} />
           ),
         }}
       />

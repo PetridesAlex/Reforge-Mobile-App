@@ -68,7 +68,11 @@ export function MessageToast({ notification, onPress, onDismiss }: Props) {
       ? 'CHAT REQUEST'
       : notification.type === 'chat_invite'
         ? 'CHAT INVITE'
-        : 'NEW MESSAGE';
+        : notification.type === 'community_like'
+          ? 'NEW LIKE'
+          : notification.type === 'community_comment'
+            ? 'NEW COMMENT'
+            : 'NEW MESSAGE';
 
   return (
     <View pointerEvents="box-none" style={[styles.host, { paddingTop: insets.top + spacing.sm }]}>
@@ -96,7 +100,17 @@ export function MessageToast({ notification, onPress, onDismiss }: Props) {
             />
             <View style={styles.accentBar} />
             <View style={styles.iconOrb}>
-              <Ionicons name="chatbubble-ellipses" size={20} color={colors.accent} />
+              <Ionicons
+                name={
+                  notification.type === 'community_like'
+                    ? 'heart'
+                    : notification.type === 'community_comment'
+                      ? 'chatbubble-ellipses'
+                      : 'chatbubble-ellipses'
+                }
+                size={20}
+                color={colors.accent}
+              />
             </View>
             <View style={styles.copy}>
               <Text style={styles.kicker}>{kicker}</Text>

@@ -6,6 +6,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { AppBottomSheet } from '@/components/ui/AppBottomSheet';
 import { AppCard } from '@/components/ui/AppCard';
 import { AthleteHomeDashboard } from '@/components/home/AthleteHomeDashboard';
+import { HomeStoreFeature } from '@/components/home/HomeStoreFeature';
 import { Avatar } from '@/components/ui/Avatar';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { ErrorState } from '@/components/ui/ErrorState';
@@ -251,6 +252,8 @@ export default function HomeScreen() {
           </View>
         </Pressable>
       ) : null}
+
+      <HomeStoreFeature enterDelay={160} />
 
       {/* Daily motivation */}
       <MotivationQuoteCard

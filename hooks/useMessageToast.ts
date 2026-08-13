@@ -6,12 +6,18 @@ import { getSupabase } from '@/lib/supabase/client';
 import type { AppNotification, AppNotificationType } from '@/types';
 
 const CHAT_TYPES: AppNotificationType[] = ['chat_message', 'chat_request', 'chat_invite'];
+const COMMUNITY_TYPES: AppNotificationType[] = ['community_like', 'community_comment'];
+const TOAST_TYPES: AppNotificationType[] = [...CHAT_TYPES, ...COMMUNITY_TYPES];
 
-function isChatNotification(row: AppNotification): boolean {
-  return Boolean(row.type && CHAT_TYPES.includes(row.type));
+function isToastNotification(row: AppNotification): boolean {
+  return Boolean(row.type && TOAST_TYPES.includes(row.type));
 }
 
-/** Live in-app popup when a chat notification arrives for the signed-in athlete. */
+function isCommunityNotification(row: AppNotification): boolean {
+  return Boolean(row.type && COMMUNITY_TYPES.includes(row.type));
+}
+
+/** Live in-app popup for chat + community social notifications. */
 export function useMessageToast(userId: string | undefined) {
   const router = useRouter();
   const pathname = usePathname();
@@ -25,6 +31,10 @@ export function useMessageToast(userId: string | undefined) {
   const open = useCallback(
     (notification: AppNotification) => {
       setToast(null);
+      if (isCommunityNotification(notification)) {
+        router.push('/(member)/community');
+        return;
+      }
       if (notification.thread_id) {
         router.push(`/(member)/messages/${notification.thread_id}`);
       } else {
@@ -54,10 +64,13 @@ export function useMessageToast(userId: string | undefined) {
         (payload) => {
           if (!active) return;
           const row = payload.new as AppNotification;
-          if (!isChatNotification(row)) return;
+          if (!isToastNotification(row)) return;
 
           const path = pathnameRef.current ?? '';
           if (row.thread_id && path.includes(`/messages/${row.thread_id}`)) {
+            return;
+          }
+          if (isCommunityNotification(row) && path.includes('/community')) {
             return;
           }
 
