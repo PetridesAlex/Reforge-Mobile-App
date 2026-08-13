@@ -373,18 +373,105 @@ export async function updateAvatar(userId: string, uri: string): Promise<Profile
 
 export async function updateProfile(
   userId: string,
-  patch: { fullName?: string; phone?: string | null },
-): Promise<Profile> {
+  patch: {
+    fullName?: string;
+    phone?: string | null;
+    email?: string;
+    communityBio?: string | null;
+    communityMood?: string | null;
+  },
+): Promise<{ profile: Profile; emailConfirmRequired?: boolean }> {
   const supabase = getSupabase();
-  const payload: Record<string, string | null> = {};
-  if (patch.fullName != null) payload.full_name = patch.fullName.trim();
-  if (patch.phone !== undefined) payload.phone = patch.phone?.trim() || null;
-  const { data, error } = await supabase
-    .from('profiles')
-    .update(payload)
-    .eq('id', userId)
-    .select('*')
-    .single();
-  if (error) throw error;
-  return data as Profile;
+  const corePayload: Record<string, string | null> = {};
+  let emailConfirmRequired = false;
+  const moodRequested = patch.communityMood !== undefined;
+
+  if (patch.fullName != null) {
+    const name = patch.fullName.trim();
+    if (!name) throw new Error('Name is required');
+    corePayload.full_name = name;
+  }
+  if (patch.phone !== undefined) {
+    corePayload.phone = patch.phone?.trim() || null;
+  }
+  if (patch.communityBio !== undefined) {
+    const bio = patch.communityBio?.trim() || null;
+    if (bio && bio.length > 280) throw new Error('Bio must be 280 characters or less');
+    corePayload.community_bio = bio;
+  }
+
+  if (patch.email != null) {
+    const nextEmail = patch.email.trim().toLowerCase();
+    if (!nextEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(nextEmail)) {
+      throw new Error('Enter a valid email address');
+    }
+
+    const { data: current } = await supabase.auth.getUser();
+    const currentEmail = (current.user?.email ?? '').toLowerCase();
+    if (nextEmail !== currentEmail) {
+      const { data: authData, error: authError } = await supabase.auth.updateUser({
+        email: nextEmail,
+      });
+      if (authError) throw new Error(authError.message || 'Could not update email');
+
+      const activeEmail = (authData.user?.email ?? '').toLowerCase();
+      if (activeEmail === nextEmail) {
+        corePayload.email = nextEmail;
+      } else {
+        emailConfirmRequired = true;
+      }
+    }
+  }
+
+  let profile: Profile | null = null;
+
+  if (Object.keys(corePayload).length > 0) {
+    const { data, error } = await supabase
+      .from('profiles')
+      .update(corePayload)
+      .eq('id', userId)
+      .select('*')
+      .single();
+    if (error) throw new Error(error.message || 'Could not save profile');
+    profile = data as Profile;
+  }
+
+  if (moodRequested) {
+    const mood = patch.communityMood?.trim() || null;
+    const allowed = new Set(['fired', 'proud', 'quiet', 'sore', 'grateful', 'playful']);
+    if (mood && !allowed.has(mood)) throw new Error('Pick a valid mood');
+
+    const moodPayload: Record<string, string | null> = {
+      community_mood: mood,
+      community_mood_updated_at: mood ? new Date().toISOString() : null,
+    };
+
+    const { data, error } = await supabase
+      .from('profiles')
+      .update(moodPayload)
+      .eq('id', userId)
+      .select('*')
+      .single();
+
+    if (error) {
+      const msg = error.message ?? '';
+      if (/community_mood|column .* does not exist/i.test(msg)) {
+        const err = new Error(
+          'Almost there — run migration 035_profile_mood_bio.sql in Supabase SQL Editor to enable daily mood.',
+        );
+        (err as Error & { code?: string; profile?: Profile }).code = 'MOOD_MIGRATION_REQUIRED';
+        if (profile) (err as Error & { profile?: Profile }).profile = profile;
+        throw err;
+      }
+      throw new Error(msg || 'Could not save mood');
+    }
+    profile = data as Profile;
+  }
+
+  if (!profile) {
+    profile = await getProfile(userId);
+    if (!profile) throw new Error('Profile not found');
+  }
+
+  return { profile, emailConfirmRequired };
 }

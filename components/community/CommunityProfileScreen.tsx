@@ -10,6 +10,7 @@ import { ErrorState } from '@/components/ui/ErrorState';
 import { Screen } from '@/components/ui/Screen';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { useAuth } from '@/hooks/useAuth';
+import { activeMoodForDisplay } from '@/lib/community/moods';
 import { communityPathsFor, type CommunitySurface } from '@/lib/community/paths';
 import * as feed from '@/services/communityFeed';
 import type { CommunityPost, CommunityProfilePublic } from '@/types';
@@ -66,6 +67,10 @@ export function CommunityProfileScreen({ surface }: Props) {
   const settingsHref =
     surface === 'coach' ? '/(coach)/profile' : '/(member)/profile';
 
+  const todayMood = person
+    ? activeMoodForDisplay(person.community_mood, person.community_mood_updated_at)
+    : null;
+
   return (
     <Screen
       refreshControl={
@@ -93,12 +98,18 @@ export function CommunityProfileScreen({ surface }: Props) {
             {person.username ? `@${person.username}` : 'athlete'}
             {person.role !== 'member' ? ` · ${person.role.toUpperCase()}` : ''}
           </Text>
+          {todayMood ? (
+            <View style={styles.moodBadge}>
+              <Text style={styles.moodEmoji}>{todayMood.emoji}</Text>
+              <Text style={styles.moodText}>Feeling {todayMood.label.toLowerCase()} today</Text>
+            </View>
+          ) : null}
           {person.community_bio ? <Text style={styles.bio}>{person.community_bio}</Text> : null}
           {person.id === viewerId ? (
             <Pressable
               onPress={() => router.push(settingsHref as '/(member)/profile')}
               style={styles.settingsLink}>
-              <Text style={styles.settingsText}>OPEN SETTINGS</Text>
+              <Text style={styles.settingsText}>EDIT PROFILE</Text>
             </Pressable>
           ) : null}
         </View>
@@ -171,6 +182,26 @@ const styles = StyleSheet.create({
     fontFamily: fonts.sans,
     fontSize: 13,
     color: colors.textMuted,
+  },
+  moodBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 999,
+    backgroundColor: 'rgba(200,255,0,0.12)',
+    borderWidth: 1,
+    borderColor: 'rgba(200,255,0,0.28)',
+  },
+  moodEmoji: {
+    fontSize: 15,
+  },
+  moodText: {
+    fontFamily: fonts.sansSemiBold,
+    fontSize: 13,
+    color: colors.text,
   },
   bio: {
     fontFamily: fonts.sans,

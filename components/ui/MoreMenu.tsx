@@ -26,6 +26,7 @@ import Animated, {
 
 import { STUDIO, studioAddressLines } from '@/constants/studio';
 import { colors, fonts, radius, spacing } from '@/constants/theme';
+import { MenuIcon } from '@/components/ui/MenuIcon';
 
 type MenuIcon = React.ComponentProps<typeof Ionicons>['name'];
 
@@ -288,7 +289,7 @@ export function MoreMenu({
         <LinearGradient
           colors={['rgba(200,255,0,0.22)', 'rgba(200,255,0,0.08)']}
           style={styles.triggerGradient}>
-          <Ionicons name="menu" size={20} color={colors.accent} />
+          <MenuIcon size={20} color={colors.accent} />
         </LinearGradient>
       </AnimatedPressable>
 

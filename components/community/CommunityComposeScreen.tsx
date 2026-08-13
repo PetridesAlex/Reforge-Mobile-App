@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from 'react';
 import {
   Alert,
   Image,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -13,12 +14,18 @@ import {
 import * as ImagePicker from 'expo-image-picker';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
+import * as Haptics from 'expo-haptics';
 
 import { BackButton } from '@/components/ui/BackButton';
 import { PrimaryButton } from '@/components/ui/PrimaryButton';
 import { Screen } from '@/components/ui/Screen';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { useAuth } from '@/hooks/useAuth';
+import {
+  COMMUNITY_MOODS,
+  type CommunityMood,
+  type CommunityMoodId,
+} from '@/lib/community/moods';
 import { communityPathsFor, type CommunitySurface } from '@/lib/community/paths';
 import * as feed from '@/services/communityFeed';
 import { colors, fonts, spacing } from '@/constants/theme';
@@ -26,14 +33,12 @@ import { colors, fonts, spacing } from '@/constants/theme';
 const MAX_IMAGES = 6;
 const CAPTION_MAX = 2200;
 
-const CAPTION_PROMPTS = [
-  'Write a caption…',
-  'Say something about this session…',
-  'Capture the moment…',
-  'How did training feel today…',
-] as const;
+type MoodId = CommunityMoodId;
+type Mood = CommunityMood;
 
-const CAPTION_CHIPS = [
+const MOODS = COMMUNITY_MOODS;
+
+const QUICK_TAGS = [
   { id: 'locked', label: 'Locked in 🔒' },
   { id: 'pr', label: 'New PR 💪' },
   { id: 'grind', label: 'Quiet grind' },
@@ -42,7 +47,20 @@ const CAPTION_CHIPS = [
   { id: 'grateful', label: 'Grateful for this work' },
 ] as const;
 
+const AI_NUDGES = [
+  'Write what you’re feeling after today…',
+  'One honest line about this session…',
+  'If your future self saw this post…',
+  'Keep it short, sharp, and real…',
+] as const;
+
 type Props = { surface: CommunitySurface };
+
+function pickSpark(mood: Mood, avoid?: string) {
+  const options = mood.sparks.filter((s) => s !== avoid);
+  const pool = options.length ? options : mood.sparks;
+  return pool[Math.floor(Math.random() * pool.length)] ?? mood.sparks[0];
+}
 
 export function CommunityComposeScreen({ surface }: Props) {
   const paths = communityPathsFor(surface);
@@ -52,6 +70,8 @@ export function CommunityComposeScreen({ surface }: Props) {
 
   const { profile, refreshProfile } = useAuth();
   const userId = profile?.id ?? '';
+  const firstName = (profile?.full_name ?? 'athlete').split(' ')[0];
+
   const [body, setBody] = useState('');
   const [images, setImages] = useState<string[]>([]);
   const [existingMedia, setExistingMedia] = useState<{ id: string; uri: string }[]>([]);
@@ -61,11 +81,22 @@ export function CommunityComposeScreen({ surface }: Props) {
   const [loadingEdit, setLoadingEdit] = useState(isEditing);
   const [error, setError] = useState<string | null>(null);
   const [captionFocused, setCaptionFocused] = useState(false);
+  const [moodId, setMoodId] = useState<MoodId | null>(null);
+  const [sparkPreview, setSparkPreview] = useState<string | null>(null);
+  const [nudgeIndex, setNudgeIndex] = useState(0);
+
+  const mood = useMemo(() => MOODS.find((m) => m.id === moodId) ?? null, [moodId]);
 
   const captionPlaceholder = useMemo(() => {
-    const i = Math.floor(Date.now() / 1000 / 30) % CAPTION_PROMPTS.length;
-    return CAPTION_PROMPTS[i];
-  }, []);
+    if (mood) return mood.prompt;
+    return AI_NUDGES[nudgeIndex % AI_NUDGES.length];
+  }, [mood, nudgeIndex]);
+
+  useEffect(() => {
+    if (body.trim() || moodId) return;
+    const t = setInterval(() => setNudgeIndex((i) => i + 1), 4200);
+    return () => clearInterval(t);
+  }, [body, moodId]);
 
   useEffect(() => {
     if (!editId || !userId) {
@@ -99,6 +130,10 @@ export function CommunityComposeScreen({ surface }: Props) {
     };
   }, [editId, userId]);
 
+  const buzz = () => {
+    if (Platform.OS !== 'web') void Haptics.selectionAsync();
+  };
+
   const pickImages = async () => {
     if (isEditing) return;
     const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -117,11 +152,53 @@ export function CommunityComposeScreen({ surface }: Props) {
   };
 
   const applyChip = (label: string) => {
+    buzz();
     setBody((prev) => {
       const next = prev.trim() ? `${prev.trim()} ${label}` : label;
       return next.slice(0, CAPTION_MAX);
     });
   };
+
+  const selectMood = (next: Mood) => {
+    buzz();
+    setMoodId(next.id);
+    const spark = pickSpark(next, sparkPreview ?? undefined);
+    setSparkPreview(spark);
+  };
+
+  const surpriseMe = () => {
+    buzz();
+    const source = mood ?? MOODS[Math.floor(Math.random() * MOODS.length)];
+    if (!mood) setMoodId(source.id);
+    const spark = pickSpark(source, sparkPreview ?? undefined);
+    setSparkPreview(spark);
+  };
+
+  const useSpark = () => {
+    if (!sparkPreview) return;
+    buzz();
+    setBody((prev) => {
+      if (!prev.trim()) return sparkPreview.slice(0, CAPTION_MAX);
+      return `${prev.trim()}\n${sparkPreview}`.slice(0, CAPTION_MAX);
+    });
+  };
+
+  const coachLine = useMemo(() => {
+    if (isEditing) return 'Tighten the caption — keep the same energy.';
+    if (!body.trim() && !mood) {
+      return `Hey ${firstName} — what’s the vibe after today? Tap a feeling and I’ll spark a line.`;
+    }
+    if (mood && !body.trim()) {
+      return `${mood.emoji} Nice. ${mood.prompt}`;
+    }
+    if (body.trim().length < 24) {
+      return 'Keep going — one more honest sentence usually hits.';
+    }
+    if (body.trim().length < 80) {
+      return 'This already feels real. Add a photo if you’ve got one.';
+    }
+    return 'Looks sharp. Ready to share with the floor.';
+  }, [body, firstName, isEditing, mood]);
 
   const publish = async () => {
     if (!userId) return;
@@ -174,12 +251,79 @@ export function CommunityComposeScreen({ surface }: Props) {
       <View style={styles.top}>
         <BackButton />
         <View style={{ flex: 1 }}>
-          <Text style={styles.kicker}>{isEditing ? 'YOUR POST' : 'NEW POST'}</Text>
-          <Text style={styles.title}>{isEditing ? 'EDIT' : 'CREATE'}</Text>
+          <Text style={styles.kicker}>{isEditing ? 'YOUR POST' : 'SHARE THE FLOOR'}</Text>
+          <Text style={styles.title}>{isEditing ? 'EDIT' : 'NEW DROP'}</Text>
         </View>
       </View>
 
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+        {!isEditing ? (
+          <View style={styles.aiCard}>
+            <LinearGradient
+              colors={['rgba(200,255,0,0.14)', 'rgba(200,255,0,0.02)', 'transparent']}
+              locations={[0, 0.45, 1]}
+              style={StyleSheet.absoluteFill}
+              pointerEvents="none"
+            />
+            <View style={styles.aiHeader}>
+              <View style={styles.aiBadge}>
+                <Ionicons name="sparkles" size={12} color={colors.background} />
+                <Text style={styles.aiBadgeText}>REFORGE SPARK</Text>
+              </View>
+              <Pressable onPress={surpriseMe} style={styles.surpriseBtn} hitSlop={6}>
+                <Ionicons name="shuffle" size={14} color={colors.accent} />
+                <Text style={styles.surpriseText}>SURPRISE ME</Text>
+              </Pressable>
+            </View>
+            <Text style={styles.aiCoach}>{coachLine}</Text>
+
+            <Text style={styles.moodLabel}>HOW ARE YOU FEELING TODAY?</Text>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.moodRow}>
+              {MOODS.map((m) => {
+                const active = moodId === m.id;
+                return (
+                  <Pressable
+                    key={m.id}
+                    onPress={() => selectMood(m)}
+                    style={({ pressed }) => [
+                      styles.moodChip,
+                      active && styles.moodChipActive,
+                      pressed && styles.moodChipPressed,
+                    ]}>
+                    <Text style={styles.moodEmoji}>{m.emoji}</Text>
+                    <Text style={[styles.moodChipText, active && styles.moodChipTextActive]}>
+                      {m.label}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </ScrollView>
+
+            {sparkPreview ? (
+              <View style={styles.sparkBox}>
+                <Text style={styles.sparkKicker}>SPARK LINE</Text>
+                <Text style={styles.sparkText}>{sparkPreview}</Text>
+                <View style={styles.sparkActions}>
+                  <Pressable onPress={useSpark} style={styles.sparkUse}>
+                    <Ionicons name="arrow-down" size={14} color={colors.background} />
+                    <Text style={styles.sparkUseText}>USE THIS</Text>
+                  </Pressable>
+                  <Pressable onPress={surpriseMe} style={styles.sparkAgain}>
+                    <Text style={styles.sparkAgainText}>ANOTHER</Text>
+                  </Pressable>
+                </View>
+              </View>
+            ) : (
+              <Text style={styles.aiHint}>
+                Pick a vibe — or tap Surprise Me — and we’ll draft a caption starter for you.
+              </Text>
+            )}
+          </View>
+        ) : null}
+
         {!isEditing && needsUsername ? (
           <View style={styles.field}>
             <Text style={styles.label}>SUBJECT</Text>
@@ -210,12 +354,16 @@ export function CommunityComposeScreen({ surface }: Props) {
 
         <View style={styles.field}>
           <View style={styles.captionHeader}>
-            <Text style={styles.label}>CAPTION</Text>
+            <Text style={styles.label}>YOUR WORDS</Text>
             <Text style={styles.count}>
               {body.length}/{CAPTION_MAX}
             </Text>
           </View>
-          <Text style={styles.hint}>Write it like you’d post it — short, sharp, real.</Text>
+          <Text style={styles.hint}>
+            {mood
+              ? `Write it like you’d tell a training partner — ${mood.label.toLowerCase()} energy.`
+              : 'Write what you’re feeling today. Short, sharp, real.'}
+          </Text>
 
           <View style={[styles.captionShell, captionFocused && styles.captionShellFocused]}>
             <LinearGradient
@@ -239,11 +387,12 @@ export function CommunityComposeScreen({ surface }: Props) {
             />
           </View>
 
+          <Text style={styles.tagLabel}>QUICK TAGS</Text>
           <ScrollView
             horizontal
             showsHorizontalScrollIndicator={false}
             contentContainerStyle={styles.chips}>
-            {CAPTION_CHIPS.map((chip) => (
+            {QUICK_TAGS.map((chip) => (
               <Pressable
                 key={chip.id}
                 onPress={() => applyChip(chip.label)}
@@ -259,7 +408,7 @@ export function CommunityComposeScreen({ surface }: Props) {
           <Text style={styles.hint}>
             {isEditing
               ? 'Photos stay as published. Caption edits save instantly.'
-              : `Add up to ${MAX_IMAGES} photos — carousel ready.`}
+              : `Drop up to ${MAX_IMAGES} photos — make the post feel alive.`}
           </Text>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.thumbs}>
             {isEditing
@@ -297,7 +446,7 @@ export function CommunityComposeScreen({ surface }: Props) {
                 : 'SHARING…'
               : isEditing
                 ? 'SAVE'
-                : 'SHARE'
+                : 'SHARE WITH THE FLOOR'
           }
           onPress={() => void publish()}
           disabled={saving || (!isEditing && needsUsername && !username.trim())}
@@ -313,7 +462,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
-    marginBottom: spacing.lg,
+    marginBottom: spacing.md,
   },
   kicker: {
     fontFamily: fonts.sansBold,
@@ -327,7 +476,159 @@ const styles = StyleSheet.create({
     lineHeight: 38,
     color: colors.text,
   },
-  content: { gap: spacing.xl, paddingBottom: spacing.xxl },
+  content: { gap: spacing.lg, paddingBottom: spacing.xxl },
+  aiCard: {
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(200,255,0,0.28)',
+    backgroundColor: colors.surface,
+    padding: spacing.md,
+    gap: 12,
+    overflow: 'hidden',
+  },
+  aiHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 10,
+  },
+  aiBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 3,
+    backgroundColor: colors.accent,
+  },
+  aiBadgeText: {
+    fontFamily: fonts.sansBold,
+    fontSize: 10,
+    letterSpacing: 1.4,
+    color: colors.background,
+  },
+  surpriseBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 3,
+    borderWidth: 1,
+    borderColor: 'rgba(200,255,0,0.35)',
+    backgroundColor: 'rgba(200,255,0,0.08)',
+  },
+  surpriseText: {
+    fontFamily: fonts.sansBold,
+    fontSize: 10,
+    letterSpacing: 1.2,
+    color: colors.accent,
+  },
+  aiCoach: {
+    fontFamily: fonts.sans,
+    fontSize: 15,
+    lineHeight: 22,
+    color: 'rgba(255,255,255,0.88)',
+  },
+  moodLabel: {
+    fontFamily: fonts.sansBold,
+    fontSize: 10,
+    letterSpacing: 1.6,
+    color: colors.textMuted,
+  },
+  moodRow: {
+    gap: 8,
+    paddingBottom: 2,
+  },
+  moodChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.12)',
+    backgroundColor: 'rgba(255,255,255,0.04)',
+  },
+  moodChipActive: {
+    borderColor: 'rgba(200,255,0,0.55)',
+    backgroundColor: 'rgba(200,255,0,0.14)',
+  },
+  moodChipPressed: {
+    opacity: 0.9,
+  },
+  moodEmoji: {
+    fontSize: 14,
+  },
+  moodChipText: {
+    fontFamily: fonts.sansMedium,
+    fontSize: 13,
+    color: colors.textSecondary,
+  },
+  moodChipTextActive: {
+    color: colors.text,
+  },
+  sparkBox: {
+    gap: 8,
+    padding: 12,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: 'rgba(200,255,0,0.22)',
+    backgroundColor: 'rgba(0,0,0,0.28)',
+  },
+  sparkKicker: {
+    fontFamily: fonts.sansBold,
+    fontSize: 9,
+    letterSpacing: 1.6,
+    color: colors.accent,
+  },
+  sparkText: {
+    fontFamily: fonts.sans,
+    fontSize: 15,
+    lineHeight: 22,
+    color: colors.text,
+  },
+  sparkActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 2,
+  },
+  sparkUse: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 3,
+    backgroundColor: colors.accent,
+  },
+  sparkUseText: {
+    fontFamily: fonts.sansBold,
+    fontSize: 11,
+    letterSpacing: 1.2,
+    color: colors.background,
+  },
+  sparkAgain: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 3,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.14)',
+  },
+  sparkAgainText: {
+    fontFamily: fonts.sansBold,
+    fontSize: 11,
+    letterSpacing: 1.2,
+    color: colors.textSecondary,
+  },
+  aiHint: {
+    fontFamily: fonts.sans,
+    fontSize: 13,
+    lineHeight: 18,
+    color: colors.textMuted,
+  },
   field: { gap: 8 },
   label: {
     fontFamily: fonts.sansBold,
@@ -400,9 +701,16 @@ const styles = StyleSheet.create({
     lineHeight: 26,
     letterSpacing: 0.15,
   },
+  tagLabel: {
+    marginTop: 4,
+    fontFamily: fonts.sansBold,
+    fontSize: 10,
+    letterSpacing: 1.5,
+    color: colors.textMuted,
+  },
   chips: {
     gap: 8,
-    paddingTop: 4,
+    paddingTop: 2,
     paddingBottom: 2,
   },
   chip: {

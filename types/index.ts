@@ -31,6 +31,9 @@ export type Profile = {
   roster_active?: boolean;
   username?: string | null;
   community_bio?: string | null;
+  /** Today's vibe — visible to other members while fresh */
+  community_mood?: string | null;
+  community_mood_updated_at?: string | null;
   community_visible?: boolean;
   created_at: string;
 };
@@ -936,6 +939,8 @@ export type CommunityProfilePublic = {
   avatar_url: string | null;
   role: UserRole;
   community_bio: string | null;
+  community_mood: string | null;
+  community_mood_updated_at: string | null;
   created_at: string;
 };
 

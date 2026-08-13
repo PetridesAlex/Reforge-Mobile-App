@@ -1,9 +1,7 @@
 import { router } from 'expo-router';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
-  Alert,
   Modal,
-  Platform,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -16,6 +14,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { addDays, format, parseISO } from 'date-fns';
 
 import { AppInput } from '@/components/ui/AppInput';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { ErrorState } from '@/components/ui/ErrorState';
 import { ExercisePrescriptionSheet } from '@/components/workouts/ExercisePrescriptionSheet';
 import { MediaImage } from '@/components/ui/MediaImage';
@@ -66,12 +65,27 @@ function AdminWeekBoard({ profileId }: { profileId: string }) {
   const [activeSlot, setActiveSlot] = useState<DaySlot | null>(null);
   const [dayName, setDayName] = useState('');
   const [pickerOpen, setPickerOpen] = useState(false);
+  const [exerciseQuery, setExerciseQuery] = useState('');
   const [saving, setSaving] = useState(false);
+  const [clearing, setClearing] = useState(false);
   const [editExercise, setEditExercise] = useState<ProgramExercise | null>(null);
   const [pendingExercise, setPendingExercise] = useState<Exercise | null>(null);
   const [configSaving, setConfigSaving] = useState(false);
+  const [sheetError, setSheetError] = useState<string | null>(null);
   const [attendance, setAttendance] = useState<WeekDayAttendance[]>([]);
   const [attendanceLoading, setAttendanceLoading] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<DaySlot | null>(null);
+
+  const filteredExercises = useMemo(() => {
+    const q = exerciseQuery.trim().toLowerCase();
+    if (!q) return exercises;
+    return exercises.filter(
+      (ex) =>
+        ex.name.toLowerCase().includes(q) ||
+        ex.muscle_group?.toLowerCase().includes(q) ||
+        ex.equipment?.toLowerCase().includes(q),
+    );
+  }, [exerciseQuery, exercises]);
 
   const load = useCallback(async () => {
     try {
@@ -133,9 +147,14 @@ function AdminWeekBoard({ profileId }: { profileId: string }) {
     }
   };
 
-  const openDay = async (slot: DaySlot) => {
+  const openDay = async (slot: DaySlot, opts?: { addExercise?: boolean }) => {
     setActiveSlot(slot);
     setDayName(slot.day?.name ?? `${slot.label} workout`);
+    setExerciseQuery('');
+    setEditExercise(null);
+    setPendingExercise(null);
+    setSheetError(null);
+    setPickerOpen(false);
 
     if (slot.isPast || board?.isPastWeek) {
       if (!programId) return;
@@ -150,11 +169,20 @@ function AdminWeekBoard({ profileId }: { profileId: string }) {
     } else {
       setAttendance([]);
     }
+
+    if (opts?.addExercise) {
+      setPickerOpen(true);
+    }
   };
 
   const closeDay = () => {
     setActiveSlot(null);
     setAttendance([]);
+    setPickerOpen(false);
+    setPendingExercise(null);
+    setEditExercise(null);
+    setExerciseQuery('');
+    setSheetError(null);
   };
 
   const saveDay = async () => {
@@ -188,26 +216,32 @@ function AdminWeekBoard({ profileId }: { profileId: string }) {
 
   const addExercise = async (exercise: Exercise) => {
     setPickerOpen(false);
+    setExerciseQuery('');
+    setSheetError(null);
     setPendingExercise(exercise);
   };
 
-  const ensureDayReady = async (): Promise<boolean> => {
-    if (programId == null || activeSlot == null) return false;
-    if (activeSlot.day) return true;
+  /** Ensure the day row exists; return the fresh slot (never rely on stale React state). */
+  const ensureDayReady = async (slot: DaySlot, name: string): Promise<DaySlot | null> => {
+    if (programId == null) return null;
+    if (slot.day) return slot;
+
+    const dayTitle = name.trim() || `${slot.label} workout`;
+    setDayName(dayTitle);
     await coachService.upsertDatedWorkoutDay(
       programId,
       weekStart,
-      activeSlot.dayOfWeek,
-      dayName,
+      slot.dayOfWeek,
+      dayTitle,
       profileId,
     );
     const refreshed = await coachService.getWeekBoard(programId, weekStart, {
       createdBy: profileId,
     });
     setBoard(refreshed);
-    const next = refreshed?.board.find((d) => d.dayOfWeek === activeSlot.dayOfWeek) ?? null;
-    setActiveSlot(next);
-    return Boolean(next?.day);
+    const next = refreshed?.board.find((d) => d.dayOfWeek === slot.dayOfWeek) ?? null;
+    if (next) setActiveSlot(next);
+    return next;
   };
 
   const submitNewExercise = async (patch: {
@@ -220,17 +254,29 @@ function AdminWeekBoard({ profileId }: { profileId: string }) {
     repRangeMin?: number | null;
     repRangeMax?: number | null;
   }) => {
-    if (!pendingExercise || !programId || activeSlot == null) return;
+    const exercise = pendingExercise;
+    const slot = activeSlot;
+    if (!exercise || !programId || !slot) {
+      setSheetError('Pick an exercise again, then tap Add to workout.');
+      return;
+    }
+
     setConfigSaving(true);
+    setSheetError(null);
+    setError(null);
     try {
-      const ok = await ensureDayReady();
-      if (!ok) return;
+      const ready = await ensureDayReady(slot, dayName);
+      if (!ready?.day) {
+        setSheetError('Could not create the workout day. Try again.');
+        return;
+      }
+
       await coachService.addDatedProgramExercise(
         programId,
         weekStart,
-        activeSlot.dayOfWeek,
+        ready.dayOfWeek,
         {
-          exerciseId: pendingExercise.id,
+          exerciseId: exercise.id,
           sets: patch.sets,
           reps: patch.reps,
           restSeconds: patch.restSeconds,
@@ -242,17 +288,20 @@ function AdminWeekBoard({ profileId }: { profileId: string }) {
         },
         profileId,
       );
+
       const refreshed = await coachService.getWeekBoard(programId, weekStart, {
         createdBy: profileId,
       });
       setBoard(refreshed);
-      setActiveSlot(
-        refreshed?.board.find((d) => d.dayOfWeek === activeSlot.dayOfWeek) ?? null,
-      );
+      const next = refreshed?.board.find((d) => d.dayOfWeek === ready.dayOfWeek) ?? null;
+      setActiveSlot(next);
       setPendingExercise(null);
-      setToast('Exercise added');
+      setPickerOpen(false);
+      setToast(`${exercise.name} added`);
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Could not add exercise');
+      const message = e instanceof Error ? e.message : 'Could not add exercise';
+      setSheetError(message);
+      setError(message);
     } finally {
       setConfigSaving(false);
     }
@@ -316,71 +365,37 @@ function AdminWeekBoard({ profileId }: { profileId: string }) {
     }
   };
 
-  const clearDay = async () => {
-    if (!programId || !activeSlot) {
-      closeDay();
-      return;
-    }
+  const runClearDay = async (target: DaySlot) => {
+    if (!programId || !target.day) return;
+    setClearing(true);
     try {
       await coachService.clearDatedWorkoutDay(
         programId,
         weekStart,
-        activeSlot.dayOfWeek,
-        activeSlot.day?.id,
+        target.dayOfWeek,
+        target.day.id,
       );
       const refreshed = await coachService.getWeekBoard(programId, weekStart, {
         createdBy: profileId,
       });
       setBoard(refreshed);
       closeDay();
+      setDeleteTarget(null);
       setToast('Workout removed from this day');
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Could not remove workout');
+    } finally {
+      setClearing(false);
     }
   };
 
   const confirmClearDay = (slot?: DaySlot | null) => {
     const target = slot ?? activeSlot;
     if (!target?.day) {
-      if (target) openDay(target);
+      if (target) void openDay(target, { addExercise: true });
       return;
     }
-
-    const title = 'Remove workout?';
-    const message = `Clear “${target.day.name}” on ${target.dateLabel}? This cannot be undone.`;
-
-    const runRemove = async () => {
-      if (!programId) return;
-      setActiveSlot(target);
-      try {
-        await coachService.clearDatedWorkoutDay(
-          programId,
-          weekStart,
-          target.dayOfWeek,
-          target.day?.id,
-        );
-        const refreshed = await coachService.getWeekBoard(programId, weekStart, {
-          createdBy: profileId,
-        });
-        setBoard(refreshed);
-        closeDay();
-        setToast('Workout removed from this day');
-      } catch (e) {
-        setError(e instanceof Error ? e.message : 'Could not remove workout');
-      }
-    };
-
-    if (Platform.OS === 'web') {
-      if (typeof window !== 'undefined' && window.confirm(`${title}\n\n${message}`)) {
-        void runRemove();
-      }
-      return;
-    }
-
-    Alert.alert(title, message, [
-      { text: 'Cancel', style: 'cancel' },
-      { text: 'Remove', style: 'destructive', onPress: () => void runRemove() },
-    ]);
+    setDeleteTarget(target);
   };
 
   const copyPrevious = async () => {
@@ -421,7 +436,11 @@ function AdminWeekBoard({ profileId }: { profileId: string }) {
       ? `Past week · ${board.weekLabel}`
       : `Upcoming · ${board?.weekLabel ?? ''}`;
 
-  const showEditSheet = Boolean(activeSlot);
+  const configuring = Boolean(editExercise || pendingExercise);
+  // Only one modal at a time — stacked modals on web break "Add to workout"
+  const showEditSheet = Boolean(activeSlot) && !pickerOpen && !configuring;
+  const showPicker = pickerOpen;
+  const showPrescription = configuring;
 
   return (
     <Screen
@@ -472,6 +491,11 @@ function AdminWeekBoard({ profileId }: { profileId: string }) {
           <Text style={styles.toastText}>{toast}</Text>
         </Pressable>
       ) : null}
+      {error && board ? (
+        <Pressable onPress={() => setError(null)} style={styles.errorBanner}>
+          <Text style={styles.errorBannerText}>{error}</Text>
+        </Pressable>
+      ) : null}
 
       <View style={styles.weekNav}>
         <BackButton compact onPress={() => shiftWeek(-1)} />
@@ -516,7 +540,7 @@ function AdminWeekBoard({ profileId }: { profileId: string }) {
           return (
             <View key={slot.date} style={styles.dayRowWrap}>
               <Pressable
-                onPress={() => openDay(slot)}
+                onPress={() => void openDay(slot)}
                 style={({ pressed }) => [
                   styles.dayRow,
                   styles.dayRowMain,
@@ -542,10 +566,12 @@ function AdminWeekBoard({ profileId }: { profileId: string }) {
                 <MediaImage uri={image} style={styles.dayThumb} rounded={radius.md} />
                 <View style={styles.dayCopy}>
                   <Text style={styles.dayName} numberOfLines={1}>
-                    {slot.day?.name ?? 'Rest / empty'}
+                    {slot.day?.name ?? 'Rest day'}
                   </Text>
                   <Text style={styles.dayMeta}>
-                    {has ? `${slot.exercises.length} exercises` : 'Tap to add workout'}
+                    {has
+                      ? `${slot.exercises.length} movement${slot.exercises.length === 1 ? '' : 's'}`
+                      : 'Tap ADD · pick exercise · set reps'}
                   </Text>
                 </View>
                 {slot.isPast && slot.trainedCount > 0 ? (
@@ -562,9 +588,14 @@ function AdminWeekBoard({ profileId }: { profileId: string }) {
               </Pressable>
               {has ? (
                 <Pressable
-                  onPress={() => confirmClearDay(slot)}
-                  hitSlop={8}
-                  accessibilityLabel={`Remove ${slot.day?.name ?? 'workout'}`}
+                  onPress={(e) => {
+                    // Prevent opening the day editor when deleting from the list
+                    e?.stopPropagation?.();
+                    confirmClearDay(slot);
+                  }}
+                  hitSlop={10}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Delete ${slot.day?.name ?? 'workout'}`}
                   style={({ pressed }) => [styles.dayRemoveBtn, pressed && styles.pressed]}>
                   <Ionicons name="trash-outline" size={16} color={colors.danger} />
                 </Pressable>
@@ -631,14 +662,10 @@ function AdminWeekBoard({ profileId }: { profileId: string }) {
               {activeSlot?.isToday ? ' · TODAY' : ''}
             </Text>
             <Text style={styles.modalTitle}>
-              {activeSlot?.day ? 'Edit workout' : 'Add workout'}
+              {activeSlot?.day ? 'Edit workout' : 'Build workout'}
             </Text>
             <Text style={styles.modalHint}>
-              {board?.isCurrentWeek
-                ? 'Members follow this weekday on Workouts & Home.'
-                : board?.isPastWeek
-                  ? 'Editing this archived week keeps your history organized.'
-                  : 'Plan ahead — saved to this upcoming week.'}
+              Name the session, add movements, set sets · rounds · reps.
             </Text>
             <AppInput
               label="Workout name"
@@ -646,41 +673,73 @@ function AdminWeekBoard({ profileId }: { profileId: string }) {
               onChangeText={setDayName}
               placeholder="Upper Strength"
             />
-            <PrimaryButton
-              title={saving ? 'Saving…' : 'Save day'}
-              onPress={saveDay}
-              disabled={saving || !dayName.trim()}
-            />
+            {activeSlot?.day ? (
+              <PrimaryButton
+                title={saving ? 'Saving…' : 'Save name'}
+                onPress={saveDay}
+                disabled={saving || !dayName.trim()}
+                variant="secondary"
+              />
+            ) : null}
 
             <Text style={styles.exHeading}>
-              Exercises · {activeSlot?.exercises.length ?? 0}
+              Movements · {activeSlot?.exercises.length ?? 0}
             </Text>
-            <ScrollView style={styles.exScroll}>
-              {(activeSlot?.exercises ?? []).map((pe, idx) => (
-                <View key={pe.id} style={styles.exRow}>
-                  <Pressable
-                    onPress={() => setEditExercise(pe)}
-                    style={({ pressed }) => [styles.exMain, pressed && styles.pressed]}>
-                    <Text style={styles.exIndex}>{idx + 1}</Text>
-                    <View style={styles.exCopy}>
-                      <Text style={styles.exName}>{pe.exercise?.name ?? 'Exercise'}</Text>
-                      <Text style={styles.exMeta}>{formatPrescription(parsePrescription(pe))}</Text>
-                    </View>
-                    <Ionicons name="create-outline" size={18} color={colors.accent} />
-                  </Pressable>
-                  <Pressable onPress={() => removeExercise(pe.id)} hitSlop={8}>
-                    <Text style={styles.exRemove}>Remove</Text>
-                  </Pressable>
-                </View>
-              ))}
-            </ScrollView>
 
-            <PrimaryButton title="Add exercise" variant="secondary" onPress={() => setPickerOpen(true)} />
-            <PrimaryButton
-              title="Remove workout"
-              variant="ghost"
-              onPress={() => confirmClearDay(activeSlot)}
-            />
+            {(activeSlot?.exercises.length ?? 0) === 0 ? (
+              <View style={styles.emptyDayBox}>
+                <Text style={styles.emptyDayTitle}>No movements yet</Text>
+                <Text style={styles.emptyDayCopy}>
+                  Pick an exercise, then dial in sets, rounds, and reps.
+                </Text>
+                <PrimaryButton
+                  title="Add first exercise"
+                  onPress={() => {
+                    setExerciseQuery('');
+                    setPickerOpen(true);
+                  }}
+                />
+              </View>
+            ) : (
+              <ScrollView style={styles.exScroll}>
+                {(activeSlot?.exercises ?? []).map((pe, idx) => (
+                  <View key={pe.id} style={styles.exRow}>
+                    <Pressable
+                      onPress={() => setEditExercise(pe)}
+                      style={({ pressed }) => [styles.exMain, pressed && styles.pressed]}>
+                      <Text style={styles.exIndex}>{idx + 1}</Text>
+                      <View style={styles.exCopy}>
+                        <Text style={styles.exName}>{pe.exercise?.name ?? 'Exercise'}</Text>
+                        <Text style={styles.exMeta}>{formatPrescription(parsePrescription(pe))}</Text>
+                      </View>
+                      <Ionicons name="create-outline" size={18} color={colors.accent} />
+                    </Pressable>
+                    <Pressable onPress={() => void removeExercise(pe.id)} hitSlop={8}>
+                      <Text style={styles.exRemove}>Remove</Text>
+                    </Pressable>
+                  </View>
+                ))}
+              </ScrollView>
+            )}
+
+            {(activeSlot?.exercises.length ?? 0) > 0 ? (
+              <PrimaryButton
+                title="Add exercise"
+                variant="secondary"
+                onPress={() => {
+                  setExerciseQuery('');
+                  setPickerOpen(true);
+                }}
+              />
+            ) : null}
+
+            {activeSlot?.day ? (
+              <PrimaryButton
+                title="Delete workout"
+                variant="ghost"
+                onPress={() => confirmClearDay(activeSlot)}
+              />
+            ) : null}
 
             {activeSlot?.isPast || board?.isPastWeek ? (
               <>
@@ -718,40 +777,68 @@ function AdminWeekBoard({ profileId }: { profileId: string }) {
         </View>
       </Modal>
 
-      <Modal visible={pickerOpen} animationType="fade" transparent>
+      <Modal visible={showPicker} animationType="fade" transparent onRequestClose={() => setPickerOpen(false)}>
         <View style={styles.modalBackdrop}>
           <View style={styles.modalSheet}>
-            <Text style={styles.modalTitle}>Add exercise</Text>
-            <Text style={styles.modalHint}>Pick a movement, then set sets, rounds & rest</Text>
-            <ScrollView style={styles.exScroll}>
-              {exercises.map((ex) => (
-                <Pressable key={ex.id} onPress={() => addExercise(ex)} style={styles.pickerRow}>
-                  <View>
-                    <Text style={styles.exName}>{ex.name}</Text>
-                    <Text style={styles.exMeta}>
-                      {ex.muscle_group}
-                      {ex.equipment ? ` · ${ex.equipment}` : ''}
-                    </Text>
-                  </View>
-                  <Text style={styles.pickerAdd}>+</Text>
-                </Pressable>
-              ))}
+            <Text style={styles.modalKicker}>STEP 1</Text>
+            <Text style={styles.modalTitle}>Pick exercise</Text>
+            <Text style={styles.modalHint}>Search by name or muscle — then set sets, rounds & reps</Text>
+            <AppInput
+              value={exerciseQuery}
+              onChangeText={setExerciseQuery}
+              placeholder="Search squat, pull-up, chest…"
+              autoCapitalize="none"
+              autoCorrect={false}
+            />
+            <ScrollView style={styles.exScroll} keyboardShouldPersistTaps="handled">
+              {filteredExercises.length === 0 ? (
+                <Text style={styles.exMeta}>
+                  {exercises.length === 0
+                    ? 'No exercises in your library yet. Add movements under Exercises, then come back.'
+                    : 'No exercises match that search.'}
+                </Text>
+              ) : (
+                filteredExercises.map((ex) => (
+                  <Pressable
+                    key={ex.id}
+                    onPress={() => void addExercise(ex)}
+                    style={({ pressed }) => [styles.pickerRow, pressed && styles.pressed]}>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.exName}>{ex.name}</Text>
+                      <Text style={styles.exMeta}>
+                        {ex.muscle_group}
+                        {ex.equipment ? ` · ${ex.equipment}` : ''}
+                      </Text>
+                    </View>
+                    <Text style={styles.pickerAdd}>+</Text>
+                  </Pressable>
+                ))
+              )}
             </ScrollView>
-            <PrimaryButton title="Close" variant="secondary" onPress={() => setPickerOpen(false)} />
+            <PrimaryButton
+              title="Back"
+              variant="secondary"
+              onPress={() => {
+                setPickerOpen(false);
+                setSheetError(null);
+              }}
+            />
           </View>
         </View>
       </Modal>
 
       <Modal
-        visible={Boolean(editExercise || pendingExercise)}
+        visible={showPrescription}
         animationType="slide"
         transparent
         onRequestClose={() => {
           setEditExercise(null);
           setPendingExercise(null);
+          setSheetError(null);
         }}>
         <View style={styles.modalBackdrop}>
           <View style={styles.modalSheet}>
+            {sheetError ? <Text style={styles.sheetError}>{sheetError}</Text> : null}
             <ExercisePrescriptionSheet
               exerciseName={
                 editExercise?.exercise?.name ??
@@ -760,6 +847,7 @@ function AdminWeekBoard({ profileId }: { profileId: string }) {
               }
               initial={editExercise ?? undefined}
               mode={pendingExercise ? 'create' : 'edit'}
+              compact
               saving={configSaving}
               onSave={pendingExercise ? submitNewExercise : saveExercise}
               onRemove={
@@ -773,11 +861,30 @@ function AdminWeekBoard({ profileId }: { profileId: string }) {
               onClose={() => {
                 setEditExercise(null);
                 setPendingExercise(null);
+                setSheetError(null);
               }}
             />
           </View>
         </View>
       </Modal>
+
+      <ConfirmDialog
+        visible={Boolean(deleteTarget)}
+        title="Delete workout?"
+        message={
+          deleteTarget?.day
+            ? `Remove “${deleteTarget.day.name}” on ${deleteTarget.dateLabel}? This cannot be undone.`
+            : undefined
+        }
+        confirmLabel={clearing ? 'Deleting…' : 'Delete'}
+        destructive
+        onCancel={() => {
+          if (!clearing) setDeleteTarget(null);
+        }}
+        onConfirm={() => {
+          if (deleteTarget && !clearing) void runClearDay(deleteTarget);
+        }}
+      />
     </Screen>
   );
 }
@@ -858,6 +965,31 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(200,255,0,0.35)',
   },
   toastText: { ...typography.caption, color: colors.accent },
+  errorBanner: {
+    marginBottom: spacing.md,
+    padding: spacing.md,
+    borderRadius: radius.md,
+    backgroundColor: 'rgba(255,77,77,0.12)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,77,77,0.35)',
+  },
+  errorBannerText: {
+    fontFamily: fonts.sansMedium,
+    fontSize: 13,
+    color: colors.danger,
+  },
+  sheetError: {
+    fontFamily: fonts.sansMedium,
+    fontSize: 13,
+    lineHeight: 18,
+    color: colors.danger,
+    padding: 12,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: 'rgba(255,77,77,0.35)',
+    backgroundColor: 'rgba(255,77,77,0.1)',
+    marginBottom: spacing.sm,
+  },
   weekNav: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1110,6 +1242,27 @@ const styles = StyleSheet.create({
   modalTitle: { ...typography.title, color: colors.text, fontSize: 22, marginBottom: spacing.xs },
   modalHint: { ...typography.caption, color: colors.textSecondary, marginBottom: spacing.sm },
   exHeading: { ...typography.subtitle, color: colors.text, fontSize: 15, marginTop: spacing.sm },
+  emptyDayBox: {
+    gap: 8,
+    padding: spacing.md,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    borderColor: 'rgba(200,255,0,0.22)',
+    backgroundColor: 'rgba(200,255,0,0.06)',
+    marginBottom: spacing.sm,
+  },
+  emptyDayTitle: {
+    fontFamily: fonts.sansSemiBold,
+    fontSize: 15,
+    color: colors.text,
+  },
+  emptyDayCopy: {
+    fontFamily: fonts.sans,
+    fontSize: 13,
+    lineHeight: 18,
+    color: colors.textSecondary,
+    marginBottom: 4,
+  },
   exScroll: { maxHeight: 220 },
   exRow: {
     flexDirection: 'row',

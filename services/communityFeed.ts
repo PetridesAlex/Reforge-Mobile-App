@@ -424,6 +424,8 @@ export async function getCommunityProfile(userId: string): Promise<CommunityProf
       avatar_url: null,
       role: 'coach',
       community_bio: 'Strength · Conditioning',
+      community_mood: 'fired',
+      community_mood_updated_at: new Date().toISOString(),
       created_at: new Date().toISOString(),
     };
   }
@@ -434,6 +436,8 @@ export async function getCommunityProfile(userId: string): Promise<CommunityProf
     avatar_url: null,
     role: 'member',
     community_bio: null,
+    community_mood: null,
+    community_mood_updated_at: null,
     created_at: new Date().toISOString(),
   };
 }

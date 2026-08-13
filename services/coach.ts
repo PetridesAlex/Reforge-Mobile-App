@@ -1089,6 +1089,19 @@ export async function assignProgram(
 }
 
 export async function getExercises(muscleGroup?: MuscleGroup): Promise<Exercise[]> {
+  const { listExercises } = await import('@/services/exercises');
+  try {
+    const rows = await listExercises(muscleGroup ? [muscleGroup] : undefined);
+    if (rows.length > 0) return rows;
+  } catch {
+    // fall through
+  }
+
+  // When the live program DB is on, never offer mock exercise IDs (FK insert would fail).
+  if (useSupabasePrograms()) {
+    return [];
+  }
+
   await delay();
   if (!muscleGroup) return [...mockExercises];
   return mockExercises.filter((e) => e.muscle_group === muscleGroup);

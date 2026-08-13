@@ -35,6 +35,7 @@
    - [`migrations/032_fix_profiles_rls_recursion.sql`](migrations/032_fix_profiles_rls_recursion.sql) — **fix profiles RLS recursion on community post create**
    - [`migrations/033_fix_profiles_update_recursion.sql`](migrations/033_fix_profiles_update_recursion.sql) — **fix profiles UPDATE WITH CHECK recursion + claim username RPC**
    - [`migrations/034_author_soft_delete_post.sql`](migrations/034_author_soft_delete_post.sql) — **author/admin soft-delete post RPC**
+   - [`migrations/035_profile_mood_bio.sql`](migrations/035_profile_mood_bio.sql) — **member bio + daily “how I feel” mood on community profiles**
    - Optional demo catalogue: [`seed/004_store_example_products.sql`](seed/004_store_example_products.sql) — **12 Essentials products (3 per category)**
 3. In **Authentication → Providers**, enable **Email** and **Google**
 4. In **Authentication → URL configuration**:

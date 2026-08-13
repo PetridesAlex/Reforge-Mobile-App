@@ -32,6 +32,8 @@ type Props = {
   >;
   saving?: boolean;
   mode?: 'create' | 'edit';
+  /** Hide advanced fields — sets, rounds, reps, rest only */
+  compact?: boolean;
   onSave: (patch: ReturnType<typeof toProgramExercisePatch>) => void | Promise<void>;
   onRemove?: () => void | Promise<void>;
   onClose: () => void;
@@ -75,6 +77,7 @@ export function ExercisePrescriptionSheet({
   initial,
   saving = false,
   mode = 'edit',
+  compact = false,
   onSave,
   onRemove,
   onClose,
@@ -82,9 +85,11 @@ export function ExercisePrescriptionSheet({
   const [rx, setRx] = useState<ExercisePrescription>(() =>
     initial ? parsePrescription(initial) : defaultPrescription(),
   );
+  const [showAdvanced, setShowAdvanced] = useState(false);
 
   useEffect(() => {
     setRx(initial ? parsePrescription(initial) : defaultPrescription());
+    setShowAdvanced(false);
   }, [initial]);
 
   const preview = useMemo(() => formatPrescription(rx), [rx]);
@@ -97,10 +102,12 @@ export function ExercisePrescriptionSheet({
     await onSave(toProgramExercisePatch(rx));
   };
 
+  const advanced = !compact || showAdvanced;
+
   return (
     <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scroll}>
       <View style={styles.handle} />
-      <Text style={styles.kicker}>{mode === 'create' ? 'CONFIGURE' : 'EDIT PRESCRIPTION'}</Text>
+      <Text style={styles.kicker}>{mode === 'create' ? 'ADD MOVEMENT' : 'EDIT MOVEMENT'}</Text>
       <Text style={styles.title}>{exerciseName}</Text>
       <View style={styles.preview}>
         <Text style={styles.previewLabel}>MEMBERS SEE</Text>
@@ -129,11 +136,11 @@ export function ExercisePrescriptionSheet({
         />
       </View>
 
-      <Text style={styles.sectionLabel}>Reps / target</Text>
+      <Text style={styles.sectionLabel}>Reps</Text>
       <AppInput
         value={rx.reps}
         onChangeText={(reps) => setRx((p) => ({ ...p, reps }))}
-        placeholder="8, 8-10, AMRAP, Max…"
+        placeholder="8, 8-10, AMRAP…"
       />
       <View style={styles.chipRow}>
         {REP_PRESETS.map((rep) => {
@@ -150,22 +157,6 @@ export function ExercisePrescriptionSheet({
       </View>
 
       <Text style={styles.sectionLabel}>Rest between sets</Text>
-      <View style={styles.metricGrid}>
-        <Stepper
-          label="Seconds"
-          value={rx.restSeconds}
-          min={0}
-          max={600}
-          onChange={(restSeconds) => setRx((p) => ({ ...p, restSeconds }))}
-        />
-        <Stepper
-          label="Work time"
-          value={rx.workSeconds}
-          min={0}
-          max={600}
-          onChange={(workSeconds) => setRx((p) => ({ ...p, workSeconds }))}
-        />
-      </View>
       <View style={styles.chipRow}>
         {REST_PRESETS.map((sec) => {
           const active = rx.restSeconds === sec;
@@ -182,83 +173,111 @@ export function ExercisePrescriptionSheet({
         })}
       </View>
 
-      <AppInput
-        label="Tempo (optional)"
-        value={rx.tempo}
-        onChangeText={(tempo) => setRx((p) => ({ ...p, tempo }))}
-        placeholder="3-1-1, slow eccentric…"
-      />
+      {compact && !showAdvanced ? (
+        <Pressable onPress={() => setShowAdvanced(true)} style={styles.moreBtn}>
+          <Text style={styles.moreBtnText}>More options</Text>
+          <Ionicons name="chevron-down" size={14} color={colors.textMuted} />
+        </Pressable>
+      ) : null}
 
-      <Text style={styles.sectionLabel}>Progression (optional)</Text>
-      <View style={styles.metricGrid}>
-        <AppInput
-          label="Target kg"
-          value={rx.targetWeightKg != null ? String(rx.targetWeightKg) : ''}
-          onChangeText={(v) =>
-            setRx((p) => ({
-              ...p,
-              targetWeightKg: v.trim() === '' ? null : Number(v) || null,
-            }))
-          }
-          keyboardType="decimal-pad"
-          placeholder="80"
-        />
-        <AppInput
-          label="Add kg / week"
-          value={rx.progressionIncrementKg != null ? String(rx.progressionIncrementKg) : ''}
-          onChangeText={(v) =>
-            setRx((p) => ({
-              ...p,
-              progressionIncrementKg: v.trim() === '' ? null : Number(v) || null,
-            }))
-          }
-          keyboardType="decimal-pad"
-          placeholder="2.5"
-        />
-      </View>
-      <View style={styles.metricGrid}>
-        <AppInput
-          label="Rep min"
-          value={rx.repRangeMin != null ? String(rx.repRangeMin) : ''}
-          onChangeText={(v) =>
-            setRx((p) => ({
-              ...p,
-              repRangeMin: v.trim() === '' ? null : Math.max(1, Number(v) || 0) || null,
-            }))
-          }
-          keyboardType="number-pad"
-          placeholder="6"
-        />
-        <AppInput
-          label="Rep max"
-          value={rx.repRangeMax != null ? String(rx.repRangeMax) : ''}
-          onChangeText={(v) =>
-            setRx((p) => ({
-              ...p,
-              repRangeMax: v.trim() === '' ? null : Math.max(1, Number(v) || 0) || null,
-            }))
-          }
-          keyboardType="number-pad"
-          placeholder="10"
-        />
-      </View>
+      {advanced ? (
+        <>
+          <View style={styles.metricGrid}>
+            <Stepper
+              label="Rest (sec)"
+              value={rx.restSeconds}
+              min={0}
+              max={600}
+              onChange={(restSeconds) => setRx((p) => ({ ...p, restSeconds }))}
+            />
+            <Stepper
+              label="Work time"
+              value={rx.workSeconds}
+              min={0}
+              max={600}
+              onChange={(workSeconds) => setRx((p) => ({ ...p, workSeconds }))}
+            />
+          </View>
 
-      <AppInput
-        label="Coach notes"
-        value={rx.notes}
-        onChangeText={(notes) => setRx((p) => ({ ...p, notes }))}
-        placeholder="Cues, scaling, equipment…"
-        multiline
-        style={styles.notesInput}
-      />
+          <AppInput
+            label="Tempo (optional)"
+            value={rx.tempo}
+            onChangeText={(tempo) => setRx((p) => ({ ...p, tempo }))}
+            placeholder="3-1-1, slow eccentric…"
+          />
+
+          <Text style={styles.sectionLabel}>Progression (optional)</Text>
+          <View style={styles.metricGrid}>
+            <AppInput
+              label="Target kg"
+              value={rx.targetWeightKg != null ? String(rx.targetWeightKg) : ''}
+              onChangeText={(v) =>
+                setRx((p) => ({
+                  ...p,
+                  targetWeightKg: v.trim() === '' ? null : Number(v) || null,
+                }))
+              }
+              keyboardType="decimal-pad"
+              placeholder="80"
+            />
+            <AppInput
+              label="Add kg / week"
+              value={rx.progressionIncrementKg != null ? String(rx.progressionIncrementKg) : ''}
+              onChangeText={(v) =>
+                setRx((p) => ({
+                  ...p,
+                  progressionIncrementKg: v.trim() === '' ? null : Number(v) || null,
+                }))
+              }
+              keyboardType="decimal-pad"
+              placeholder="2.5"
+            />
+          </View>
+          <View style={styles.metricGrid}>
+            <AppInput
+              label="Rep min"
+              value={rx.repRangeMin != null ? String(rx.repRangeMin) : ''}
+              onChangeText={(v) =>
+                setRx((p) => ({
+                  ...p,
+                  repRangeMin: v.trim() === '' ? null : Math.max(1, Number(v) || 0) || null,
+                }))
+              }
+              keyboardType="number-pad"
+              placeholder="6"
+            />
+            <AppInput
+              label="Rep max"
+              value={rx.repRangeMax != null ? String(rx.repRangeMax) : ''}
+              onChangeText={(v) =>
+                setRx((p) => ({
+                  ...p,
+                  repRangeMax: v.trim() === '' ? null : Math.max(1, Number(v) || 0) || null,
+                }))
+              }
+              keyboardType="number-pad"
+              placeholder="10"
+            />
+          </View>
+
+          <AppInput
+            label="Coach notes"
+            value={rx.notes}
+            onChangeText={(notes) => setRx((p) => ({ ...p, notes }))}
+            placeholder="Cues, scaling, equipment…"
+            multiline
+            style={styles.notesInput}
+          />
+        </>
+      ) : null}
 
       <PrimaryButton
-        title={saving ? 'Saving…' : mode === 'create' ? 'Add to workout' : 'Save prescription'}
+        title={saving ? 'Saving…' : mode === 'create' ? 'Add to workout' : 'Save'}
         onPress={submit}
         disabled={saving}
       />
       {onRemove ? (
-        <PrimaryButton title="Remove from day" variant="ghost" onPress={onRemove} disabled={saving} />
+        <PrimaryButton title="Remove exercise" variant="ghost" onPress={onRemove} disabled={saving} />
       ) : null}
       <PrimaryButton title="Cancel" variant="secondary" onPress={onClose} disabled={saving} />
     </ScrollView>
@@ -402,6 +421,18 @@ const styles = StyleSheet.create({
   },
   chipTextOn: {
     color: colors.accent,
+  },
+  moreBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 10,
+  },
+  moreBtnText: {
+    fontFamily: fonts.sansMedium,
+    fontSize: 13,
+    color: colors.textMuted,
   },
   notesInput: {
     minHeight: 80,

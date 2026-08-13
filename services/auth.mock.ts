@@ -116,7 +116,13 @@ export async function updateAvatar(userId: string, uri: string): Promise<Profile
 
 export async function updateProfile(
   userId: string,
-  patch: { fullName?: string; phone?: string | null },
+  patch: {
+    fullName?: string;
+    phone?: string | null;
+    email?: string;
+    communityBio?: string | null;
+    communityMood?: string | null;
+  },
 ): Promise<Profile> {
   await delay(250);
   const profile = mockProfiles.find((p) => p.id === userId);
@@ -127,5 +133,22 @@ export async function updateProfile(
     profile.full_name = name;
   }
   if (patch.phone !== undefined) profile.phone = patch.phone?.trim() || null;
+  if (patch.email != null) {
+    const nextEmail = patch.email.trim().toLowerCase();
+    if (!nextEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(nextEmail)) {
+      throw new Error('Enter a valid email address');
+    }
+    profile.email = nextEmail;
+  }
+  if (patch.communityBio !== undefined) {
+    const bio = patch.communityBio?.trim() || null;
+    if (bio && bio.length > 280) throw new Error('Bio must be 280 characters or less');
+    profile.community_bio = bio;
+  }
+  if (patch.communityMood !== undefined) {
+    const mood = patch.communityMood?.trim() || null;
+    profile.community_mood = mood;
+    profile.community_mood_updated_at = mood ? new Date().toISOString() : null;
+  }
   return { ...profile };
 }

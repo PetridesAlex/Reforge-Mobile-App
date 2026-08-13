@@ -24,7 +24,13 @@ type AuthContextValue = {
   requestPasswordReset: (email: string) => Promise<void>;
   updatePassword: (password: string) => Promise<void>;
   updateAvatar: (uri: string) => Promise<Profile>;
-  updateProfile: (patch: { fullName?: string; phone?: string | null }) => Promise<Profile>;
+  updateProfile: (patch: {
+    fullName?: string;
+    phone?: string | null;
+    email?: string;
+    communityBio?: string | null;
+    communityMood?: string | null;
+  }) => Promise<Profile>;
 };
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -183,11 +189,32 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   );
 
   const updateProfile = useCallback(
-    async (patch: { fullName?: string; phone?: string | null }) => {
+    async (patch: {
+      fullName?: string;
+      phone?: string | null;
+      email?: string;
+      communityBio?: string | null;
+      communityMood?: string | null;
+    }) => {
       if (!session) throw new Error('Not authenticated');
-      const updated = await authService.updateProfile(session.userId, patch);
-      setProfile(updated);
-      return updated;
+      try {
+        const result = await authService.updateProfile(session.userId, patch);
+        setProfile(result.profile);
+        if (result.emailConfirmRequired) {
+          const err = new Error(
+            'Check your inbox to confirm the new email. Name and phone were saved.',
+          );
+          (err as Error & { code?: string }).code = 'EMAIL_CONFIRM_REQUIRED';
+          throw err;
+        }
+        return result.profile;
+      } catch (e) {
+        const err = e as Error & { code?: string; profile?: Profile };
+        if (err.code === 'MOOD_MIGRATION_REQUIRED' && err.profile) {
+          setProfile(err.profile);
+        }
+        throw e;
+      }
     },
     [session],
   );

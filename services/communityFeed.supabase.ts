@@ -513,6 +513,8 @@ export async function getCommunityProfile(
     avatar_url: (row.avatar_url as string | null) ?? null,
     role: row.role as CommunityProfilePublic['role'],
     community_bio: (row.community_bio as string | null) ?? null,
+    community_mood: (row.community_mood as string | null) ?? null,
+    community_mood_updated_at: (row.community_mood_updated_at as string | null) ?? null,
     created_at: row.created_at as string,
   };
 }

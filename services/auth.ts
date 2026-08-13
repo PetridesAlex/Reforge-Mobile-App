@@ -45,10 +45,16 @@ export async function updateAvatar(userId: string, uri: string): Promise<Profile
 
 export async function updateProfile(
   userId: string,
-  patch: { fullName?: string; phone?: string | null },
-): Promise<Profile> {
+  patch: {
+    fullName?: string;
+    phone?: string | null;
+    email?: string;
+    communityBio?: string | null;
+    communityMood?: string | null;
+  },
+): Promise<{ profile: Profile; emailConfirmRequired?: boolean }> {
   return useMock()
-    ? mockAuth.updateProfile(userId, patch)
+    ? mockAuth.updateProfile(userId, patch).then((profile) => ({ profile }))
     : supabaseAuth.updateProfile(userId, patch);
 }
 

@@ -2,23 +2,34 @@ import { router } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
 import { useEffect, useRef, useState } from 'react';
-import { Animated, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Animated, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
 import { MemberAppGuide } from '@/components/onboarding/MemberAppGuide';
 import { PerformanceBuildProfile } from '@/components/performance/PerformanceBuildProfile';
+import { AppBottomSheet, SheetFormError } from '@/components/ui/AppBottomSheet';
 import { AppCard } from '@/components/ui/AppCard';
+import { AppInput } from '@/components/ui/AppInput';
 import { Avatar } from '@/components/ui/Avatar';
 import { MoreMenu } from '@/components/ui/MoreMenu';
 import { PersonIcon } from '@/components/ui/PersonIcon';
+import { PrimaryButton } from '@/components/ui/PrimaryButton';
 import { ReforgeLogo } from '@/components/ui/ReforgeLogo';
 import { Screen } from '@/components/ui/Screen';
 import { SectionHeader } from '@/components/ui/SectionHeader';
 import { useAuth } from '@/hooks/useAuth';
+import {
+  activeMoodForDisplay,
+  COMMUNITY_MOODS,
+  type CommunityMoodId,
+  isMoodFreshToday,
+} from '@/lib/community/moods';
 import { pickAvatarImage } from '@/lib/utils/pickAvatar';
 import * as community from '@/services/community';
 import * as memberService from '@/services/member';
 import { colors, fonts, radius, spacing, typography } from '@/constants/theme';
+
+const BIO_MAX = 280;
 
 const MENU_ITEMS = [
   { id: 'orders', label: 'My Orders', icon: 'receipt-outline' as const, href: '/(member)/store/orders' },
@@ -35,13 +46,26 @@ const MENU_ITEMS = [
 ];
 
 export default function ProfileScreen() {
-  const { profile, signOut, updateAvatar } = useAuth();
+  const { profile, signOut, updateAvatar, updateProfile } = useAuth();
   const [coachName, setCoachName] = useState<string | null>(null);
   const [plan, setPlan] = useState<string | null>(null);
   const [signingOut, setSigningOut] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
   const [guideOpen, setGuideOpen] = useState(false);
+  const [editOpen, setEditOpen] = useState(false);
+  const [savingProfile, setSavingProfile] = useState(false);
+  const [editError, setEditError] = useState<string | null>(null);
+  const [fullName, setFullName] = useState(profile?.full_name ?? '');
+  const [email, setEmail] = useState(profile?.email ?? '');
+  const [phone, setPhone] = useState(profile?.phone ?? '');
+  const [bio, setBio] = useState(profile?.community_bio ?? '');
+  const [moodId, setMoodId] = useState<CommunityMoodId | null>(
+    isMoodFreshToday(profile?.community_mood_updated_at)
+      ? ((profile?.community_mood as CommunityMoodId | null | undefined) ?? null)
+      : null,
+  );
   const [messagingCoach, setMessagingCoach] = useState(false);
   const [performanceStats, setPerformanceStats] = useState<{
     weeklyWorkouts: number;
@@ -55,6 +79,25 @@ export default function ProfileScreen() {
       streak: number;
     };
   } | null>(null);
+
+  useEffect(() => {
+    setFullName(profile?.full_name ?? '');
+    setEmail(profile?.email ?? '');
+    setPhone(profile?.phone ?? '');
+    setBio(profile?.community_bio ?? '');
+    setMoodId(
+      isMoodFreshToday(profile?.community_mood_updated_at)
+        ? ((profile?.community_mood as CommunityMoodId | null | undefined) ?? null)
+        : null,
+    );
+  }, [
+    profile?.full_name,
+    profile?.email,
+    profile?.phone,
+    profile?.community_bio,
+    profile?.community_mood,
+    profile?.community_mood_updated_at,
+  ]);
 
   useEffect(() => {
     if (!profile) return;
@@ -72,6 +115,52 @@ export default function ProfileScreen() {
       });
     });
   }, [profile]);
+
+  const openEdit = () => {
+    setFullName(profile?.full_name ?? '');
+    setEmail(profile?.email ?? '');
+    setPhone(profile?.phone ?? '');
+    setBio(profile?.community_bio ?? '');
+    setMoodId(
+      isMoodFreshToday(profile?.community_mood_updated_at)
+        ? ((profile?.community_mood as CommunityMoodId | null | undefined) ?? null)
+        : null,
+    );
+    setEditError(null);
+    setSuccess(null);
+    setEditOpen(true);
+  };
+
+  const onSaveProfile = async () => {
+    setSavingProfile(true);
+    setEditError(null);
+    setSuccess(null);
+    setError(null);
+    try {
+      const hadFreshMood = isMoodFreshToday(profile?.community_mood_updated_at);
+      await updateProfile({
+        fullName: fullName.trim(),
+        email: email.trim(),
+        phone: phone.trim() || null,
+        communityBio: bio.trim() || null,
+        ...(moodId != null || hadFreshMood ? { communityMood: moodId } : {}),
+      });
+      setEditOpen(false);
+      setSuccess('Profile updated');
+      void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    } catch (e) {
+      const message = e instanceof Error ? e.message : 'Could not save profile';
+      const code = e instanceof Error ? (e as Error & { code?: string }).code : undefined;
+      if (code === 'EMAIL_CONFIRM_REQUIRED') {
+        setEditOpen(false);
+        setSuccess(message);
+      } else {
+        setEditError(message);
+      }
+    } finally {
+      setSavingProfile(false);
+    }
+  };
 
   const onMessageCoach = async () => {
     if (!profile) return;
@@ -104,6 +193,13 @@ export default function ProfileScreen() {
   const signOutScale = useRef(new Animated.Value(1)).current;
   const brandOpacity = useRef(new Animated.Value(0)).current;
   const brandY = useRef(new Animated.Value(10)).current;
+  const feelingOpacity = useRef(new Animated.Value(0.4)).current;
+  const feelingY = useRef(new Animated.Value(8)).current;
+
+  const todayMood = activeMoodForDisplay(
+    profile?.community_mood,
+    profile?.community_mood_updated_at,
+  );
 
   useEffect(() => {
     Animated.parallel([
@@ -121,6 +217,41 @@ export default function ProfileScreen() {
       }),
     ]).start();
   }, [brandOpacity, brandY]);
+
+  useEffect(() => {
+    if (todayMood) {
+      feelingOpacity.stopAnimation();
+      feelingY.stopAnimation();
+      feelingOpacity.setValue(1);
+      return;
+    }
+    feelingOpacity.setValue(0.4);
+    feelingY.setValue(8);
+    const anim = Animated.parallel([
+      Animated.spring(feelingY, {
+        toValue: 0,
+        friction: 8,
+        tension: 64,
+        useNativeDriver: true,
+      }),
+      Animated.loop(
+        Animated.sequence([
+          Animated.timing(feelingOpacity, {
+            toValue: 1,
+            duration: 1600,
+            useNativeDriver: true,
+          }),
+          Animated.timing(feelingOpacity, {
+            toValue: 0.45,
+            duration: 1600,
+            useNativeDriver: true,
+          }),
+        ]),
+      ),
+    ]);
+    anim.start();
+    return () => anim.stop();
+  }, [todayMood, feelingOpacity, feelingY]);
 
   const onSignOutPressIn = () => {
     Animated.spring(signOutScale, {
@@ -158,7 +289,6 @@ export default function ProfileScreen() {
         <MoreMenu compact />
       </View>
 
-      {/* Public profile header */}
       <View style={styles.hero}>
         <Avatar
           name={profile?.full_name}
@@ -171,15 +301,58 @@ export default function ProfileScreen() {
         <View style={styles.membershipBadge}>
           <Text style={styles.membershipText}>{plan ?? 'REFORGE Member'}</Text>
         </View>
+        {todayMood ? (
+          <View style={styles.moodBadge}>
+            <Text style={styles.moodBadgeEmoji}>{todayMood.emoji}</Text>
+            <Text style={styles.moodBadgeText}>Feeling {todayMood.label.toLowerCase()} today</Text>
+          </View>
+        ) : (
+          <Pressable
+            onPress={openEdit}
+            accessibilityRole="button"
+            accessibilityLabel="How are you feeling today?"
+            style={styles.moodPrompt}>
+            <Animated.Text
+              style={[
+                styles.moodPromptText,
+                {
+                  opacity: feelingOpacity,
+                  transform: [{ translateY: feelingY }],
+                },
+              ]}>
+              How are you feeling today?
+            </Animated.Text>
+            <Animated.View style={[styles.moodPromptRule, { opacity: feelingOpacity }]} />
+          </Pressable>
+        )}
+        {profile?.community_bio?.trim() ? (
+          <Text style={styles.heroBio}>{profile.community_bio.trim()}</Text>
+        ) : null}
         <Text style={styles.uploadHint}>
           {uploading ? 'Updating photo…' : 'Tap photo to change'}
         </Text>
+        <Pressable
+          onPress={openEdit}
+          style={({ pressed }) => [styles.editProfileBtn, pressed && styles.editProfileBtnPressed]}>
+          <Ionicons name="create-outline" size={16} color={colors.background} />
+          <Text style={styles.editProfileBtnText}>EDIT PROFILE</Text>
+        </Pressable>
         {error ? <Text style={styles.error}>{error}</Text> : null}
+        {success ? <Text style={styles.success}>{success}</Text> : null}
       </View>
 
-      {/* Contact details below */}
-      <SectionHeader title="Contact" kicker="Account" />
-      <View style={styles.premiumCard}>
+      <View style={styles.contactHead}>
+        <View style={{ flex: 1 }}>
+          <SectionHeader title="Contact" kicker="Account" />
+        </View>
+        <Pressable onPress={openEdit} hitSlop={8} style={styles.editLink}>
+          <Text style={styles.editLinkText}>EDIT</Text>
+          <Ionicons name="chevron-forward" size={14} color={colors.accent} />
+        </Pressable>
+      </View>
+      <Pressable
+        onPress={openEdit}
+        style={({ pressed }) => [styles.premiumCard, pressed && styles.contactPressed]}>
         <LinearGradient
           colors={['rgba(200,255,0,0.18)', 'transparent']}
           start={{ x: 0, y: 0 }}
@@ -196,6 +369,7 @@ export default function ProfileScreen() {
               {profile?.email ?? '—'}
             </Text>
           </View>
+          <Ionicons name="pencil" size={14} color={colors.textMuted} />
         </View>
         <View style={styles.divider} />
         <View style={styles.infoRow}>
@@ -204,12 +378,14 @@ export default function ProfileScreen() {
           </View>
           <View style={styles.infoCopy}>
             <Text style={styles.infoLabel}>Phone</Text>
-            <Text style={styles.infoValue}>{profile?.phone ?? 'Not added'}</Text>
+            <Text style={[styles.infoValue, !profile?.phone && styles.infoValueMuted]}>
+              {profile?.phone?.trim() ? profile.phone : 'Tap to add number'}
+            </Text>
           </View>
+          <Ionicons name="pencil" size={14} color={colors.textMuted} />
         </View>
-      </View>
+      </Pressable>
 
-      {/* Performance build profile */}
       <SectionHeader title="Performance build" kicker="Analytics" />
       {performanceStats ? (
         <PerformanceBuildProfile
@@ -220,7 +396,6 @@ export default function ProfileScreen() {
         />
       ) : null}
 
-      {/* Training info */}
       <SectionHeader title="Performance" />
       <AppCard onPress={() => router.push('/(member)/progress/setup')} style={styles.infoCard}>
         <View style={styles.infoRow}>
@@ -288,6 +463,11 @@ export default function ProfileScreen() {
 
       <SectionHeader title="Settings" />
       <View style={styles.menu}>
+        <AppCard onPress={openEdit} style={styles.menuItem}>
+          <Ionicons name="person-outline" size={20} color={colors.accent} />
+          <Text style={styles.menuLabel}>Edit profile</Text>
+          <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
+        </AppCard>
         <AppCard onPress={() => setGuideOpen(true)} style={styles.menuItem}>
           <Ionicons name="map-outline" size={20} color={colors.accent} />
           <Text style={styles.menuLabel}>App guide</Text>
@@ -369,6 +549,91 @@ export default function ProfileScreen() {
         onComplete={() => setGuideOpen(false)}
         onSkip={() => setGuideOpen(false)}
       />
+
+      <AppBottomSheet
+        visible={editOpen}
+        onClose={() => setEditOpen(false)}
+        kicker="Profile"
+        title="Edit profile"
+        hint="Update your details, bio, and how you’re feeling today."
+        icon="person-outline"
+        footer={
+          <>
+            <PrimaryButton
+              title={savingProfile ? 'Saving…' : 'Save changes'}
+              onPress={() => void onSaveProfile()}
+              disabled={savingProfile || !fullName.trim() || !email.trim()}
+            />
+            <PrimaryButton title="Cancel" variant="ghost" onPress={() => setEditOpen(false)} />
+          </>
+        }>
+        <AppInput
+          label="Full name"
+          value={fullName}
+          onChangeText={setFullName}
+          placeholder="Your name"
+          autoCapitalize="words"
+        />
+        <AppInput
+          label="Email"
+          value={email}
+          onChangeText={setEmail}
+          placeholder="you@email.com"
+          autoCapitalize="none"
+          keyboardType="email-address"
+          autoCorrect={false}
+        />
+        <AppInput
+          label="Mobile number"
+          value={phone}
+          onChangeText={setPhone}
+          placeholder="+357 99 000000"
+          keyboardType="phone-pad"
+        />
+        <AppInput
+          label="About you"
+          value={bio}
+          onChangeText={(t) => setBio(t.slice(0, BIO_MAX))}
+          placeholder="What drives you? Goals, vibe, training style…"
+          multiline
+          textAlignVertical="top"
+          style={styles.bioInput}
+        />
+        <Text style={styles.bioCount}>
+          {bio.trim().length}/{BIO_MAX}
+        </Text>
+
+        <Text style={styles.moodLabel}>HOW ARE YOU FEELING TODAY?</Text>
+        <Text style={styles.moodHint}>Members can see this on your profile until midnight.</Text>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.moodRow}>
+          {COMMUNITY_MOODS.map((m) => {
+            const active = moodId === m.id;
+            return (
+              <Pressable
+                key={m.id}
+                onPress={() => {
+                  void Haptics.selectionAsync();
+                  setMoodId((prev) => (prev === m.id ? null : m.id));
+                }}
+                style={({ pressed }) => [
+                  styles.moodChip,
+                  active && styles.moodChipActive,
+                  pressed && styles.moodChipPressed,
+                ]}>
+                <Text style={styles.moodEmoji}>{m.emoji}</Text>
+                <Text style={[styles.moodChipText, active && styles.moodChipTextActive]}>
+                  {m.label}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </ScrollView>
+
+        {editError ? <SheetFormError message={editError} /> : null}
+      </AppBottomSheet>
     </Screen>
   );
 }
@@ -416,15 +681,164 @@ const styles = StyleSheet.create({
     color: colors.accent,
     fontWeight: '700',
   },
+  moodBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: spacing.xs,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: radius.full,
+    backgroundColor: 'rgba(200,255,0,0.12)',
+    borderWidth: 1,
+    borderColor: 'rgba(200,255,0,0.28)',
+  },
+  moodBadgeEmoji: {
+    fontSize: 16,
+  },
+  moodBadgeText: {
+    fontFamily: fonts.sansSemiBold,
+    fontSize: 13,
+    color: colors.text,
+  },
+  moodPrompt: {
+    marginTop: spacing.xs,
+    alignItems: 'center',
+    gap: 8,
+    paddingVertical: 4,
+  },
+  moodPromptText: {
+    fontFamily: fonts.display,
+    fontSize: 22,
+    letterSpacing: 1.6,
+    color: colors.accent,
+    textAlign: 'center',
+    textTransform: 'uppercase',
+  },
+  moodPromptRule: {
+    width: 56,
+    height: 1,
+    backgroundColor: 'rgba(200,255,0,0.55)',
+  },
+  heroBio: {
+    fontFamily: fonts.sans,
+    fontSize: 14,
+    lineHeight: 20,
+    color: colors.textSecondary,
+    textAlign: 'center',
+    marginTop: 4,
+    paddingHorizontal: spacing.sm,
+  },
+  bioInput: {
+    minHeight: 88,
+    paddingTop: spacing.md,
+  },
+  bioCount: {
+    fontFamily: fonts.sans,
+    fontSize: 11,
+    color: colors.textMuted,
+    textAlign: 'right',
+    marginTop: -4,
+    marginBottom: spacing.sm,
+  },
+  moodLabel: {
+    fontFamily: fonts.sansBold,
+    fontSize: 11,
+    letterSpacing: 1.4,
+    color: colors.accent,
+    marginBottom: 4,
+  },
+  moodHint: {
+    fontFamily: fonts.sans,
+    fontSize: 12,
+    color: colors.textMuted,
+    marginBottom: spacing.sm,
+  },
+  moodRow: {
+    gap: 8,
+    paddingBottom: spacing.sm,
+  },
+  moodChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderRadius: radius.full,
+    backgroundColor: colors.surfaceElevated,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  moodChipActive: {
+    borderColor: colors.accent,
+    backgroundColor: 'rgba(200,255,0,0.14)',
+  },
+  moodChipPressed: {
+    opacity: 0.85,
+  },
+  moodEmoji: {
+    fontSize: 16,
+  },
+  moodChipText: {
+    fontFamily: fonts.sansSemiBold,
+    fontSize: 13,
+    color: colors.textSecondary,
+  },
+  moodChipTextActive: {
+    color: colors.text,
+  },
   uploadHint: {
     ...typography.caption,
     color: colors.textMuted,
     marginTop: spacing.xs,
   },
+  editProfileBtn: {
+    marginTop: spacing.sm,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 3,
+    backgroundColor: colors.accent,
+  },
+  editProfileBtnPressed: { opacity: 0.9 },
+  editProfileBtnText: {
+    fontFamily: fonts.sansBold,
+    fontSize: 11,
+    letterSpacing: 1.4,
+    color: colors.background,
+  },
   error: {
     ...typography.caption,
     color: colors.danger,
   },
+  success: {
+    ...typography.caption,
+    color: colors.accent,
+    textAlign: 'center',
+    paddingHorizontal: spacing.md,
+  },
+  contactHead: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    justifyContent: 'space-between',
+    gap: spacing.md,
+    marginBottom: 0,
+  },
+  editLink: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2,
+    paddingBottom: spacing.md + 2,
+  },
+  editLinkText: {
+    fontFamily: fonts.sansBold,
+    fontSize: 11,
+    letterSpacing: 1.4,
+    color: colors.accent,
+  },
+  contactPressed: { opacity: 0.94 },
   infoCard: {
     marginBottom: spacing.lg,
     paddingVertical: spacing.sm,
@@ -512,6 +926,10 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: colors.text,
     letterSpacing: -0.2,
+  },
+  infoValueMuted: {
+    color: colors.textMuted,
+    fontFamily: fonts.sansMedium,
   },
   coachName: {
     fontFamily: fonts.sansBold,
