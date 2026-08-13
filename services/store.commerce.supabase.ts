@@ -78,7 +78,11 @@ export async function pullCart(userId: string): Promise<StoreCartLine[]> {
     .select(
       `
       id, quantity, product_id, variant_id,
-      product:store_products(name, price_cents),
+      product:store_products(
+        name,
+        price_cents,
+        images:store_product_images(public_url, is_primary, sort_order)
+      ),
       variant:store_product_variants(sku, size_label, color_label, price_override_cents, image_url, stock_qty, active)
     `,
     )
@@ -86,7 +90,11 @@ export async function pullCart(userId: string): Promise<StoreCartLine[]> {
   if (error) throw new Error(formatSupabaseError(error));
 
   return (data ?? []).map((row) => {
-    const product = row.product as unknown as { name: string; price_cents: number } | null;
+    const product = row.product as unknown as {
+      name: string;
+      price_cents: number;
+      images?: Array<{ public_url: string; is_primary: boolean; sort_order: number }> | null;
+    } | null;
     const variant = row.variant as unknown as {
       sku: string;
       size_label: string | null;
@@ -94,6 +102,11 @@ export async function pullCart(userId: string): Promise<StoreCartLine[]> {
       price_override_cents: number | null;
       image_url: string | null;
     } | null;
+    const images = product?.images ?? [];
+    const primaryImage =
+      images.find((i) => i.is_primary)?.public_url ??
+      [...images].sort((a, b) => a.sort_order - b.sort_order)[0]?.public_url ??
+      null;
     return {
       id: row.id as string,
       product_id: row.product_id as string,
@@ -104,7 +117,7 @@ export async function pullCart(userId: string): Promise<StoreCartLine[]> {
       sku: variant?.sku ?? null,
       unit_price_cents: variant?.price_override_cents ?? product?.price_cents ?? 0,
       quantity: row.quantity as number,
-      image_url: variant?.image_url ?? null,
+      image_url: variant?.image_url ?? primaryImage,
     };
   });
 }

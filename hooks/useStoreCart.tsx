@@ -5,6 +5,7 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from 'react';
@@ -12,6 +13,7 @@ import {
 import { trackStoreEvent } from '@/lib/store/analytics';
 import { useSupabaseStore } from '@/lib/store/config';
 import * as commerce from '@/services/store.commerce';
+import * as store from '@/services/store';
 import type { StoreCartLine, StoreCartValidationIssue } from '@/types';
 
 type AddInput = {
@@ -56,6 +58,7 @@ export function StoreCartProvider({
   const [lines, setLines] = useState<StoreCartLine[]>([]);
   const [issues, setIssues] = useState<StoreCartValidationIssue[]>([]);
   const [hydrated, setHydrated] = useState(false);
+  const resolvingImages = useRef(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -73,8 +76,15 @@ export function StoreCartProvider({
         if (useSupabaseStore()) {
           const remote = await commerce.pullCart(userId).catch(() => null);
           if (!cancelled && remote && remote.length) {
-            setLines(remote);
-            await AsyncStorage.setItem(storageKey(userId), JSON.stringify(remote));
+            const merged = remote.map((r) => ({
+              ...r,
+              image_url:
+                r.image_url ??
+                local.find((l) => l.variant_id === r.variant_id)?.image_url ??
+                null,
+            }));
+            setLines(merged);
+            await AsyncStorage.setItem(storageKey(userId), JSON.stringify(merged));
           } else if (!cancelled && local.length) {
             await commerce.pushCart(userId, local).catch(() => undefined);
           }
@@ -87,6 +97,49 @@ export function StoreCartProvider({
       cancelled = true;
     };
   }, [userId]);
+
+  /** Backfill product images for cart lines that lost / never had a thumbnail. */
+  useEffect(() => {
+    if (!hydrated || !userId || resolvingImages.current) return;
+    const missing = lines.filter((l) => !l.image_url);
+    if (!missing.length) return;
+
+    resolvingImages.current = true;
+    let cancelled = false;
+    void (async () => {
+      try {
+        const productIds = [...new Set(missing.map((l) => l.product_id))];
+        const entries = await Promise.all(
+          productIds.map(async (id) => {
+            const product = await store.getProduct(id).catch(() => null);
+            return [id, product?.primary_image_url ?? null] as const;
+          }),
+        );
+        const byProduct = Object.fromEntries(entries);
+        if (cancelled) return;
+
+        let changed = false;
+        const next = lines.map((l) => {
+          if (l.image_url) return l;
+          const uri = byProduct[l.product_id];
+          if (!uri) return l;
+          changed = true;
+          return { ...l, image_url: uri };
+        });
+        if (changed) {
+          setLines(next);
+          await AsyncStorage.setItem(storageKey(userId), JSON.stringify(next));
+        }
+      } finally {
+        resolvingImages.current = false;
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+      resolvingImages.current = false;
+    };
+  }, [hydrated, lines, userId]);
 
   const persist = useCallback(
     async (next: StoreCartLine[]) => {
@@ -107,7 +160,12 @@ export function StoreCartProvider({
       const next = existing
         ? lines.map((l) =>
             l.variant_id === input.variant_id
-              ? { ...l, quantity: l.quantity + qty, unit_price_cents: input.unit_price_cents }
+              ? {
+                  ...l,
+                  quantity: l.quantity + qty,
+                  unit_price_cents: input.unit_price_cents,
+                  image_url: input.image_url ?? l.image_url,
+                }
               : l,
           )
         : [
@@ -178,7 +236,8 @@ export function StoreCartProvider({
         sku: l.sku,
         unit_price_cents: l.unit_price_cents,
         quantity: l.quantity,
-        image_url: l.image_url,
+        image_url:
+          l.image_url ?? lines.find((prev) => prev.variant_id === l.variant_id)?.image_url ?? null,
       }));
       await persist(mapped);
     }
