@@ -149,7 +149,7 @@ function AdminWeekBoard({ profileId }: { profileId: string }) {
 
   const openDay = async (slot: DaySlot, opts?: { addExercise?: boolean }) => {
     setActiveSlot(slot);
-    setDayName(slot.day?.name ?? `${slot.label} workout`);
+    setDayName(slot.day?.name ?? '');
     setExerciseQuery('');
     setEditExercise(null);
     setPendingExercise(null);
@@ -187,18 +187,24 @@ function AdminWeekBoard({ profileId }: { profileId: string }) {
 
   const saveDay = async () => {
     if (programId == null || activeSlot == null) return;
+    const title = dayName.trim();
+    if (!title) {
+      setSheetError('Name this workout before saving.');
+      return;
+    }
     setSaving(true);
+    setSheetError(null);
     try {
       await coachService.upsertDatedWorkoutDay(
         programId,
         weekStart,
         activeSlot.dayOfWeek,
-        dayName,
+        title,
         profileId,
       );
       setToast(
         board?.isCurrentWeek
-          ? 'Saved — members see this on Workouts & Home'
+          ? 'Saved — members see this on Workouts'
           : 'Saved for this calendar week',
       );
       const refreshed = await coachService.getWeekBoard(programId, weekStart, {
@@ -207,14 +213,30 @@ function AdminWeekBoard({ profileId }: { profileId: string }) {
       setBoard(refreshed);
       const next = refreshed?.board.find((d) => d.dayOfWeek === activeSlot.dayOfWeek) ?? null;
       setActiveSlot(next);
+      setDayName(next?.day?.name ?? title);
     } catch (e) {
+      setSheetError(e instanceof Error ? e.message : 'Could not save');
       setError(e instanceof Error ? e.message : 'Could not save');
     } finally {
       setSaving(false);
     }
   };
 
+  const finishDay = async () => {
+    const title = dayName.trim();
+    const existingName = activeSlot?.day?.name?.trim() ?? '';
+    if (title && title !== existingName) {
+      await saveDay();
+    }
+    closeDay();
+  };
+
   const addExercise = async (exercise: Exercise) => {
+    if (!activeSlot?.day && !dayName.trim()) {
+      setPickerOpen(false);
+      setSheetError('Name the workout first, then add exercises.');
+      return;
+    }
     setPickerOpen(false);
     setExerciseQuery('');
     setSheetError(null);
@@ -224,9 +246,29 @@ function AdminWeekBoard({ profileId }: { profileId: string }) {
   /** Ensure the day row exists; return the fresh slot (never rely on stale React state). */
   const ensureDayReady = async (slot: DaySlot, name: string): Promise<DaySlot | null> => {
     if (programId == null) return null;
-    if (slot.day) return slot;
+    if (slot.day) {
+      const title = name.trim();
+      if (title && title !== slot.day.name) {
+        await coachService.upsertDatedWorkoutDay(
+          programId,
+          weekStart,
+          slot.dayOfWeek,
+          title,
+          profileId,
+        );
+        const refreshedNamed = await coachService.getWeekBoard(programId, weekStart, {
+          createdBy: profileId,
+        });
+        setBoard(refreshedNamed);
+        const named = refreshedNamed?.board.find((d) => d.dayOfWeek === slot.dayOfWeek) ?? null;
+        if (named) setActiveSlot(named);
+        return named;
+      }
+      return slot;
+    }
 
-    const dayTitle = name.trim() || `${slot.label} workout`;
+    const dayTitle = name.trim();
+    if (!dayTitle) return null;
     setDayName(dayTitle);
     await coachService.upsertDatedWorkoutDay(
       programId,
@@ -265,9 +307,13 @@ function AdminWeekBoard({ profileId }: { profileId: string }) {
     setSheetError(null);
     setError(null);
     try {
+      if (!dayName.trim() && !slot.day) {
+        setSheetError('Name the workout first, then add exercises.');
+        return;
+      }
       const ready = await ensureDayReady(slot, dayName);
       if (!ready?.day) {
-        setSheetError('Could not create the workout day. Try again.');
+        setSheetError('Could not create the workout day. Name it and try again.');
         return;
       }
 
@@ -537,6 +583,11 @@ function AdminWeekBoard({ profileId }: { profileId: string }) {
         {board?.board.map((slot) => {
           const has = Boolean(slot.day);
           const image = has ? workoutImageForDay(slot.day!.name) : PLACEHOLDER_IMAGES.studio;
+          const preview = (slot.exercises ?? [])
+            .slice(0, 2)
+            .map((pe) => pe.exercise?.name)
+            .filter(Boolean)
+            .join(' · ');
           return (
             <View key={slot.date} style={styles.dayRowWrap}>
               <Pressable
@@ -550,7 +601,7 @@ function AdminWeekBoard({ profileId }: { profileId: string }) {
                 ]}>
                 {has ? (
                   <LinearGradient
-                    colors={['rgba(200,255,0,0.06)', 'transparent']}
+                    colors={['rgba(200,255,0,0.08)', 'transparent']}
                     start={{ x: 0, y: 0 }}
                     end={{ x: 1, y: 1 }}
                     style={styles.dayGlow}
@@ -568,10 +619,12 @@ function AdminWeekBoard({ profileId }: { profileId: string }) {
                   <Text style={styles.dayName} numberOfLines={1}>
                     {slot.day?.name ?? 'Rest day'}
                   </Text>
-                  <Text style={styles.dayMeta}>
+                  <Text style={styles.dayMeta} numberOfLines={2}>
                     {has
-                      ? `${slot.exercises.length} movement${slot.exercises.length === 1 ? '' : 's'}`
-                      : 'Tap ADD · pick exercise · set reps'}
+                      ? preview
+                        ? `${slot.exercises.length} moves · ${preview}`
+                        : `${slot.exercises.length} movement${slot.exercises.length === 1 ? '' : 's'}`
+                      : 'Name workout · add exercises · set reps'}
                   </Text>
                 </View>
                 {slot.isPast && slot.trainedCount > 0 ? (
@@ -581,18 +634,14 @@ function AdminWeekBoard({ profileId }: { profileId: string }) {
                 ) : (
                   <View style={[styles.dayBadge, has ? styles.dayBadgeOn : styles.dayBadgeOff]}>
                     <Text style={[styles.dayBadgeText, has && styles.dayBadgeTextOn]}>
-                      {has ? 'EDIT' : 'ADD'}
+                      {has ? 'EDIT' : 'BUILD'}
                     </Text>
                   </View>
                 )}
               </Pressable>
               {has ? (
                 <Pressable
-                  onPress={(e) => {
-                    // Prevent opening the day editor when deleting from the list
-                    e?.stopPropagation?.();
-                    confirmClearDay(slot);
-                  }}
+                  onPress={() => confirmClearDay(slot)}
                   hitSlop={10}
                   accessibilityRole="button"
                   accessibilityLabel={`Delete ${slot.day?.name ?? 'workout'}`}
@@ -653,10 +702,11 @@ function AdminWeekBoard({ profileId }: { profileId: string }) {
         </>
       ) : null}
 
-      {/* Day editor — any date */}
-      <Modal visible={showEditSheet} animationType="slide" transparent onRequestClose={closeDay}>
+      {/* Day editor — name, movements, edit/delete */}
+      <Modal visible={showEditSheet} animationType="slide" transparent onRequestClose={() => void finishDay()}>
         <View style={styles.modalBackdrop}>
           <View style={styles.modalSheet}>
+            <View style={styles.modalHandle} />
             <Text style={styles.modalKicker}>
               {activeSlot?.short.toUpperCase()} · {activeSlot?.dateLabel}
               {activeSlot?.isToday ? ' · TODAY' : ''}
@@ -665,73 +715,97 @@ function AdminWeekBoard({ profileId }: { profileId: string }) {
               {activeSlot?.day ? 'Edit workout' : 'Build workout'}
             </Text>
             <Text style={styles.modalHint}>
-              Name the session, add movements, set sets · rounds · reps.
+              {board?.isCurrentWeek
+                ? 'Members see this on Workouts for this weekday.'
+                : 'Plan this calendar week. Current week is what members train live.'}
             </Text>
-            <AppInput
-              label="Workout name"
-              value={dayName}
-              onChangeText={setDayName}
-              placeholder="Upper Strength"
-            />
-            {activeSlot?.day ? (
+
+            <View style={styles.stepBlock}>
+              <Text style={styles.stepLabel}>1 · WORKOUT NAME</Text>
+              <AppInput
+                label="Name"
+                value={dayName}
+                onChangeText={(text) => {
+                  setDayName(text);
+                  if (sheetError) setSheetError(null);
+                }}
+                placeholder="Upper Strength"
+              />
               <PrimaryButton
-                title={saving ? 'Saving…' : 'Save name'}
-                onPress={saveDay}
+                title={
+                  saving
+                    ? 'Saving…'
+                    : activeSlot?.day
+                      ? 'Save name'
+                      : 'Create workout'
+                }
+                onPress={() => void saveDay()}
                 disabled={saving || !dayName.trim()}
                 variant="secondary"
               />
-            ) : null}
+            </View>
 
-            <Text style={styles.exHeading}>
-              Movements · {activeSlot?.exercises.length ?? 0}
-            </Text>
+            {sheetError ? <Text style={styles.sheetError}>{sheetError}</Text> : null}
 
-            {(activeSlot?.exercises.length ?? 0) === 0 ? (
-              <View style={styles.emptyDayBox}>
-                <Text style={styles.emptyDayTitle}>No movements yet</Text>
-                <Text style={styles.emptyDayCopy}>
-                  Pick an exercise, then dial in sets, rounds, and reps.
-                </Text>
+            <View style={styles.stepBlock}>
+              <Text style={styles.stepLabel}>
+                2 · MOVEMENTS · {activeSlot?.exercises.length ?? 0}
+              </Text>
+
+              {(activeSlot?.exercises.length ?? 0) === 0 ? (
+                <View style={styles.emptyDayBox}>
+                  <Ionicons name="barbell-outline" size={22} color={colors.textMuted} />
+                  <Text style={styles.emptyDayTitle}>No movements yet</Text>
+                  <Text style={styles.emptyDayCopy}>
+                    Name the workout, then add exercises with sets, rounds, and reps.
+                  </Text>
+                  <PrimaryButton
+                    title="Add first exercise"
+                    onPress={() => {
+                      if (!dayName.trim() && !activeSlot?.day) {
+                        setSheetError('Name the workout first, then add exercises.');
+                        return;
+                      }
+                      setExerciseQuery('');
+                      setPickerOpen(true);
+                    }}
+                  />
+                </View>
+              ) : (
+                <ScrollView style={styles.exScroll}>
+                  {(activeSlot?.exercises ?? []).map((pe, idx) => (
+                    <View key={pe.id} style={styles.exRow}>
+                      <Pressable
+                        onPress={() => setEditExercise(pe)}
+                        style={({ pressed }) => [styles.exMain, pressed && styles.pressed]}>
+                        <Text style={styles.exIndex}>{String(idx + 1).padStart(2, '0')}</Text>
+                        <View style={styles.exCopy}>
+                          <Text style={styles.exName}>{pe.exercise?.name ?? 'Exercise'}</Text>
+                          <Text style={styles.exMeta}>
+                            {formatPrescription(parsePrescription(pe))}
+                          </Text>
+                        </View>
+                        <Ionicons name="create-outline" size={18} color={colors.accent} />
+                      </Pressable>
+                      <Pressable onPress={() => void removeExercise(pe.id)} hitSlop={8}>
+                        <Text style={styles.exRemove}>Delete</Text>
+                      </Pressable>
+                    </View>
+                  ))}
+                </ScrollView>
+              )}
+
+              {(activeSlot?.exercises.length ?? 0) > 0 ? (
                 <PrimaryButton
-                  title="Add first exercise"
+                  title="Add exercise"
+                  variant="secondary"
                   onPress={() => {
                     setExerciseQuery('');
                     setPickerOpen(true);
                   }}
                 />
-              </View>
-            ) : (
-              <ScrollView style={styles.exScroll}>
-                {(activeSlot?.exercises ?? []).map((pe, idx) => (
-                  <View key={pe.id} style={styles.exRow}>
-                    <Pressable
-                      onPress={() => setEditExercise(pe)}
-                      style={({ pressed }) => [styles.exMain, pressed && styles.pressed]}>
-                      <Text style={styles.exIndex}>{idx + 1}</Text>
-                      <View style={styles.exCopy}>
-                        <Text style={styles.exName}>{pe.exercise?.name ?? 'Exercise'}</Text>
-                        <Text style={styles.exMeta}>{formatPrescription(parsePrescription(pe))}</Text>
-                      </View>
-                      <Ionicons name="create-outline" size={18} color={colors.accent} />
-                    </Pressable>
-                    <Pressable onPress={() => void removeExercise(pe.id)} hitSlop={8}>
-                      <Text style={styles.exRemove}>Remove</Text>
-                    </Pressable>
-                  </View>
-                ))}
-              </ScrollView>
-            )}
-
-            {(activeSlot?.exercises.length ?? 0) > 0 ? (
-              <PrimaryButton
-                title="Add exercise"
-                variant="secondary"
-                onPress={() => {
-                  setExerciseQuery('');
-                  setPickerOpen(true);
-                }}
-              />
-            ) : null}
+              ) : null}
+            </View>
 
             {activeSlot?.day ? (
               <PrimaryButton
@@ -772,7 +846,7 @@ function AdminWeekBoard({ profileId }: { profileId: string }) {
               </>
             ) : null}
 
-            <PrimaryButton title="Done" variant="ghost" onPress={closeDay} />
+            <PrimaryButton title="Done" onPress={() => void finishDay()} />
           </View>
         </View>
       </Modal>
@@ -1241,6 +1315,24 @@ const styles = StyleSheet.create({
   modalKicker: { ...typography.label, color: colors.accent },
   modalTitle: { ...typography.title, color: colors.text, fontSize: 22, marginBottom: spacing.xs },
   modalHint: { ...typography.caption, color: colors.textSecondary, marginBottom: spacing.sm },
+  modalHandle: {
+    alignSelf: 'center',
+    width: 40,
+    height: 4,
+    borderRadius: 99,
+    backgroundColor: 'rgba(255,255,255,0.18)',
+    marginBottom: spacing.sm,
+  },
+  stepBlock: {
+    gap: spacing.sm,
+    marginBottom: spacing.sm,
+  },
+  stepLabel: {
+    fontFamily: fonts.sansBold,
+    fontSize: 10,
+    letterSpacing: 1.6,
+    color: colors.accent,
+  },
   exHeading: { ...typography.subtitle, color: colors.text, fontSize: 15, marginTop: spacing.sm },
   emptyDayBox: {
     gap: 8,

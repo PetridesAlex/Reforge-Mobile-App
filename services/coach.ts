@@ -1071,6 +1071,10 @@ export async function assignProgram(
   clientIds: string[],
   options?: { startDate?: string },
 ): Promise<void> {
+  if (useSupabasePrograms()) {
+    return programsSupabase.assignProgram(programId, clientIds, options);
+  }
+
   await delay(250);
   const startDate = options?.startDate ?? format(new Date(), 'yyyy-MM-dd');
   for (const clientId of clientIds) {

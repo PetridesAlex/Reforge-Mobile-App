@@ -1,7 +1,17 @@
-import { useCallback, useEffect, useState } from 'react';
-import { Modal, Pressable, RefreshControl, StyleSheet, Text, View } from 'react-native';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import {
+  Modal,
+  Pressable,
+  RefreshControl,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 
+import { AchievementMark } from '@/components/achievements/AchievementMark';
 import { AppInput } from '@/components/ui/AppInput';
 import { BackButton } from '@/components/ui/BackButton';
 import { EmptyState } from '@/components/ui/EmptyState';
@@ -16,8 +26,24 @@ import * as adminService from '@/services/admin';
 import type { Achievement } from '@/types';
 import { colors, fonts, radius, spacing } from '@/constants/theme';
 
-const CATEGORIES = ['training', 'performance', 'consistency', 'challenges', 'special'] as const;
-const RARITIES = ['common', 'rare', 'epic', 'legendary'] as const;
+const CATEGORIES = [
+  { id: 'training', label: 'Training' },
+  { id: 'performance', label: 'Performance' },
+  { id: 'consistency', label: 'Consistency' },
+  { id: 'challenges', label: 'Challenges' },
+  { id: 'special', label: 'Special' },
+] as const;
+
+const RARITIES = [
+  { id: 'common', label: 'Common', tone: 'rgba(255,255,255,0.35)' },
+  { id: 'rare', label: 'Rare', tone: 'rgba(160,190,220,0.85)' },
+  { id: 'epic', label: 'Epic', tone: 'rgba(200,255,0,0.7)' },
+  { id: 'legendary', label: 'Legendary', tone: colors.accent },
+] as const;
+
+function rarityTone(rarity?: string | null) {
+  return RARITIES.find((r) => r.id === rarity)?.tone ?? RARITIES[0].tone;
+}
 
 export default function AchievementManagerScreen() {
   const { role, profile } = useAuth();
@@ -58,6 +84,12 @@ export default function AchievementManagerScreen() {
     void load();
   }, [load]);
 
+  const stats = useMemo(() => {
+    const active = rows.filter((r) => r.is_active !== false).length;
+    const manual = rows.filter((r) => r.award_mode === 'manual').length;
+    return { total: rows.length, active, manual };
+  }, [rows]);
+
   const openCreate = () => {
     setEditId(null);
     setCode('');
@@ -66,6 +98,17 @@ export default function AchievementManagerScreen() {
     setCategory('special');
     setRarity('epic');
     setXp('250');
+    setEditorOpen(true);
+  };
+
+  const openEdit = (row: Achievement) => {
+    setEditId(row.id);
+    setCode(row.code);
+    setTitle(row.title);
+    setDescription(row.description ?? '');
+    setCategory(row.category ?? 'special');
+    setRarity(row.rarity ?? 'common');
+    setXp(String(row.xp_reward ?? 50));
     setEditorOpen(true);
   };
 
@@ -129,7 +172,11 @@ export default function AchievementManagerScreen() {
     return (
       <Screen>
         <BackButton />
-        <EmptyState icon="lock-closed-outline" title="Staff only" description="Achievement manager is for coaches and admins." />
+        <EmptyState
+          icon="lock-closed-outline"
+          title="Staff only"
+          description="Achievement manager is for coaches and admins."
+        />
       </Screen>
     );
   }
@@ -137,7 +184,10 @@ export default function AchievementManagerScreen() {
   if (loading) {
     return (
       <Screen>
-        <Skeleton height={120} />
+        <Skeleton height={48} style={{ marginTop: spacing.md }} />
+        <Skeleton height={88} style={{ marginTop: spacing.lg }} />
+        <Skeleton height={110} style={{ marginTop: spacing.md }} />
+        <Skeleton height={110} style={{ marginTop: spacing.sm }} />
       </Screen>
     );
   }
@@ -160,64 +210,172 @@ export default function AchievementManagerScreen() {
       }>
       <View style={styles.top}>
         <BackButton />
-        <Text style={styles.title}>ACHIEVEMENTS</Text>
-        <Pressable onPress={openCreate} style={styles.iconBtn}>
-          <Ionicons name="add" size={18} color={colors.background} />
+        <View style={styles.topCopy}>
+          <Text style={styles.kicker}>CATALOG</Text>
+          <Text style={styles.title}>ACHIEVEMENTS</Text>
+        </View>
+        <Pressable onPress={openCreate} style={styles.iconBtn} accessibilityLabel="Create achievement">
+          <Ionicons name="add" size={20} color={colors.background} />
         </Pressable>
       </View>
-      <PrimaryButton title="Award to athlete" onPress={() => void openAward()} />
+
+      <View style={styles.summaryRow}>
+        <SummaryStat value={String(stats.total)} label="Total" />
+        <SummaryStat value={String(stats.active)} label="Active" />
+        <SummaryStat value={String(stats.manual)} label="Manual" />
+      </View>
+
+      <View style={styles.actionRow}>
+        <Pressable
+          onPress={() => void openAward()}
+          style={({ pressed }) => [styles.awardCta, pressed && styles.pressed]}>
+          <LinearGradient
+            colors={['rgba(200,255,0,0.14)', 'transparent']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={StyleSheet.absoluteFillObject}
+          />
+          <Ionicons name="ribbon-outline" size={18} color={colors.accent} />
+          <View style={styles.awardCopy}>
+            <Text style={styles.awardKicker}>RECOGNIZE</Text>
+            <Text style={styles.awardTitle}>Award to athlete</Text>
+          </View>
+          <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
+        </Pressable>
+      </View>
+
       {error ? <ErrorState message={error} onRetry={load} /> : null}
 
+      <Text style={styles.sectionHint}>Tap a card to edit · closest catalog order</Text>
+
       <View style={styles.list}>
-        {rows.map((row) => (
-          <View key={row.id} style={[styles.card, row.is_active === false && styles.cardOff]}>
-            <View style={styles.cardTop}>
-              <Text style={styles.rarity}>{(row.rarity ?? 'common').toUpperCase()}</Text>
-              <Text style={styles.cat}>{row.category}</Text>
-            </View>
-            <Text style={styles.cardTitle}>{row.title}</Text>
-            <Text style={styles.cardDesc}>{row.description}</Text>
-            <Text style={styles.xp}>+{row.xp_reward ?? 50} XP · {row.code}</Text>
-            <View style={styles.rowActions}>
-              <Pressable
-                onPress={() =>
-                  void achievements.setAchievementActive(row.id, row.is_active === false).then(load)
-                }>
-                <Text style={styles.link}>{row.is_active === false ? 'Enable' : 'Disable'}</Text>
-              </Pressable>
-            </View>
-          </View>
-        ))}
+        {rows.map((row) => {
+          const active = row.is_active !== false;
+          const tone = rarityTone(row.rarity);
+          return (
+            <Pressable
+              key={row.id}
+              onPress={() => openEdit(row)}
+              style={({ pressed }) => [
+                styles.card,
+                !active && styles.cardOff,
+                pressed && styles.pressed,
+              ]}>
+              <View style={[styles.rail, { backgroundColor: tone }]} />
+              <View style={styles.mark}>
+                <AchievementMark
+                  name={row.icon_key ?? row.code}
+                  size={18}
+                  color={active ? colors.accent : colors.textMuted}
+                />
+              </View>
+              <View style={styles.cardBody}>
+                <View style={styles.cardTop}>
+                  <Text style={[styles.rarity, { color: tone }]}>
+                    {(row.rarity ?? 'common').toUpperCase()}
+                  </Text>
+                  <Text style={styles.cat}>{(row.category ?? 'special').toUpperCase()}</Text>
+                </View>
+                <Text style={styles.cardTitle} numberOfLines={1}>
+                  {row.title}
+                </Text>
+                <Text style={styles.cardDesc} numberOfLines={2}>
+                  {row.description}
+                </Text>
+                <View style={styles.cardMeta}>
+                  <Text style={styles.xp}>+{row.xp_reward ?? 50} XP</Text>
+                  <Text style={styles.code}>{row.code}</Text>
+                  {!active ? <Text style={styles.disabledTag}>DISABLED</Text> : null}
+                </View>
+                <View style={styles.rowActions}>
+                  <Pressable
+                    onPress={() => {
+                      void achievements.setAchievementActive(row.id, !active).then(load);
+                    }}
+                    hitSlop={8}>
+                    <Text style={styles.link}>{active ? 'Disable' : 'Enable'}</Text>
+                  </Pressable>
+                  <Text style={styles.editHint}>EDIT</Text>
+                </View>
+              </View>
+            </Pressable>
+          );
+        })}
       </View>
+      <View style={{ height: spacing.xxl }} />
 
       <Modal visible={editorOpen} animationType="slide" onRequestClose={() => setEditorOpen(false)}>
         <Screen>
           <View style={styles.top}>
             <BackButton onPress={() => setEditorOpen(false)} />
-            <Text style={styles.title}>CREATE</Text>
+            <View style={styles.topCopy}>
+              <Text style={styles.kicker}>{editId ? 'UPDATE' : 'NEW'}</Text>
+              <Text style={styles.title}>{editId ? 'EDIT' : 'CREATE'}</Text>
+            </View>
           </View>
-          <AppInput label="Code" value={code} onChangeText={setCode} autoCapitalize="none" />
-          <AppInput label="Title" value={title} onChangeText={setTitle} />
-          <AppInput label="Description" value={description} onChangeText={setDescription} multiline />
-          <Text style={styles.label}>CATEGORY</Text>
-          <View style={styles.chips}>
-            {CATEGORIES.map((c) => (
-              <Pressable key={c} onPress={() => setCategory(c)} style={[styles.chip, category === c && styles.chipOn]}>
-                <Text style={styles.chipText}>{c}</Text>
-              </Pressable>
-            ))}
+
+          <View style={styles.formSection}>
+            <Text style={styles.sectionLabel}>Identity</Text>
+            <AppInput label="Code" value={code} onChangeText={setCode} autoCapitalize="none" />
+            <AppInput label="Title" value={title} onChangeText={setTitle} />
+            <AppInput
+              label="Description"
+              value={description}
+              onChangeText={setDescription}
+              multiline
+            />
           </View>
-          <Text style={styles.label}>RARITY</Text>
-          <View style={styles.chips}>
-            {RARITIES.map((r) => (
-              <Pressable key={r} onPress={() => setRarity(r)} style={[styles.chip, rarity === r && styles.chipOn]}>
-                <Text style={styles.chipText}>{r}</Text>
-              </Pressable>
-            ))}
+
+          <View style={styles.formSection}>
+            <Text style={styles.sectionLabel}>Classification</Text>
+            <Text style={styles.fieldLabel}>CATEGORY</Text>
+            <View style={styles.chips}>
+              {CATEGORIES.map((c) => {
+                const on = category === c.id;
+                return (
+                  <Pressable
+                    key={c.id}
+                    onPress={() => setCategory(c.id)}
+                    style={[styles.chip, on && styles.chipOn]}>
+                    <Text style={[styles.chipText, on && styles.chipTextOn]}>{c.label}</Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+
+            <Text style={[styles.fieldLabel, { marginTop: spacing.md }]}>RARITY</Text>
+            <View style={styles.chips}>
+              {RARITIES.map((r) => {
+                const on = rarity === r.id;
+                return (
+                  <Pressable
+                    key={r.id}
+                    onPress={() => setRarity(r.id)}
+                    style={[styles.chip, on && styles.chipOn, on && { borderColor: r.tone }]}>
+                    <View style={[styles.rarityDot, { backgroundColor: r.tone }]} />
+                    <Text style={[styles.chipText, on && styles.chipTextOn]}>{r.label}</Text>
+                  </Pressable>
+                );
+              })}
+            </View>
           </View>
-          <AppInput label="XP reward" value={xp} onChangeText={setXp} keyboardType="number-pad" />
-          <PrimaryButton title={saving ? 'Saving…' : 'Save'} onPress={() => void onSave()} disabled={saving || !code || !title} />
-          <PrimaryButton title="Cancel" variant="ghost" onPress={() => setEditorOpen(false)} />
+
+          <View style={styles.formSection}>
+            <Text style={styles.sectionLabel}>Reward</Text>
+            <AppInput label="XP reward" value={xp} onChangeText={setXp} keyboardType="number-pad" />
+            <Text style={styles.helper}>
+              Special category awards are manual. Other categories unlock automatically.
+            </Text>
+          </View>
+
+          <View style={styles.formFooter}>
+            <PrimaryButton
+              title={saving ? 'Saving…' : editId ? 'Save changes' : 'Create achievement'}
+              onPress={() => void onSave()}
+              disabled={saving || !code.trim() || !title.trim()}
+            />
+            <PrimaryButton title="Cancel" variant="ghost" onPress={() => setEditorOpen(false)} />
+          </View>
         </Screen>
       </Modal>
 
@@ -225,70 +383,334 @@ export default function AchievementManagerScreen() {
         <Screen>
           <View style={styles.top}>
             <BackButton onPress={() => setAwardOpen(false)} />
-            <Text style={styles.title}>AWARD</Text>
+            <View style={styles.topCopy}>
+              <Text style={styles.kicker}>RECOGNIZE</Text>
+              <Text style={styles.title}>AWARD</Text>
+            </View>
           </View>
-          <AppInput label="Achievement code" value={awardCode} onChangeText={setAwardCode} autoCapitalize="none" />
-          <AppInput label="Find athlete" value={memberQuery} onChangeText={setMemberQuery} />
-          {filteredMembers.slice(0, 12).map((m) => (
-            <Pressable
-              key={m.id}
-              onPress={() => setSelectedMemberId(m.id)}
-              style={[styles.memberRow, selectedMemberId === m.id && styles.memberOn]}>
-              <Text style={styles.memberName}>{m.full_name}</Text>
-            </Pressable>
-          ))}
-          <PrimaryButton
-            title={saving ? 'Awarding…' : 'Award achievement'}
-            onPress={() => void onAward()}
-            disabled={saving || !selectedMemberId || !awardCode}
-          />
+
+          <View style={styles.formSection}>
+            <Text style={styles.sectionLabel}>Achievement</Text>
+            <AppInput
+              label="Achievement code"
+              value={awardCode}
+              onChangeText={setAwardCode}
+              autoCapitalize="none"
+            />
+          </View>
+
+          <View style={styles.formSection}>
+            <Text style={styles.sectionLabel}>Athlete</Text>
+            <AppInput label="Find athlete" value={memberQuery} onChangeText={setMemberQuery} />
+            <ScrollView style={styles.memberList} nestedScrollEnabled>
+              {filteredMembers.slice(0, 16).map((m) => {
+                const on = selectedMemberId === m.id;
+                return (
+                  <Pressable
+                    key={m.id}
+                    onPress={() => setSelectedMemberId(m.id)}
+                    style={[styles.memberRow, on && styles.memberOn]}>
+                    <Text style={[styles.memberName, on && styles.memberNameOn]}>{m.full_name}</Text>
+                    {on ? <Ionicons name="checkmark-circle" size={18} color={colors.accent} /> : null}
+                  </Pressable>
+                );
+              })}
+              {!filteredMembers.length ? (
+                <Text style={styles.helper}>No athletes match that search.</Text>
+              ) : null}
+            </ScrollView>
+          </View>
+
+          <View style={styles.formFooter}>
+            <PrimaryButton
+              title={saving ? 'Awarding…' : 'Award achievement'}
+              onPress={() => void onAward()}
+              disabled={saving || !selectedMemberId || !awardCode.trim()}
+            />
+            <PrimaryButton title="Cancel" variant="ghost" onPress={() => setAwardOpen(false)} />
+          </View>
         </Screen>
       </Modal>
     </Screen>
   );
 }
 
+function SummaryStat({ value, label }: { value: string; label: string }) {
+  return (
+    <View style={styles.summaryCard}>
+      <Text style={styles.summaryValue}>{value}</Text>
+      <Text style={styles.summaryLabel}>{label}</Text>
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
-  top: { flexDirection: 'row', alignItems: 'center', gap: 12, marginTop: spacing.sm, marginBottom: spacing.md },
-  title: { fontFamily: fonts.display, fontSize: 28, color: colors.text, flex: 1 },
+  top: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    marginTop: spacing.sm,
+    marginBottom: spacing.lg,
+  },
+  topCopy: { flex: 1, gap: 2 },
+  kicker: {
+    fontFamily: fonts.sansBold,
+    fontSize: 10,
+    letterSpacing: 2,
+    color: colors.accent,
+  },
+  title: {
+    fontFamily: fonts.display,
+    fontSize: 32,
+    lineHeight: 34,
+    color: colors.text,
+  },
   iconBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 8,
+    width: 40,
+    height: 40,
+    borderRadius: radius.sm,
     backgroundColor: colors.accent,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  list: { gap: 10, marginTop: spacing.md },
-  card: {
-    padding: spacing.md,
+  summaryRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: spacing.md,
+  },
+  summaryCard: {
+    flex: 1,
     borderRadius: radius.md,
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: 'rgba(255,255,255,0.08)',
+    backgroundColor: colors.surface,
+    paddingVertical: spacing.md,
+    alignItems: 'center',
+    gap: 2,
+  },
+  summaryValue: {
+    fontFamily: fonts.display,
+    fontSize: 24,
+    color: colors.text,
+  },
+  summaryLabel: {
+    fontFamily: fonts.sans,
+    fontSize: 10,
+    letterSpacing: 0.4,
+    color: colors.textMuted,
+  },
+  actionRow: { marginBottom: spacing.lg },
+  awardCta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.md,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    borderColor: 'rgba(200,255,0,0.28)',
     backgroundColor: colors.surfaceElevated,
-    gap: 6,
+    overflow: 'hidden',
   },
-  cardOff: { opacity: 0.5 },
-  cardTop: { flexDirection: 'row', justifyContent: 'space-between' },
-  rarity: { fontFamily: fonts.sansBold, fontSize: 10, letterSpacing: 1.2, color: colors.accent },
-  cat: { fontFamily: fonts.sans, fontSize: 11, color: colors.textMuted },
-  cardTitle: { fontFamily: fonts.sansBold, fontSize: 15, color: colors.text },
-  cardDesc: { fontFamily: fonts.sans, fontSize: 13, color: colors.textSecondary },
-  xp: { fontFamily: fonts.sans, fontSize: 12, color: colors.textMuted },
-  rowActions: { marginTop: 4 },
-  link: { fontFamily: fonts.sansBold, color: colors.accent, fontSize: 12 },
-  label: { fontFamily: fonts.sansBold, fontSize: 11, letterSpacing: 1.2, color: colors.textSecondary, marginTop: 8 },
-  chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginVertical: 8 },
-  chip: { paddingHorizontal: 10, paddingVertical: 8, borderRadius: 99, borderWidth: 1, borderColor: colors.border },
-  chipOn: { borderColor: colors.accent, backgroundColor: 'rgba(200,255,0,0.12)' },
-  chipText: { fontFamily: fonts.sansSemiBold, fontSize: 12, color: colors.text },
-  memberRow: {
-    padding: 12,
+  awardCopy: { flex: 1, gap: 2 },
+  awardKicker: {
+    fontFamily: fonts.sansBold,
+    fontSize: 10,
+    letterSpacing: 1.6,
+    color: colors.accent,
+  },
+  awardTitle: {
+    fontFamily: fonts.sansSemiBold,
+    fontSize: 15,
+    color: colors.text,
+  },
+  pressed: { opacity: 0.9 },
+  sectionHint: {
+    fontFamily: fonts.sans,
+    fontSize: 12,
+    color: colors.textMuted,
+    marginBottom: spacing.sm,
+  },
+  list: { gap: 10 },
+  card: {
+    flexDirection: 'row',
+    alignItems: 'stretch',
     borderRadius: radius.md,
     borderWidth: 1,
-    borderColor: colors.border,
-    marginBottom: 6,
+    borderColor: 'rgba(255,255,255,0.08)',
+    backgroundColor: colors.surfaceElevated,
+    overflow: 'hidden',
+    minHeight: 124,
   },
-  memberOn: { borderColor: colors.accent },
-  memberName: { fontFamily: fonts.sansSemiBold, color: colors.text },
+  cardOff: { opacity: 0.55 },
+  rail: { width: 3 },
+  mark: {
+    width: 48,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRightWidth: 1,
+    borderRightColor: 'rgba(255,255,255,0.06)',
+    backgroundColor: 'rgba(200,255,0,0.04)',
+  },
+  cardBody: {
+    flex: 1,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.md,
+    gap: 4,
+  },
+  cardTop: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    gap: 8,
+  },
+  rarity: {
+    fontFamily: fonts.sansBold,
+    fontSize: 9,
+    letterSpacing: 1.5,
+  },
+  cat: {
+    fontFamily: fonts.sans,
+    fontSize: 10,
+    letterSpacing: 0.8,
+    color: colors.textMuted,
+  },
+  cardTitle: {
+    fontFamily: fonts.sansSemiBold,
+    fontSize: 15,
+    color: colors.text,
+  },
+  cardDesc: {
+    fontFamily: fonts.sans,
+    fontSize: 12,
+    lineHeight: 17,
+    color: colors.textSecondary,
+  },
+  cardMeta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginTop: 4,
+  },
+  xp: {
+    fontFamily: fonts.sansBold,
+    fontSize: 11,
+    letterSpacing: 0.4,
+    color: colors.accent,
+  },
+  code: {
+    fontFamily: fonts.sans,
+    fontSize: 11,
+    color: colors.textMuted,
+  },
+  disabledTag: {
+    fontFamily: fonts.sansBold,
+    fontSize: 9,
+    letterSpacing: 1,
+    color: colors.danger,
+  },
+  rowActions: {
+    marginTop: 6,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  link: {
+    fontFamily: fonts.sansBold,
+    color: colors.accent,
+    fontSize: 12,
+  },
+  editHint: {
+    fontFamily: fonts.sansBold,
+    fontSize: 10,
+    letterSpacing: 1.4,
+    color: colors.textMuted,
+  },
+  formSection: {
+    marginBottom: spacing.lg,
+    gap: spacing.sm,
+  },
+  sectionLabel: {
+    fontFamily: fonts.display,
+    fontSize: 22,
+    lineHeight: 24,
+    color: colors.text,
+    marginBottom: 4,
+  },
+  fieldLabel: {
+    fontFamily: fonts.sansBold,
+    fontSize: 10,
+    letterSpacing: 1.6,
+    color: colors.textMuted,
+    marginBottom: 2,
+  },
+  chips: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  chip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderRadius: 2,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.1)',
+    backgroundColor: colors.surface,
+  },
+  chipOn: {
+    borderColor: colors.accent,
+    backgroundColor: 'rgba(200,255,0,0.12)',
+  },
+  chipText: {
+    fontFamily: fonts.sansSemiBold,
+    fontSize: 12,
+    color: colors.textMuted,
+  },
+  chipTextOn: { color: colors.text },
+  rarityDot: {
+    width: 7,
+    height: 7,
+    borderRadius: 99,
+  },
+  helper: {
+    fontFamily: fonts.sans,
+    fontSize: 12,
+    lineHeight: 17,
+    color: colors.textMuted,
+  },
+  formFooter: {
+    gap: spacing.sm,
+    marginTop: spacing.sm,
+    marginBottom: spacing.xl,
+  },
+  memberList: {
+    maxHeight: 280,
+    marginTop: 4,
+  },
+  memberRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 14,
+    paddingHorizontal: spacing.md,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.08)',
+    backgroundColor: colors.surface,
+    marginBottom: 8,
+  },
+  memberOn: {
+    borderColor: 'rgba(200,255,0,0.4)',
+    backgroundColor: 'rgba(200,255,0,0.08)',
+  },
+  memberName: {
+    fontFamily: fonts.sansSemiBold,
+    fontSize: 14,
+    color: colors.textSecondary,
+  },
+  memberNameOn: { color: colors.text },
 });

@@ -84,7 +84,7 @@ export default function LoginScreen() {
       <View style={styles.header}>
         <ReforgeLogo width={340} height={90} style={styles.logo} />
         <Text style={styles.kicker}>LIMASSOL</Text>
-        <Text style={styles.title}>Welcome back</Text>
+        <Text style={styles.title}>WELCOME BACK</Text>
         <Text style={styles.subtitle}>Sign in to continue your training</Text>
       </View>
 
@@ -193,22 +193,24 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   title: {
-    ...typography.section,
-    fontSize: 56,
-    lineHeight: 58,
-    letterSpacing: 2,
-    fontWeight: '400',
+    fontFamily: fonts.wordmark,
+    fontSize: 44,
+    lineHeight: 50,
+    letterSpacing: -0.4,
+    color: colors.text,
     textAlign: 'center',
+    textTransform: 'uppercase',
   },
   subtitle: {
     fontFamily: fonts.sans,
     fontWeight: '400',
-    fontSize: 16,
-    lineHeight: 24,
+    fontSize: 15,
+    lineHeight: 22,
     color: colors.textSecondary,
     textAlign: 'center',
     maxWidth: 300,
-    letterSpacing: 0.2,
+    letterSpacing: 0.3,
+    marginTop: 2,
   },
   form: {
     gap: spacing.md,

@@ -13,6 +13,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 
 import { AppInput } from '@/components/ui/AppInput';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { ErrorState } from '@/components/ui/ErrorState';
 import { ExercisePrescriptionSheet } from '@/components/workouts/ExercisePrescriptionSheet';
 import { PrimaryButton } from '@/components/ui/PrimaryButton';
@@ -70,6 +71,8 @@ export default function ProgramDetailScreen() {
   const [assignOpen, setAssignOpen] = useState(false);
   const [selectedMembers, setSelectedMembers] = useState<string[]>([]);
   const [startDate, setStartDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [deleteDayId, setDeleteDayId] = useState<string | null>(null);
+  const [deletingDay, setDeletingDay] = useState(false);
 
   const load = useCallback(async () => {
     if (!id) return;
@@ -154,9 +157,17 @@ export default function ProgramDetailScreen() {
   };
 
   const deleteDay = async (dayId: string) => {
-    await coachService.removeProgramDay(dayId);
-    setMessage('Training day removed');
-    await load();
+    setDeletingDay(true);
+    try {
+      await coachService.removeProgramDay(dayId);
+      setDeleteDayId(null);
+      setMessage('Training day removed');
+      await load();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not delete day');
+    } finally {
+      setDeletingDay(false);
+    }
   };
 
   const openEditExercise = (pe: ProgramExercise) => {
@@ -388,7 +399,7 @@ export default function ProgramDetailScreen() {
                     </View>
                   </View>
                 </View>
-                <Pressable onPress={() => deleteDay(day.id)} hitSlop={8} style={styles.dayDelete}>
+                <Pressable onPress={() => setDeleteDayId(day.id)} hitSlop={8} style={styles.dayDelete}>
                   <Ionicons name="trash-outline" size={16} color={colors.textMuted} />
                 </Pressable>
               </View>
@@ -480,10 +491,24 @@ export default function ProgramDetailScreen() {
       )}
 
       <View style={styles.addDayCard}>
+        <LinearGradient
+          colors={['rgba(200,255,0,0.1)', 'transparent']}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={StyleSheet.absoluteFillObject}
+        />
         <Text style={styles.addDayKicker}>NEW DAY</Text>
         <Text style={styles.addDayTitle}>Add training day</Text>
-        <AppInput label="Workout name" value={dayName} onChangeText={setDayName} placeholder="Upper Strength" />
-        <Text style={styles.weekdayLabel}>Day of week</Text>
+        <Text style={styles.addDayHint}>
+          Name the workout, pick a weekday, then add exercises. Assigned members see that weekday on Workouts.
+        </Text>
+        <AppInput
+          label="Workout name"
+          value={dayName}
+          onChangeText={setDayName}
+          placeholder="Upper Strength"
+        />
+        <Text style={styles.weekdayLabel}>DAY OF WEEK</Text>
         <View style={styles.weekRow}>
           {WEEKDAYS.map((wd) => {
             const selected = newDayWeekday === wd.value;
@@ -506,7 +531,11 @@ export default function ProgramDetailScreen() {
             );
           })}
         </View>
-        <PrimaryButton title="Add training day" onPress={addDay} disabled={!dayName.trim()} />
+        <PrimaryButton
+          title="Add training day"
+          onPress={addDay}
+          disabled={!dayName.trim() || newDayWeekday == null}
+        />
       </View>
 
       <Pressable
@@ -634,6 +663,21 @@ export default function ProgramDetailScreen() {
           </View>
         </View>
       </Modal>
+
+      <ConfirmDialog
+        visible={Boolean(deleteDayId)}
+        title="Delete training day?"
+        message="This removes the workout and all exercises on that day."
+        confirmLabel={deletingDay ? 'Deleting…' : 'Delete day'}
+        cancelLabel="Keep"
+        destructive
+        onCancel={() => {
+          if (!deletingDay) setDeleteDayId(null);
+        }}
+        onConfirm={() => {
+          if (deleteDayId && !deletingDay) void deleteDay(deleteDayId);
+        }}
+      />
     </Screen>
   );
 }
@@ -1058,11 +1102,15 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   addDayCard: {
+    position: 'relative',
+    overflow: 'hidden',
     gap: spacing.sm,
     marginBottom: spacing.lg,
-    padding: spacing.md,
+    padding: spacing.lg,
     borderRadius: radius.lg,
-    backgroundColor: '#121812',
+    borderWidth: 1,
+    borderColor: 'rgba(200,255,0,0.22)',
+    backgroundColor: colors.surfaceElevated,
   },
   addDayKicker: {
     ...typography.sectionKicker,
@@ -1075,7 +1123,13 @@ const styles = StyleSheet.create({
     letterSpacing: 1,
     color: colors.text,
     textTransform: 'uppercase',
-    marginBottom: spacing.xs,
+  },
+  addDayHint: {
+    fontFamily: fonts.sans,
+    fontSize: 13,
+    lineHeight: 18,
+    color: colors.textSecondary,
+    marginBottom: 4,
   },
   libraryLink: {
     flexDirection: 'row',

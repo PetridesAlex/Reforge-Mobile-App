@@ -478,3 +478,33 @@ export async function removeProgramDay(dayId: string): Promise<void> {
   const { error } = await supabase.from('program_days').delete().eq('id', dayId);
   if (error) throw new Error(formatSupabaseError(error));
 }
+
+/** Assign program to members (deactivates their previous active assignment). */
+export async function assignProgram(
+  programId: string,
+  clientIds: string[],
+  options?: { startDate?: string },
+): Promise<void> {
+  const supabase = getSupabase();
+  const startDate = options?.startDate ?? new Date().toISOString().slice(0, 10);
+  const uniqueIds = [...new Set(clientIds.filter(Boolean))];
+  if (!uniqueIds.length) return;
+
+  const { error: deactivateError } = await supabase
+    .from('client_programs')
+    .update({ is_active: false })
+    .in('client_id', uniqueIds)
+    .eq('is_active', true);
+  if (deactivateError) throw new Error(formatSupabaseError(deactivateError));
+
+  const rows = uniqueIds.map((clientId) => ({
+    client_id: clientId,
+    program_id: programId,
+    start_date: startDate,
+    current_week: 1,
+    is_active: true,
+  }));
+
+  const { error: insertError } = await supabase.from('client_programs').insert(rows);
+  if (insertError) throw new Error(formatSupabaseError(insertError));
+}
