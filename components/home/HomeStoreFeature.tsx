@@ -16,6 +16,7 @@ import Animated, {
 } from 'react-native-reanimated';
 
 import { trackStoreEvent } from '@/lib/store/analytics';
+import { GYM_IMAGES } from '@/constants/media';
 import * as store from '@/services/store';
 import type { StoreHomeHero, StoreProduct } from '@/types';
 import { colors, fonts, radius, spacing } from '@/constants/theme';
@@ -131,11 +132,6 @@ export function HomeStoreFeature({ enterDelay = 140 }: Props) {
     };
   }, []);
 
-  const imageUri =
-    product?.primary_image_url ??
-    product?.images?.find((i) => i.is_primary)?.public_url ??
-    product?.images?.[0]?.public_url ??
-    null;
   const headline = hero.headline?.trim() || FALLBACK_HERO.headline;
   const parts = headline.split(/\s+/);
   const brand = parts[0] ?? 'REFORGE';
@@ -154,15 +150,12 @@ export function HomeStoreFeature({ enterDelay = 140 }: Props) {
         accessibilityLabel="Open REFORGE Store"
         style={({ pressed }) => [styles.pressable, pressed && styles.pressed]}>
         <View style={styles.media}>
-          {imageUri ? (
-            <Image source={{ uri: imageUri }} style={StyleSheet.absoluteFill} contentFit="cover" />
-          ) : (
-            <LinearGradient
-              colors={['#121212', '#0A0A0A', '#050505']}
-              locations={[0, 0.55, 1]}
-              style={StyleSheet.absoluteFill}
-            />
-          )}
+          <Image
+            source={GYM_IMAGES.reforgeStore}
+            style={StyleSheet.absoluteFill}
+            contentFit="cover"
+            transition={400}
+          />
 
           <LinearGradient
             colors={['rgba(5,5,5,0.15)', 'rgba(5,5,5,0.55)', 'rgba(5,5,5,0.96)']}

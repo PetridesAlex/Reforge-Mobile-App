@@ -15,9 +15,13 @@ alter table public.profiles
   );
 
 -- CREATE OR REPLACE cannot insert/rename view columns — drop then recreate.
+-- security_invoker so the view respects caller privileges + profiles RLS
+-- (avoids Supabase "Security Definer View" critical advisory).
 drop view if exists public.community_profiles;
 
-create view public.community_profiles as
+create view public.community_profiles
+with (security_invoker = on)
+as
 select
   p.id,
   p.full_name,
@@ -77,5 +81,5 @@ $$;
 
 grant execute on function public.get_community_profile(uuid) to authenticated;
 grant execute on function public.get_community_profile(uuid) to anon;
+revoke all on public.community_profiles from anon, public;
 grant select on public.community_profiles to authenticated;
-grant select on public.community_profiles to anon;

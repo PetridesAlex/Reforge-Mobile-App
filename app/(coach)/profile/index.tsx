@@ -39,7 +39,8 @@ const ADMIN_LINKS: LinkItem[] = [
   { key: 'workouts', title: 'Workouts', meta: 'Weekly training plan', mark: 'W', href: '/(coach)/programs' },
   { key: 'schedule', title: 'Schedule', meta: 'Premium week plan', mark: 'K', href: '/(coach)/admin/schedule' },
   { key: 'news', title: 'News', meta: 'Posts for members', mark: 'N', href: '/(coach)/admin/news' },
-  { key: 'challenges', title: 'Challenges', meta: 'Gym competitions', mark: 'G', href: '/(coach)/admin/challenges' },
+  { key: 'challenges', title: 'Challenges', meta: 'Weekly competitions', mark: 'G', href: '/(coach)/challenges' },
+  { key: 'achievements', title: 'Achievements', meta: 'Awards & catalog', mark: 'A', href: '/(coach)/achievements' },
   { key: 'staff', title: 'Staff', meta: 'Coaches and roles', mark: 'T', href: '/(coach)/admin/staff' },
 ];
 
@@ -48,6 +49,8 @@ const COACH_LINKS: LinkItem[] = [
   { key: 'calendar', title: 'Calendar', meta: 'Sessions & availability', mark: 'K', href: '/(coach)/calendar' },
   { key: 'chat', title: 'Class chats', meta: 'Message your groups', mark: '@', href: '/(coach)/messages' },
   { key: 'programs', title: 'Programs', meta: 'Training plans', mark: 'P', href: '/(coach)/programs' },
+  { key: 'challenges', title: 'Challenges', meta: 'Weekly competitions', mark: 'G', href: '/(coach)/challenges' },
+  { key: 'achievements', title: 'Achievements', meta: 'Awards & catalog', mark: 'A', href: '/(coach)/achievements' },
 ];
 
 export default function CoachProfileScreen() {

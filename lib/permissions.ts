@@ -47,6 +47,15 @@ export function canManageWod(role: UserRole | null | undefined): boolean {
   return role === 'coach' || role === 'admin';
 }
 
+/** Weekly challenges, result verification, achievement awards. */
+export function canManageChallenges(role: UserRole | null | undefined): boolean {
+  return role === 'coach' || role === 'admin';
+}
+
+export function canManageAchievements(role: UserRole | null | undefined): boolean {
+  return role === 'coach' || role === 'admin';
+}
+
 /** Admin sees every group chat; coaches see groups they lead. */
 export function canManageAllChats(role: UserRole | null | undefined): boolean {
   return role === 'admin';

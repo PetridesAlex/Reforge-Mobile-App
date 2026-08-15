@@ -101,6 +101,8 @@ export default function CoachLayout() {
       <Tabs.Screen name="exercises" options={{ href: null }} />
       <Tabs.Screen name="admin" options={{ href: null }} />
       <Tabs.Screen name="messages" options={{ href: null }} />
+      <Tabs.Screen name="challenges" options={{ href: null }} />
+      <Tabs.Screen name="achievements" options={{ href: null }} />
     </Tabs>
   );
 }

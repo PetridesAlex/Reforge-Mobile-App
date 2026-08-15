@@ -1,29 +1,45 @@
 import { StyleProp, StyleSheet, View, ViewStyle } from 'react-native';
-import { Image, ImageContentFit } from 'expo-image';
+import { Image, ImageContentFit, type ImageSource } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 
 import { colors, radius } from '@/constants/theme';
 
 type MediaImageProps = {
-  uri?: string | null;
+  /** Remote URL, or local Metro asset (require / module id). */
+  uri?: string | number | null;
+  /** Prefer this when you already have a require() / ImageSource. */
+  source?: ImageSource;
   style?: StyleProp<ViewStyle>;
   contentFit?: ImageContentFit;
   rounded?: number;
   overlay?: boolean;
 };
 
+function resolveSource(
+  source: ImageSource | undefined,
+  uri: string | number | null | undefined,
+): ImageSource | null {
+  if (source != null) return source;
+  if (typeof uri === 'number') return uri;
+  if (typeof uri === 'string' && uri.length > 0) return { uri };
+  return null;
+}
+
 /** Swap `uri` later for real REFORGE assets — keeps layout stable. */
 export function MediaImage({
   uri,
+  source,
   style,
   contentFit = 'cover',
   rounded = radius.lg,
   overlay = false,
 }: MediaImageProps) {
+  const resolved = resolveSource(source, uri);
+
   return (
     <View style={[styles.wrap, { borderRadius: rounded }, style]}>
-      {uri ? (
-        <Image source={{ uri }} style={styles.image} contentFit={contentFit} transition={250} />
+      {resolved != null ? (
+        <Image source={resolved} style={styles.image} contentFit={contentFit} transition={400} />
       ) : (
         <View style={styles.fallback} />
       )}

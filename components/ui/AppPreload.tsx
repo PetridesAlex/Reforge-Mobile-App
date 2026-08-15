@@ -24,87 +24,145 @@ type AppPreloadProps = {
 const QUOTE_INTERVAL_MS = 2800;
 const EXIT_DURATION_MS = 550;
 const WELCOME_LINE = 'WELCOME TO';
+const WELCOME_BACK_LINE = 'WELCOME BACK';
 const BRAND_LINE = 'REFORGE';
+const ANCHOR_LINE = 'STUDIO';
 
 function firstNameFrom(fullName?: string | null) {
   if (!fullName?.trim()) return null;
   return fullName.trim().split(/\s+/)[0];
 }
 
-function GraffitiLine({
+/** Sharp italic wordmark — matches store “REFORGE” line */
+function BrandWordmark({
   text,
-  accent,
   delay = 0,
-  size = 54,
+  accent = false,
 }: {
   text: string;
-  accent?: boolean;
   delay?: number;
-  size?: number;
+  accent?: boolean;
 }) {
-  const letters = text.split('');
-  const animsRef = useRef<Animated.Value[]>([]);
-  if (animsRef.current.length !== letters.length) {
-    animsRef.current = letters.map(() => new Animated.Value(0));
-  }
-  const anims = animsRef.current;
+  const opacity = useRef(new Animated.Value(0)).current;
+  const translateY = useRef(new Animated.Value(18)).current;
+  const scale = useRef(new Animated.Value(0.94)).current;
 
   useEffect(() => {
-    anims.forEach((anim) => anim.setValue(0));
+    opacity.setValue(0);
+    translateY.setValue(18);
+    scale.setValue(0.94);
     const timer = setTimeout(() => {
-      Animated.stagger(
-        55,
-        anims.map((anim) =>
-          Animated.spring(anim, {
-            toValue: 1,
-            friction: 6,
-            tension: 90,
-            useNativeDriver: true,
-          }),
-        ),
-      ).start();
+      Animated.parallel([
+        Animated.timing(opacity, {
+          toValue: 1,
+          duration: 480,
+          easing: Easing.out(Easing.cubic),
+          useNativeDriver: true,
+        }),
+        Animated.spring(translateY, {
+          toValue: 0,
+          friction: 8,
+          tension: 72,
+          useNativeDriver: true,
+        }),
+        Animated.spring(scale, {
+          toValue: 1,
+          friction: 7,
+          tension: 60,
+          useNativeDriver: true,
+        }),
+      ]).start();
     }, delay);
     return () => clearTimeout(timer);
-  }, [anims, delay, text]);
+  }, [delay, opacity, scale, text, translateY]);
 
   return (
-    <View style={styles.graffitiRow}>
-      {letters.map((char, index) => {
-        const anim = anims[index];
-        if (!anim) return null;
-        const isSpace = char === ' ';
-        const translateY = anim.interpolate({
-          inputRange: [0, 1],
-          outputRange: [28, 0],
-        });
-        const rotate = anim.interpolate({
-          inputRange: [0, 1],
-          outputRange: [`${index % 2 === 0 ? -8 : 8}deg`, `${(index % 3) - 1}deg`],
-        });
-        const scale = anim.interpolate({
-          inputRange: [0, 1],
-          outputRange: [0.7, 1],
-        });
+    <Animated.Text
+      style={[
+        styles.wordmark,
+        accent && styles.wordmarkAccent,
+        { opacity, transform: [{ translateY }, { scale }] },
+      ]}
+      numberOfLines={1}
+      adjustsFontSizeToFit
+      minimumFontScale={0.55}>
+      {text}
+    </Animated.Text>
+  );
+}
 
-        return (
-          <Animated.Text
-            key={`${char}-${index}`}
-            style={[
-              styles.graffitiLetter,
-              accent && styles.graffitiAccent,
-              {
-                fontSize: size,
-                lineHeight: size + 2,
-                width: isSpace ? size * 0.28 : undefined,
-                opacity: anim,
-                transform: [{ translateY }, { rotate }, { scale }],
-              },
-            ]}>
-            {isSpace ? ' ' : char}
-          </Animated.Text>
-        );
-      })}
-    </View>
+/** Heavy lime block — matches store “STORE” weight */
+function BrandAnchor({ text, delay = 0 }: { text: string; delay?: number }) {
+  const opacity = useRef(new Animated.Value(0)).current;
+  const translateY = useRef(new Animated.Value(12)).current;
+
+  useEffect(() => {
+    opacity.setValue(0);
+    translateY.setValue(12);
+    const timer = setTimeout(() => {
+      Animated.parallel([
+        Animated.timing(opacity, {
+          toValue: 1,
+          duration: 420,
+          easing: Easing.out(Easing.cubic),
+          useNativeDriver: true,
+        }),
+        Animated.spring(translateY, {
+          toValue: 0,
+          friction: 9,
+          tension: 70,
+          useNativeDriver: true,
+        }),
+      ]).start();
+    }, delay);
+    return () => clearTimeout(timer);
+  }, [delay, opacity, text, translateY]);
+
+  return (
+    <Animated.Text
+      style={[styles.anchor, { opacity, transform: [{ translateY }] }]}
+      numberOfLines={1}
+      adjustsFontSizeToFit
+      minimumFontScale={0.6}>
+      {text}
+    </Animated.Text>
+  );
+}
+
+function WelcomeLine({ text, delay = 0 }: { text: string; delay?: number }) {
+  const opacity = useRef(new Animated.Value(0)).current;
+  const translateY = useRef(new Animated.Value(10)).current;
+
+  useEffect(() => {
+    opacity.setValue(0);
+    translateY.setValue(10);
+    const timer = setTimeout(() => {
+      Animated.parallel([
+        Animated.timing(opacity, {
+          toValue: 1,
+          duration: 480,
+          easing: Easing.out(Easing.cubic),
+          useNativeDriver: true,
+        }),
+        Animated.spring(translateY, {
+          toValue: 0,
+          friction: 8,
+          tension: 70,
+          useNativeDriver: true,
+        }),
+      ]).start();
+    }, delay);
+    return () => clearTimeout(timer);
+  }, [delay, opacity, text, translateY]);
+
+  return (
+    <Animated.Text
+      style={[styles.welcomeLine, { opacity, transform: [{ translateY }] }]}
+      numberOfLines={1}
+      adjustsFontSizeToFit
+      minimumFontScale={0.75}>
+      {text}
+    </Animated.Text>
   );
 }
 
@@ -131,8 +189,9 @@ export function AppPreload({
   const rootScale = useRef(new Animated.Value(1)).current;
 
   const firstName = useMemo(() => firstNameFrom(userName), [userName]);
-  const welcomeText = firstName ? `WELCOME BACK` : WELCOME_LINE;
+  const welcomeText = firstName ? WELCOME_BACK_LINE : WELCOME_LINE;
   const brandText = firstName ? firstName.toUpperCase() : BRAND_LINE;
+  const showStudioAnchor = !firstName;
 
   useEffect(() => {
     Animated.parallel([
@@ -269,8 +328,9 @@ export function AppPreload({
         </Animated.View>
 
         <View style={styles.welcomeBlock}>
-          <GraffitiLine text={welcomeText} size={34} delay={180} />
-          <GraffitiLine text={brandText} accent size={64} delay={420} />
+          <WelcomeLine text={welcomeText} delay={180} />
+          <BrandWordmark text={brandText} delay={380} accent={Boolean(firstName)} />
+          {showStudioAnchor ? <BrandAnchor text={ANCHOR_LINE} delay={560} /> : null}
           <Animated.View
             style={[
               styles.slash,
@@ -336,31 +396,48 @@ const styles = StyleSheet.create({
   welcomeBlock: {
     alignItems: 'center',
     gap: 2,
+    width: '100%',
+    maxWidth: 420,
+    paddingHorizontal: spacing.sm,
   },
-  graffitiRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'center',
-    alignItems: 'flex-end',
-  },
-  graffitiLetter: {
-    fontFamily: fonts.display,
-    color: colors.text,
-    letterSpacing: 1,
+  welcomeLine: {
+    fontFamily: fonts.sansBold,
+    fontSize: 12,
+    lineHeight: 16,
+    letterSpacing: 4.2,
+    color: 'rgba(255,255,255,0.92)',
+    textAlign: 'center',
     textTransform: 'uppercase',
-    textShadowColor: 'rgba(0,0,0,0.55)',
-    textShadowOffset: { width: 2, height: 3 },
-    textShadowRadius: 0,
+    width: '100%',
+    marginBottom: 6,
   },
-  graffitiAccent: {
+  wordmark: {
+    fontFamily: fonts.wordmark,
+    fontSize: 46,
+    lineHeight: 52,
+    letterSpacing: -0.5,
+    color: colors.text,
+    textAlign: 'center',
+    textTransform: 'uppercase',
+    width: '100%',
+  },
+  wordmarkAccent: {
     color: colors.accent,
-    textShadowColor: 'rgba(200,255,0,0.35)',
-    textShadowOffset: { width: 0, height: 0 },
-    textShadowRadius: 18,
+  },
+  anchor: {
+    fontFamily: fonts.displayHeavy,
+    fontSize: 56,
+    lineHeight: 60,
+    letterSpacing: 1,
+    color: colors.accent,
+    textAlign: 'center',
+    textTransform: 'uppercase',
+    width: '100%',
+    marginTop: -4,
   },
   slash: {
     marginTop: spacing.md,
-    width: 88,
+    width: 72,
     height: 3,
     backgroundColor: colors.accent,
   },

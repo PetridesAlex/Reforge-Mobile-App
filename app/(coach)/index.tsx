@@ -124,10 +124,17 @@ const ADMIN_ACTIONS: Action[] = [
   {
     key: 'challenges',
     title: 'Challenges',
-    meta: 'Gym competitions',
-    href: '/(coach)/admin/challenges',
+    meta: 'Weekly competition',
+    href: '/(coach)/challenges',
     icon: 'trophy-outline',
     accent: true,
+  },
+  {
+    key: 'achievements',
+    title: 'Achievements',
+    meta: 'Awards & catalog',
+    href: '/(coach)/achievements',
+    icon: 'ribbon-outline',
   },
   {
     key: 'staff',

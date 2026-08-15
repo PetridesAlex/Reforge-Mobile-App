@@ -29,13 +29,17 @@ export const radius = {
   full: 999,
 } as const;
 
-/** Loaded via useFonts in root layout — Bebas Neue (display) + DM Sans (UI). */
+/** Loaded via useFonts in root layout — display + UI + REFORGE brand accents. */
 export const fonts = {
   display: 'BebasNeue_400Regular',
   sans: 'DMSans_400Regular',
   sansMedium: 'DMSans_500Medium',
   sansSemiBold: 'DMSans_600SemiBold',
   sansBold: 'DMSans_700Bold',
+  /** Sharp italic wordmark (store “REFORGE” line) */
+  wordmark: 'Exo2_800ExtraBold_Italic',
+  /** Heavy block display (store “STORE” line) */
+  displayHeavy: 'Anton_400Regular',
 } as const;
 
 export const typography = {

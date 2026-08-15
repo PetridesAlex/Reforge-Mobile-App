@@ -1,22 +1,20 @@
-import { getSupabase } from '@/lib/supabase/client';
+import { getSupabase, isSupabaseConfigured } from '@/lib/supabase/client';
 import { formatSupabaseError } from '@/lib/supabase/errors';
+import { evaluateSessionAchievements, mapAchievement } from '@/services/challenges';
 import type { Achievement, MemberAchievement } from '@/types';
 
-export async function listAchievements(): Promise<Achievement[]> {
+export async function listAchievements(opts?: { activeOnly?: boolean }): Promise<Achievement[]> {
+  if (!isSupabaseConfigured()) return [];
   const supabase = getSupabase();
-  const { data, error } = await supabase.from('achievements').select('*').order('title');
+  let q = supabase.from('achievements').select('*').order('title');
+  if (opts?.activeOnly !== false) q = q.eq('is_active', true);
+  const { data, error } = await q;
   if (error) throw new Error(formatSupabaseError(error));
-  return (data ?? []).map((row) => ({
-    id: row.id as string,
-    code: row.code as string,
-    title: row.title as string,
-    description: row.description as string,
-    category: row.category as string,
-    threshold: row.threshold != null ? Number(row.threshold) : null,
-  }));
+  return (data ?? []).map((row) => mapAchievement(row as Record<string, unknown>));
 }
 
 export async function listMemberAchievements(memberId: string): Promise<MemberAchievement[]> {
+  if (!isSupabaseConfigured()) return [];
   const supabase = getSupabase();
   const { data, error } = await supabase
     .from('member_achievements')
@@ -30,58 +28,81 @@ export async function listMemberAchievements(memberId: string): Promise<MemberAc
     achievement_id: row.achievement_id as string,
     unlocked_at: row.unlocked_at as string,
     achievement: row.achievements
-      ? {
-          id: (row.achievements as Record<string, unknown>).id as string,
-          code: (row.achievements as Record<string, unknown>).code as string,
-          title: (row.achievements as Record<string, unknown>).title as string,
-          description: (row.achievements as Record<string, unknown>).description as string,
-          category: (row.achievements as Record<string, unknown>).category as string,
-          threshold:
-            (row.achievements as Record<string, unknown>).threshold != null
-              ? Number((row.achievements as Record<string, unknown>).threshold)
-              : null,
-        }
+      ? mapAchievement(row.achievements as Record<string, unknown>)
       : undefined,
   }));
 }
 
 export async function unlockAfterSession(memberId: string): Promise<string[]> {
+  const result = await evaluateSessionAchievements(memberId);
+  return result.unlocked.map((a) => a.title);
+}
+
+export async function upsertAchievement(input: {
+  id?: string;
+  code: string;
+  title: string;
+  description: string;
+  category: string;
+  threshold?: number | null;
+  rarity?: string;
+  xp_reward?: number;
+  icon_key?: string;
+  is_active?: boolean;
+  award_mode?: 'automatic' | 'manual';
+}): Promise<Achievement> {
   const supabase = getSupabase();
-  const { count } = await supabase
-    .from('workout_sessions')
-    .select('id', { count: 'exact', head: true })
-    .eq('member_id', memberId)
-    .eq('status', 'completed');
-
-  const total = count ?? 0;
-  const catalog = await listAchievements();
-  const owned = await listMemberAchievements(memberId);
-  const ownedCodes = new Set(owned.map((o) => o.achievement?.code).filter(Boolean));
-
-  const toUnlock: Achievement[] = [];
-  for (const a of catalog) {
-    if (ownedCodes.has(a.code)) continue;
-    if (a.code === 'first_session' && total >= 1) toUnlock.push(a);
-    if (a.code === 'sessions_10' && total >= 10) toUnlock.push(a);
-    if (a.code === 'sessions_50' && total >= 50) toUnlock.push(a);
-    if (a.code === 'sessions_100' && total >= 100) toUnlock.push(a);
-    if (a.code === 'new_pr') {
-      const { count: prCount } = await supabase
-        .from('personal_records')
-        .select('id', { count: 'exact', head: true })
-        .eq('member_id', memberId);
-      if ((prCount ?? 0) > 0) toUnlock.push(a);
-    }
+  const payload = {
+    code: input.code.trim().toLowerCase().replace(/\s+/g, '_'),
+    title: input.title.trim(),
+    description: input.description.trim(),
+    category: input.category,
+    threshold: input.threshold ?? null,
+    rarity: input.rarity ?? 'common',
+    xp_reward: input.xp_reward ?? 50,
+    icon_key: input.icon_key ?? 'trophy',
+    is_active: input.is_active ?? true,
+    award_mode: input.award_mode ?? 'automatic',
+  };
+  if (input.id) {
+    const { data, error } = await supabase
+      .from('achievements')
+      .update(payload)
+      .eq('id', input.id)
+      .select('*')
+      .single();
+    if (error) throw new Error(formatSupabaseError(error));
+    return mapAchievement(data as Record<string, unknown>);
   }
-
-  if (toUnlock.length === 0) return [];
-
-  const { error } = await supabase.from('member_achievements').insert(
-    toUnlock.map((a) => ({
-      member_id: memberId,
-      achievement_id: a.id,
-    })),
-  );
+  const { data, error } = await supabase.from('achievements').insert(payload).select('*').single();
   if (error) throw new Error(formatSupabaseError(error));
-  return toUnlock.map((a) => a.title);
+  return mapAchievement(data as Record<string, unknown>);
+}
+
+export async function setAchievementActive(id: string, isActive: boolean): Promise<void> {
+  const supabase = getSupabase();
+  const { error } = await supabase.from('achievements').update({ is_active: isActive }).eq('id', id);
+  if (error) throw new Error(formatSupabaseError(error));
+}
+
+export async function manualAwardAchievement(memberId: string, code: string): Promise<Achievement | null> {
+  const supabase = getSupabase();
+  const { data, error } = await supabase.rpc('manual_award_achievement', {
+    p_member: memberId,
+    p_code: code,
+  });
+  if (error) throw new Error(formatSupabaseError(error));
+  const row = data as Record<string, unknown>;
+  if (!row?.unlocked) return null;
+  return {
+    id: String(row.achievement_id ?? ''),
+    code: String(row.code ?? code),
+    title: String(row.title ?? code),
+    description: String(row.description ?? ''),
+    category: 'special',
+    threshold: null,
+    rarity: (row.rarity as Achievement['rarity']) ?? 'epic',
+    xp_reward: Number(row.xp ?? 0),
+    icon_key: String(row.icon_key ?? 'star'),
+  };
 }

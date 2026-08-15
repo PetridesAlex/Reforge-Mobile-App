@@ -1,4 +1,4 @@
-import { PLACEHOLDER_IMAGES } from '@/constants/media';
+import { PLACEHOLDER_IMAGES, type LocalImageSource } from '@/constants/media';
 import type { AssignedProgramView, Exercise, MuscleGroup } from '@/types';
 import type { WorkoutOfTheDayView } from '@/services/member';
 
@@ -8,7 +8,7 @@ export type WorkoutCategoryConfig = {
   id: WorkoutCategoryId;
   label: string;
   subtitle: string;
-  image: string;
+  image: LocalImageSource | string;
   tint: string;
   muscleGroups: MuscleGroup[];
   wodKeywords: string[];

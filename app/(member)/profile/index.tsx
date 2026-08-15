@@ -7,6 +7,7 @@ import { Ionicons } from '@expo/vector-icons';
 
 import { MemberAppGuide } from '@/components/onboarding/MemberAppGuide';
 import { PerformanceBuildProfile } from '@/components/performance/PerformanceBuildProfile';
+import { TrophyCabinetCard } from '@/components/achievements/TrophyCabinetCard';
 import { AppBottomSheet, SheetFormError } from '@/components/ui/AppBottomSheet';
 import { AppCard } from '@/components/ui/AppCard';
 import { AppInput } from '@/components/ui/AppInput';
@@ -32,6 +33,8 @@ import { colors, fonts, radius, spacing, typography } from '@/constants/theme';
 const BIO_MAX = 280;
 
 const MENU_ITEMS = [
+  { id: 'achievements', label: 'Achievements', icon: 'ribbon-outline' as const, href: '/(member)/achievements' },
+  { id: 'challenges', label: 'Weekly Challenge', icon: 'trophy-outline' as const, href: '/(member)/challenges' },
   { id: 'orders', label: 'My Orders', icon: 'receipt-outline' as const, href: '/(member)/store/orders' },
   { id: 'favorites', label: 'Favorites', icon: 'heart-outline' as const, href: '/(member)/store/favorites' },
   { id: 'store', label: 'Store', icon: 'bag-handle-outline' as const, href: '/(member)/store' },
@@ -340,6 +343,10 @@ export default function ProfileScreen() {
         {error ? <Text style={styles.error}>{error}</Text> : null}
         {success ? <Text style={styles.success}>{success}</Text> : null}
       </View>
+
+      {profile?.id ? (
+        <TrophyCabinetCard memberId={profile.id} memberName={profile.full_name} />
+      ) : null}
 
       <View style={styles.contactHead}>
         <View style={{ flex: 1 }}>

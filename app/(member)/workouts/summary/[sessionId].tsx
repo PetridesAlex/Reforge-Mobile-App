@@ -2,6 +2,7 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 
+import { AchievementUnlockedModal } from '@/components/achievements/AchievementUnlockedModal';
 import { WorkoutSummaryCard } from '@/components/workouts/WorkoutSummaryCard';
 import { WorkoutShareCard } from '@/components/share/WorkoutShareCard';
 import { ErrorState } from '@/components/ui/ErrorState';
@@ -14,8 +15,8 @@ import { evaluateProgression } from '@/lib/training/progression';
 import { useAuth } from '@/hooks/useAuth';
 import { useSupabaseWorkouts } from '@/lib/workouts/config';
 import * as memberService from '@/services/member';
-import * as achievementsService from '@/services/achievements';
-import type { WorkoutSummary } from '@/types';
+import * as challenges from '@/services/challenges';
+import type { Achievement, WorkoutSummary } from '@/types';
 import { colors, fonts, spacing, typography } from '@/constants/theme';
 
 export default function WorkoutSummaryScreen() {
@@ -25,6 +26,8 @@ export default function WorkoutSummaryScreen() {
   const [summary, setSummary] = useState<WorkoutSummary | null>(null);
   const [progressionHint, setProgressionHint] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [unlockedQueue, setUnlockedQueue] = useState<Achievement[]>([]);
+  const [activeUnlock, setActiveUnlock] = useState<Achievement | null>(null);
 
   const load = useCallback(async () => {
     if (!sessionId) return;
@@ -87,7 +90,31 @@ export default function WorkoutSummaryScreen() {
       });
 
       if (profile) {
-        void achievementsService.unlockAfterSession(profile.id).catch(() => undefined);
+        try {
+          const result = await challenges.evaluateSessionAchievements(profile.id);
+          if (result.unlocked.length) {
+            setUnlockedQueue(result.unlocked);
+            setActiveUnlock(result.unlocked[0] ?? null);
+            if (profile.share_achievements !== false && profile.share_activity) {
+              try {
+                const { publishActivityEvent } = await import('@/services/activity.supabase');
+                for (const a of result.unlocked.slice(0, 2)) {
+                  await publishActivityEvent({
+                    memberId: profile.id,
+                    kind: 'milestone',
+                    title: 'Achievement unlocked',
+                    body: `${profile.full_name.split(' ')[0]} unlocked ${a.title}`,
+                    visibility: 'gym',
+                  });
+                }
+              } catch {
+                // activity feed optional
+              }
+            }
+          }
+        } catch {
+          // non-blocking
+        }
       }
       await refreshActiveSession();
     } catch (e) {
@@ -136,6 +163,15 @@ export default function WorkoutSummaryScreen() {
         title="View Progress"
         variant="secondary"
         onPress={() => router.replace('/(member)/progress')}
+      />
+      <AchievementUnlockedModal
+        visible={Boolean(activeUnlock)}
+        achievement={activeUnlock}
+        onClose={() => {
+          const rest = unlockedQueue.slice(1);
+          setUnlockedQueue(rest);
+          setActiveUnlock(rest[0] ?? null);
+        }}
       />
     </Screen>
   );

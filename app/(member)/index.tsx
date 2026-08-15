@@ -3,10 +3,13 @@ import { useCallback, useMemo, useRef, useState } from 'react';
 import { Pressable, RefreshControl, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
+import { WinnerCelebrationModal } from '@/components/achievements/WinnerCelebrationModal';
 import { AppBottomSheet } from '@/components/ui/AppBottomSheet';
 import { AppCard } from '@/components/ui/AppCard';
 import { AthleteHomeDashboard } from '@/components/home/AthleteHomeDashboard';
+import { HomeAchievementsStrip } from '@/components/home/HomeAchievementsStrip';
 import { HomeStoreFeature } from '@/components/home/HomeStoreFeature';
+import { HomeThisWeekChallenge } from '@/components/home/HomeThisWeekChallenge';
 import { Avatar } from '@/components/ui/Avatar';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { ErrorState } from '@/components/ui/ErrorState';
@@ -34,7 +37,8 @@ import {
 import { formatDateLabel, greetingForNow } from '@/lib/utils/dates';
 import * as memberService from '@/services/member';
 import * as community from '@/services/community';
-import type { MemberDashboard } from '@/types';
+import * as challenges from '@/services/challenges';
+import type { MemberDashboard, PendingCelebration } from '@/types';
 import { colors, fonts, radius, spacing, typography } from '@/constants/theme';
 
 const QUICK_ACTIONS = [
@@ -56,6 +60,7 @@ export default function HomeScreen() {
   const [soloSheetOpen, setSoloSheetOpen] = useState(false);
   const [soloFinishing, setSoloFinishing] = useState(false);
   const [chatAlertCount, setChatAlertCount] = useState(0);
+  const [celebration, setCelebration] = useState<PendingCelebration | null>(null);
   const isFirstHomeFocus = useRef(true);
 
   const greeting = useMemo(() => greetingForNow(), [greetingAnimKey]);
@@ -97,6 +102,15 @@ export default function HomeScreen() {
         }
       }
       await refreshActiveSession();
+      try {
+        const pending = await challenges.listPendingCelebrations(profile.id);
+        const win = pending.find((c) =>
+          ['weekly_champion', 'weekly_runner_up', 'weekly_bronze'].includes(c.kind),
+        );
+        setCelebration(win ?? pending[0] ?? null);
+      } catch {
+        // optional until migration applied
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to load');
     } finally {
@@ -214,6 +228,9 @@ export default function HomeScreen() {
         data={data}
         activeSessionId={activeSessionId ?? data.activeSessionId}
       />
+
+      <HomeThisWeekChallenge />
+      <HomeAchievementsStrip />
 
       {chatAlertCount > 0 ? (
         <Pressable
@@ -425,6 +442,26 @@ export default function HomeScreen() {
           />
         ) : null}
       </AppBottomSheet>
+
+      <WinnerCelebrationModal
+        celebration={celebration}
+        onClose={() => {
+          if (celebration) {
+            void challenges.markCelebrationSeen(celebration.id);
+          }
+          setCelebration(null);
+        }}
+        onViewLeaderboard={() => {
+          const challengeId = celebration?.meta?.challenge_id;
+          if (celebration) void challenges.markCelebrationSeen(celebration.id);
+          setCelebration(null);
+          if (typeof challengeId === 'string') {
+            router.push(`/(member)/challenges/${challengeId}`);
+          } else {
+            router.push('/(member)/challenges');
+          }
+        }}
+      />
     </Screen>
   );
 }

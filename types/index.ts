@@ -27,6 +27,8 @@ export type Profile = {
   /** First-run app guide (Home, Workouts, Messages, etc.) */
   app_onboarding_complete?: boolean;
   share_activity?: boolean;
+  /** Opt-in for achievement / challenge win moments */
+  share_achievements?: boolean;
   /** Soft roster flag — false hides member from active studio lists */
   roster_active?: boolean;
   username?: string | null;
@@ -71,7 +73,8 @@ export type Exercise = {
   equipment: string | null;
   description: string | null;
   instructions: string | null;
-  image_url: string | null;
+  /** Remote URL or local Metro asset module id */
+  image_url: string | number | null;
   video_url: string | null;
   created_by: string | null;
   created_at: string;
@@ -460,13 +463,27 @@ export type ReadinessCheckin = {
   created_at: string;
 };
 
+export type AchievementRarity = 'common' | 'rare' | 'epic' | 'legendary';
+export type AchievementCategory =
+  | 'training'
+  | 'performance'
+  | 'consistency'
+  | 'challenges'
+  | 'special'
+  | string;
+
 export type Achievement = {
   id: string;
   code: string;
   title: string;
   description: string;
-  category: string;
+  category: AchievementCategory;
   threshold: number | null;
+  rarity?: AchievementRarity;
+  xp_reward?: number;
+  icon_key?: string;
+  is_active?: boolean;
+  award_mode?: 'automatic' | 'manual';
 };
 
 export type MemberAchievement = {
@@ -475,6 +492,104 @@ export type MemberAchievement = {
   achievement_id: string;
   unlocked_at: string;
   achievement?: Achievement;
+};
+
+export type AthleteXp = {
+  member_id: string;
+  total_xp: number;
+  level: number;
+  level_title: string;
+  xp_into_level: number;
+  xp_for_next: number;
+  updated_at: string;
+};
+
+export type ChallengeScoreType =
+  | 'lowest_time'
+  | 'highest_reps'
+  | 'highest_weight'
+  | 'highest_points'
+  | 'coach_score';
+
+export type WeeklyChallengeStatus = 'draft' | 'scheduled' | 'live' | 'closed' | 'archived';
+
+export type ChallengeMovement = {
+  name: string;
+  reps?: string | null;
+  notes?: string | null;
+};
+
+export type WeeklyChallenge = {
+  id: string;
+  name: string;
+  description: string | null;
+  instructions: string | null;
+  movements: ChallengeMovement[];
+  score_type: ChallengeScoreType;
+  starts_at: string;
+  ends_at: string;
+  status: WeeklyChallengeStatus;
+  xp_participate: number;
+  created_by: string;
+  published_at: string | null;
+  closed_at: string | null;
+  created_at: string;
+  updated_at: string;
+  participant_count?: number;
+  verified_count?: number;
+};
+
+export type ChallengeResultStatus = 'pending' | 'verified' | 'rejected';
+
+export type ChallengeResult = {
+  id: string;
+  challenge_id: string;
+  member_id: string;
+  score_value: number;
+  score_display: string;
+  status: ChallengeResultStatus;
+  is_pr: boolean;
+  previous_score_value: number | null;
+  previous_score_display: string | null;
+  verified_by: string | null;
+  verified_at: string | null;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+  member_name?: string;
+  member_avatar_url?: string | null;
+  rank?: number | null;
+};
+
+export type ChallengePodiumPlace = {
+  place: 1 | 2 | 3;
+  member_id: string;
+  member_name: string;
+  member_avatar_url: string | null;
+  score_display: string;
+  result_id: string;
+};
+
+export type PendingCelebration = {
+  id: string;
+  member_id: string;
+  kind: 'achievement' | 'weekly_champion' | 'weekly_runner_up' | 'weekly_bronze' | 'level_up';
+  title: string;
+  body: string | null;
+  meta: Record<string, unknown>;
+  seen_at: string | null;
+  created_at: string;
+};
+
+export type TrophyCabinet = {
+  achievements: number;
+  gold: number;
+  silver: number;
+  bronze: number;
+  longest_streak: number;
+  personal_records: number;
+  total_workouts: number;
+  rarest: Achievement[];
 };
 
 export type GymChallenge = {

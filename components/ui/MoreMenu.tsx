@@ -40,6 +40,20 @@ export type MoreMenuItem = {
 
 const MEMBER_MENU_ITEMS: readonly MoreMenuItem[] = [
   {
+    id: 'challenges',
+    label: 'Weekly Challenge',
+    description: 'Compete on this week’s workout',
+    icon: 'trophy-outline',
+    href: '/(member)/challenges',
+  },
+  {
+    id: 'achievements',
+    label: 'Achievements',
+    description: 'Badges, XP & progress',
+    icon: 'ribbon-outline',
+    href: '/(member)/achievements',
+  },
+  {
     id: 'store',
     label: 'Store',
     description: 'REFORGE merchandise',
@@ -143,9 +157,16 @@ export const ADMIN_MENU_ITEMS: readonly MoreMenuItem[] = [
   {
     id: 'challenges',
     label: 'Challenges',
-    description: 'Gym competitions',
+    description: 'Weekly competitions & verification',
     icon: 'trophy-outline',
-    href: '/(coach)/admin/challenges',
+    href: '/(coach)/challenges',
+  },
+  {
+    id: 'achievements-mgr',
+    label: 'Achievements',
+    description: 'Catalog & manual awards',
+    icon: 'ribbon-outline',
+    href: '/(coach)/achievements',
   },
   {
     id: 'settings',

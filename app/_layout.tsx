@@ -1,3 +1,4 @@
+import { Anton_400Regular } from '@expo-google-fonts/anton';
 import { BebasNeue_400Regular } from '@expo-google-fonts/bebas-neue';
 import {
   DMSans_400Regular,
@@ -5,6 +6,7 @@ import {
   DMSans_600SemiBold,
   DMSans_700Bold,
 } from '@expo-google-fonts/dm-sans';
+import { Exo2_800ExtraBold_Italic } from '@expo-google-fonts/exo-2';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useFonts } from 'expo-font';
@@ -25,6 +27,8 @@ const MIN_PRELOAD_MS = 7000;
 
 export const appFonts = {
   BebasNeue_400Regular,
+  Exo2_800ExtraBold_Italic,
+  Anton_400Regular,
   DMSans_400Regular,
   DMSans_500Medium,
   DMSans_600SemiBold,

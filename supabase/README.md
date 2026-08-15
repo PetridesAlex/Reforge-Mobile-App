@@ -36,6 +36,8 @@
    - [`migrations/033_fix_profiles_update_recursion.sql`](migrations/033_fix_profiles_update_recursion.sql) — **fix profiles UPDATE WITH CHECK recursion + claim username RPC**
    - [`migrations/034_author_soft_delete_post.sql`](migrations/034_author_soft_delete_post.sql) — **author/admin soft-delete post RPC**
    - [`migrations/035_profile_mood_bio.sql`](migrations/035_profile_mood_bio.sql) — **member bio + daily “how I feel” mood on community profiles**
+   - [`migrations/036_achievements_weekly_challenges.sql`](migrations/036_achievements_weekly_challenges.sql) — **achievements rarity/XP, athlete XP, weekly challenges, results verification, podium RPCs**
+   - [`migrations/037_fix_community_profiles_security_invoker.sql`](migrations/037_fix_community_profiles_security_invoker.sql) — **fix community_profiles Security Definer View advisory**
    - Optional demo catalogue: [`seed/004_store_example_products.sql`](seed/004_store_example_products.sql) — **12 Essentials products (3 per category)**
 3. In **Authentication → Providers**, enable **Email** and **Google**
 4. In **Authentication → URL configuration**:
