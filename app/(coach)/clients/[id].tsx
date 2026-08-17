@@ -17,6 +17,7 @@ import { Screen } from '@/components/ui/Screen';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { BackButton } from '@/components/ui/BackButton';
 import { useAuth } from '@/hooks/useAuth';
+import { labelForPrimaryGoal, labelForTrainingLevel, TRAINING_INTEREST_OPTIONS } from '@/lib/onboarding/types';
 import { canManageStudio } from '@/lib/permissions';
 import { useSupabaseProgress } from '@/lib/progress/config';
 import { formatTime, relativeTime } from '@/lib/utils/dates';
@@ -399,7 +400,83 @@ export default function ClientDetailScreen() {
               style={styles.highlightGlow}
             />
             <Text style={styles.highlightKicker}>GOAL</Text>
-            <Text style={styles.highlightTitle}>{data.goal}</Text>
+            <Text style={styles.highlightTitle}>
+              {labelForPrimaryGoal(data.member.primary_goal) !== 'Athlete'
+                ? labelForPrimaryGoal(data.member.primary_goal)
+                : data.goal}
+            </Text>
+            <View style={styles.highlightDivider} />
+            <View style={styles.profileMetaGrid}>
+              {data.member.training_level ? (
+                <View style={styles.profileMetaItem}>
+                  <Text style={styles.profileMetaLabel}>Level</Text>
+                  <Text style={styles.profileMetaValue}>
+                    {labelForTrainingLevel(data.member.training_level)}
+                  </Text>
+                </View>
+              ) : null}
+              {data.member.training_days_per_week ? (
+                <View style={styles.profileMetaItem}>
+                  <Text style={styles.profileMetaLabel}>Frequency</Text>
+                  <Text style={styles.profileMetaValue}>
+                    {data.member.training_days_per_week} days / week
+                  </Text>
+                </View>
+              ) : null}
+              {data.member.date_of_birth ? (
+                <View style={styles.profileMetaItem}>
+                  <Text style={styles.profileMetaLabel}>Age</Text>
+                  <Text style={styles.profileMetaValue}>
+                    {Math.max(
+                      0,
+                      new Date().getFullYear() -
+                        Number(String(data.member.date_of_birth).slice(0, 4)),
+                    )}
+                  </Text>
+                </View>
+              ) : null}
+              {data.member.created_at ? (
+                <View style={styles.profileMetaItem}>
+                  <Text style={styles.profileMetaLabel}>Joined</Text>
+                  <Text style={styles.profileMetaValue}>
+                    {format(parseISO(data.member.created_at), 'MMM yyyy')}
+                  </Text>
+                </View>
+              ) : null}
+            </View>
+            {data.member.training_interests?.length ? (
+              <>
+                <View style={styles.highlightDivider} />
+                <Text style={styles.profileMetaLabel}>Interests</Text>
+                <Text style={styles.profileMetaValue}>
+                  {data.member.training_interests
+                    .map(
+                      (id) =>
+                        TRAINING_INTEREST_OPTIONS.find((o) => o.id === id)?.label ?? id,
+                    )
+                    .join(' · ')}
+                </Text>
+              </>
+            ) : null}
+            {data.member.preferred_workout_time ||
+            data.member.preferred_workout_duration ||
+            data.member.motivation_type ? (
+              <>
+                <View style={styles.highlightDivider} />
+                <Text style={styles.profileMetaLabel}>Preferences</Text>
+                <Text style={styles.profileMetaValue}>
+                  {[
+                    data.member.preferred_workout_time,
+                    data.member.preferred_workout_duration
+                      ? `${data.member.preferred_workout_duration} min`
+                      : null,
+                    data.member.motivation_type,
+                  ]
+                    .filter(Boolean)
+                    .join(' · ')}
+                </Text>
+              </>
+            ) : null}
             <View style={styles.highlightDivider} />
             <View style={styles.highlightRow}>
               <Ionicons name="calendar-outline" size={16} color={colors.accent} />
@@ -1237,6 +1314,28 @@ const styles = StyleSheet.create({
   highlightDivider: {
     height: 1,
     backgroundColor: 'rgba(255,255,255,0.06)',
+  },
+  profileMetaGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.md,
+  },
+  profileMetaItem: {
+    minWidth: '40%',
+    gap: 2,
+  },
+  profileMetaLabel: {
+    fontFamily: fonts.sansMedium,
+    fontSize: 10,
+    letterSpacing: 1.2,
+    textTransform: 'uppercase',
+    color: colors.textMuted,
+  },
+  profileMetaValue: {
+    fontFamily: fonts.sans,
+    fontSize: 14,
+    color: colors.text,
+    lineHeight: 20,
   },
   highlightRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   highlightCopy: { flex: 1, gap: 2 },

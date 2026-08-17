@@ -69,6 +69,8 @@ export async function signUp(input: {
     phone: input.phone?.trim() || null,
     avatar_url: null,
     role: 'member',
+    onboarding_completed: false,
+    onboarding_step: 1,
     created_at: new Date().toISOString(),
   };
   mockProfiles.push(profile);
@@ -118,15 +120,33 @@ export async function updateProfile(
   userId: string,
   patch: {
     fullName?: string;
+    firstName?: string | null;
+    lastName?: string | null;
     phone?: string | null;
     email?: string;
     communityBio?: string | null;
     communityMood?: string | null;
+    username?: string | null;
+    gender?: string | null;
+    dateOfBirth?: string | null;
+    primaryGoal?: string | null;
+    trainingLevel?: string | null;
+    trainingDaysPerWeek?: number | null;
+    trainingInterests?: string[] | null;
+    preferredWorkoutTime?: string | null;
+    preferredWorkoutDuration?: string | null;
+    motivationType?: string | null;
   },
 ): Promise<Profile> {
   await delay(250);
   const profile = mockProfiles.find((p) => p.id === userId);
   if (!profile) throw new Error('Profile not found');
+  if (patch.firstName !== undefined || patch.lastName !== undefined) {
+    if (patch.firstName !== undefined) profile.first_name = patch.firstName?.trim() || null;
+    if (patch.lastName !== undefined) profile.last_name = patch.lastName?.trim() || null;
+    const joined = [profile.first_name, profile.last_name].filter(Boolean).join(' ').trim();
+    if (joined) profile.full_name = joined;
+  }
   if (patch.fullName != null) {
     const name = patch.fullName.trim();
     if (!name) throw new Error('Name is required');
@@ -150,5 +170,25 @@ export async function updateProfile(
     profile.community_mood = mood;
     profile.community_mood_updated_at = mood ? new Date().toISOString() : null;
   }
+  if (patch.username !== undefined) {
+    profile.username = patch.username?.trim().replace(/^@/, '').toLowerCase() || null;
+  }
+  if (patch.gender !== undefined) profile.gender = patch.gender as Profile['gender'];
+  if (patch.dateOfBirth !== undefined) profile.date_of_birth = patch.dateOfBirth || null;
+  if (patch.primaryGoal !== undefined) profile.primary_goal = patch.primaryGoal;
+  if (patch.trainingLevel !== undefined) profile.training_level = patch.trainingLevel;
+  if (patch.trainingDaysPerWeek !== undefined) {
+    profile.training_days_per_week = patch.trainingDaysPerWeek;
+  }
+  if (patch.trainingInterests !== undefined) {
+    profile.training_interests = patch.trainingInterests ?? [];
+  }
+  if (patch.preferredWorkoutTime !== undefined) {
+    profile.preferred_workout_time = patch.preferredWorkoutTime;
+  }
+  if (patch.preferredWorkoutDuration !== undefined) {
+    profile.preferred_workout_duration = patch.preferredWorkoutDuration;
+  }
+  if (patch.motivationType !== undefined) profile.motivation_type = patch.motivationType;
   return { ...profile };
 }

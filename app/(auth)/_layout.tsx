@@ -1,18 +1,18 @@
 import { Redirect, Stack } from 'expo-router';
 
 import { AppPreload } from '@/components/ui/AppPreload';
-import { homeRouteForRole, useAuth } from '@/hooks/useAuth';
+import { postAuthRoute, useAuth } from '@/hooks/useAuth';
 import { colors } from '@/constants/theme';
 
 export default function AuthLayout() {
-  const { isLoading, isAuthenticated, role, profile } = useAuth();
+  const { isLoading, isAuthenticated, profile } = useAuth();
 
   if (isLoading) {
     return <AppPreload userName={profile?.full_name} />;
   }
 
   if (isAuthenticated) {
-    return <Redirect href={homeRouteForRole(role)} />;
+    return <Redirect href={postAuthRoute(profile)} />;
   }
 
   return (

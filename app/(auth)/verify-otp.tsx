@@ -5,7 +5,7 @@ import { StyleSheet, Text, View } from 'react-native';
 import { AppInput } from '@/components/ui/AppInput';
 import { PrimaryButton } from '@/components/ui/PrimaryButton';
 import { Screen } from '@/components/ui/Screen';
-import { homeRouteForRole, useAuth } from '@/hooks/useAuth';
+import { postAuthRoute, useAuth } from '@/hooks/useAuth';
 import { colors, fonts, spacing, typography } from '@/constants/theme';
 
 export default function VerifyOtpScreen() {
@@ -49,7 +49,7 @@ export default function VerifyOtpScreen() {
     setVerifying(true);
     try {
       const profile = await verifyEmailOtp(email.trim(), code.trim());
-      router.replace(homeRouteForRole(profile.role));
+      router.replace(postAuthRoute(profile));
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Invalid or expired code');
     } finally {

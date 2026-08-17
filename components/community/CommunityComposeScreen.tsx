@@ -30,8 +30,15 @@ import { communityPathsFor, type CommunitySurface } from '@/lib/community/paths'
 import * as feed from '@/services/communityFeed';
 import { colors, fonts, spacing } from '@/constants/theme';
 
-const MAX_IMAGES = 6;
+const MAX_ASSETS = 6;
+const MAX_VIDEOS = 2;
 const CAPTION_MAX = 2200;
+
+type LocalAsset = {
+  uri: string;
+  mediaType: 'image' | 'video';
+  durationSeconds?: number | null;
+};
 
 type MoodId = CommunityMoodId;
 type Mood = CommunityMood;
@@ -73,7 +80,7 @@ export function CommunityComposeScreen({ surface }: Props) {
   const firstName = (profile?.full_name ?? 'athlete').split(' ')[0];
 
   const [body, setBody] = useState('');
-  const [images, setImages] = useState<string[]>([]);
+  const [assets, setAssets] = useState<LocalAsset[]>([]);
   const [existingMedia, setExistingMedia] = useState<{ id: string; uri: string }[]>([]);
   const [username, setUsername] = useState(profile?.username ?? '');
   const [needsUsername] = useState(!profile?.username);
@@ -134,21 +141,41 @@ export function CommunityComposeScreen({ surface }: Props) {
     if (Platform.OS !== 'web') void Haptics.selectionAsync();
   };
 
-  const pickImages = async () => {
+  const pickMedia = async () => {
     if (isEditing) return;
     const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (!permission.granted) {
-      Alert.alert('Photo access needed', 'Allow photo library access to attach images.');
+      Alert.alert('Media access needed', 'Allow library access to attach photos or videos.');
       return;
     }
+    const remaining = MAX_ASSETS - assets.length;
+    if (remaining <= 0) return;
     const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ['images'],
+      mediaTypes: ['images', 'videos'],
       quality: 0.85,
       allowsMultipleSelection: true,
-      selectionLimit: MAX_IMAGES - images.length,
+      selectionLimit: remaining,
+      videoMaxDuration: 60,
     });
     if (result.canceled || !result.assets?.length) return;
-    setImages((prev) => [...prev, ...result.assets.map((a) => a.uri)].slice(0, MAX_IMAGES));
+
+    setAssets((prev) => {
+      let videoCount = prev.filter((a) => a.mediaType === 'video').length;
+      const next = [...prev];
+      for (const a of result.assets) {
+        if (next.length >= MAX_ASSETS) break;
+        const isVideo = a.type === 'video';
+        if (isVideo && videoCount >= MAX_VIDEOS) continue;
+        if (isVideo) videoCount += 1;
+        next.push({
+          uri: a.uri,
+          mediaType: isVideo ? 'video' : 'image',
+          durationSeconds:
+            typeof a.duration === 'number' ? Math.round(a.duration / 1000) : null,
+        });
+      }
+      return next;
+    });
   };
 
   const applyChip = (label: string) => {
@@ -202,8 +229,8 @@ export function CommunityComposeScreen({ surface }: Props) {
 
   const publish = async () => {
     if (!userId) return;
-    if (!body.trim() && (isEditing ? existingMedia.length === 0 : images.length === 0)) {
-      setError('Add a caption or a photo');
+    if (!body.trim() && (isEditing ? existingMedia.length === 0 : assets.length === 0)) {
+      setError('Add a caption, photo, or video');
       return;
     }
     setSaving(true);
@@ -227,7 +254,7 @@ export function CommunityComposeScreen({ surface }: Props) {
       await feed.createCommunityPost({
         authorId: userId,
         body: body.trim(),
-        localImageUris: images,
+        localMedia: assets,
       });
       router.replace(paths.home as '/(member)/community');
     } catch (e) {
@@ -407,8 +434,8 @@ export function CommunityComposeScreen({ surface }: Props) {
           <Text style={styles.label}>MEDIA</Text>
           <Text style={styles.hint}>
             {isEditing
-              ? 'Photos stay as published. Caption edits save instantly.'
-              : `Drop up to ${MAX_IMAGES} photos — make the post feel alive.`}
+              ? 'Media stays as published. Caption edits save instantly.'
+              : `Up to ${MAX_ASSETS} photos or videos (max ${MAX_VIDEOS} videos · ~60s).`}
           </Text>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.thumbs}>
             {isEditing
@@ -417,20 +444,25 @@ export function CommunityComposeScreen({ surface }: Props) {
                     <Image source={{ uri: m.uri }} style={styles.thumb} />
                   </View>
                 ))
-              : images.map((uri) => (
-                  <View key={uri} style={styles.thumbWrap}>
-                    <Image source={{ uri }} style={styles.thumb} />
+              : assets.map((asset) => (
+                  <View key={asset.uri} style={styles.thumbWrap}>
+                    <Image source={{ uri: asset.uri }} style={styles.thumb} />
+                    {asset.mediaType === 'video' ? (
+                      <View style={styles.videoTag}>
+                        <Ionicons name="play" size={12} color={colors.background} />
+                      </View>
+                    ) : null}
                     <Pressable
-                      onPress={() => setImages((prev) => prev.filter((u) => u !== uri))}
+                      onPress={() => setAssets((prev) => prev.filter((u) => u.uri !== asset.uri))}
                       style={styles.remove}>
                       <Ionicons name="close" size={14} color={colors.text} />
                     </Pressable>
                   </View>
                 ))}
-            {!isEditing && images.length < MAX_IMAGES ? (
-              <Pressable onPress={() => void pickImages()} style={styles.addMedia}>
-                <Ionicons name="image-outline" size={22} color={colors.accent} />
-                <Text style={styles.addMediaText}>PHOTO</Text>
+            {!isEditing && assets.length < MAX_ASSETS ? (
+              <Pressable onPress={() => void pickMedia()} style={styles.addMedia}>
+                <Ionicons name="images-outline" size={22} color={colors.accent} />
+                <Text style={styles.addMediaText}>ADD</Text>
               </Pressable>
             ) : null}
           </ScrollView>
@@ -732,6 +764,17 @@ const styles = StyleSheet.create({
   },
   thumbs: { gap: 10, alignItems: 'center', paddingTop: 2 },
   thumbWrap: { position: 'relative' },
+  videoTag: {
+    position: 'absolute',
+    left: 6,
+    bottom: 6,
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.accent,
+  },
   thumb: { width: 96, height: 96, borderRadius: 6 },
   remove: {
     position: 'absolute',

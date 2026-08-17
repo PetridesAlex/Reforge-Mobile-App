@@ -1,6 +1,31 @@
 export type UserRole = 'member' | 'coach' | 'admin';
 
-export type MemberGender = 'male' | 'female' | 'other';
+export type MemberGender = 'male' | 'female' | 'other' | 'prefer_not_to_say';
+
+export type TrainingLevel = 'beginner' | 'intermediate' | 'advanced' | 'competitive';
+
+export type PrimaryGoal =
+  | 'build_strength'
+  | 'build_muscle'
+  | 'improve_endurance'
+  | 'improve_conditioning'
+  | 'lose_body_fat'
+  | 'athletic_performance'
+  | 'improve_mobility'
+  | 'general_fitness'
+  | 'competition_prep';
+
+export type WorkoutTimePreference = 'morning' | 'afternoon' | 'evening' | 'no_preference';
+
+export type WorkoutDurationPreference = '30' | '45' | '60' | '75';
+
+export type MotivationType =
+  | 'progress'
+  | 'competition'
+  | 'community'
+  | 'consistency'
+  | 'performance'
+  | 'personal_goals';
 
 export type BookingStatus = 'pending' | 'confirmed' | 'cancelled' | 'completed';
 
@@ -26,6 +51,21 @@ export type Profile = {
   gender?: MemberGender | null;
   /** First-run app guide (Home, Workouts, Messages, etc.) */
   app_onboarding_complete?: boolean;
+  /** Athlete profile onboarding wizard completed */
+  onboarding_completed?: boolean;
+  onboarding_completed_at?: string | null;
+  /** Resume cursor for profile onboarding (1–10) */
+  onboarding_step?: number;
+  first_name?: string | null;
+  last_name?: string | null;
+  date_of_birth?: string | null;
+  primary_goal?: PrimaryGoal | string | null;
+  training_level?: TrainingLevel | string | null;
+  training_days_per_week?: number | null;
+  training_interests?: string[] | null;
+  preferred_workout_time?: WorkoutTimePreference | string | null;
+  preferred_workout_duration?: WorkoutDurationPreference | string | null;
+  motivation_type?: MotivationType | string | null;
   share_activity?: boolean;
   /** Opt-in for achievement / challenge win moments */
   share_achievements?: boolean;
@@ -427,6 +467,8 @@ export type WorkoutSummary = {
   personalRecords: string[];
   completionPct?: number;
   workoutName?: string | null;
+  estimatedCalories?: number | null;
+  xpEarned?: number;
   highlight?: {
     title: string;
     subtitle: string;
@@ -579,6 +621,20 @@ export type PendingCelebration = {
   meta: Record<string, unknown>;
   seen_at: string | null;
   created_at: string;
+};
+
+export type WeeklyAwardSpotlight = {
+  id: string;
+  week_start: string;
+  member_id: string;
+  achievement_id: string;
+  achievement_code: string;
+  title: string;
+  coach_note: string | null;
+  awarded_by: string | null;
+  created_at: string;
+  member_name?: string;
+  member_avatar_url?: string | null;
 };
 
 export type TrophyCabinet = {

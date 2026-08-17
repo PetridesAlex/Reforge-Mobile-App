@@ -8,6 +8,7 @@ import {
 } from 'date-fns';
 
 import type { MemberPlacementSummary } from '@/lib/scheduling/placement';
+import { labelForPrimaryGoal } from '@/lib/onboarding/types';
 import { useSupabaseAdmin } from '@/lib/admin/config';
 import { useSupabasePrograms } from '@/lib/programs/config';
 import { getSupabase } from '@/lib/supabase/client';
@@ -101,7 +102,7 @@ async function getClientDetailFromSupabase(memberId: string) {
     assignment: null,
     latestWeight: null,
     workoutsThisWeek: 0,
-    goal: 'Build strength & lean mass',
+    goal: labelForPrimaryGoal((member as Profile).primary_goal),
     nextSession: undefined,
     notes: [],
     sessions: [],
@@ -265,7 +266,7 @@ export async function getClientDetail(memberId: string) {
     assignment,
     latestWeight,
     workoutsThisWeek: 3,
-    goal: 'Build strength & lean mass',
+    goal: labelForPrimaryGoal(member.primary_goal),
     nextSession: bookings.find(
       (b) => (b.status === 'confirmed' || b.status === 'pending') && parseISO(b.starts_at) > new Date(),
     ),
@@ -1115,15 +1116,8 @@ export async function createExercise(
   coachId: string,
   input: Omit<Exercise, 'id' | 'created_at' | 'created_by'>,
 ): Promise<Exercise> {
-  await delay(250);
-  const exercise: Exercise = {
-    ...input,
-    id: newId('ex'),
-    created_by: coachId,
-    created_at: new Date().toISOString(),
-  };
-  mockExercises.push(exercise);
-  return exercise;
+  const { createExercise: createExerciseService } = await import('@/services/exercises');
+  return createExerciseService(coachId, input);
 }
 
 export async function getAvailability(coachId: string): Promise<CoachAvailability[]> {

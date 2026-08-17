@@ -47,10 +47,22 @@ export async function updateProfile(
   userId: string,
   patch: {
     fullName?: string;
+    firstName?: string | null;
+    lastName?: string | null;
     phone?: string | null;
     email?: string;
     communityBio?: string | null;
     communityMood?: string | null;
+    username?: string | null;
+    gender?: string | null;
+    dateOfBirth?: string | null;
+    primaryGoal?: string | null;
+    trainingLevel?: string | null;
+    trainingDaysPerWeek?: number | null;
+    trainingInterests?: string[] | null;
+    preferredWorkoutTime?: string | null;
+    preferredWorkoutDuration?: string | null;
+    motivationType?: string | null;
   },
 ): Promise<{ profile: Profile; emailConfirmRequired?: boolean }> {
   return useMock()

@@ -13,6 +13,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 
 import { AchievementMark } from '@/components/achievements/AchievementMark';
 import { AppInput } from '@/components/ui/AppInput';
+import { Avatar } from '@/components/ui/Avatar';
 import { BackButton } from '@/components/ui/BackButton';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { ErrorState } from '@/components/ui/ErrorState';
@@ -25,6 +26,8 @@ import * as achievements from '@/services/achievements';
 import * as adminService from '@/services/admin';
 import type { Achievement } from '@/types';
 import { colors, fonts, radius, spacing } from '@/constants/theme';
+
+type AwardMember = { id: string; full_name: string; avatar_url?: string | null };
 
 const CATEGORIES = [
   { id: 'training', label: 'Training' },
@@ -63,9 +66,26 @@ export default function AchievementManagerScreen() {
   const [rarity, setRarity] = useState<string>('epic');
   const [xp, setXp] = useState('250');
   const [awardCode, setAwardCode] = useState('');
+  const [coachNote, setCoachNote] = useState('');
   const [memberQuery, setMemberQuery] = useState('');
-  const [members, setMembers] = useState<Array<{ id: string; full_name: string }>>([]);
+  const [members, setMembers] = useState<AwardMember[]>([]);
   const [selectedMemberId, setSelectedMemberId] = useState<string | null>(null);
+  const [awardToast, setAwardToast] = useState<string | null>(null);
+
+  const manualAwards = useMemo(
+    () => rows.filter((r) => r.award_mode === 'manual' && r.is_active !== false),
+    [rows],
+  );
+
+  const selectedMember = useMemo(
+    () => members.find((m) => m.id === selectedMemberId) ?? null,
+    [members, selectedMemberId],
+  );
+
+  const selectedAward = useMemo(
+    () => manualAwards.find((a) => a.code === awardCode) ?? null,
+    [manualAwards, awardCode],
+  );
 
   const load = useCallback(async () => {
     if (!allowed) return;
@@ -138,16 +158,33 @@ export default function AchievementManagerScreen() {
 
   const openAward = async () => {
     setAwardOpen(true);
-    setAwardCode(rows.find((r) => r.award_mode === 'manual')?.code ?? 'coachs_choice');
+    setCoachNote('');
+    setMemberQuery('');
+    setSelectedMemberId(null);
+    setAwardCode(
+      rows.find((r) => r.award_mode === 'manual' && r.is_active !== false)?.code ?? 'coachs_choice',
+    );
     try {
       const all = await adminService.listMembers();
-      setMembers(all.map((m) => ({ id: m.member.id, full_name: m.member.full_name })));
+      setMembers(
+        all.map((m) => ({
+          id: m.member.id,
+          full_name: m.member.full_name,
+          avatar_url: m.member.avatar_url,
+        })),
+      );
     } catch {
       try {
         if (!profile) throw new Error('no profile');
         const { getClients } = await import('@/services/coach');
         const clients = await getClients(profile.id, { studioWide: role === 'admin' });
-        setMembers(clients.map((c) => ({ id: c.member.id, full_name: c.member.full_name })));
+        setMembers(
+          clients.map((c) => ({
+            id: c.member.id,
+            full_name: c.member.full_name,
+            avatar_url: c.member.avatar_url,
+          })),
+        );
       } catch {
         setMembers([]);
       }
@@ -158,9 +195,12 @@ export default function AchievementManagerScreen() {
     if (!selectedMemberId || !awardCode) return;
     setSaving(true);
     try {
-      await achievements.manualAwardAchievement(selectedMemberId, awardCode);
+      await achievements.manualAwardAchievement(selectedMemberId, awardCode, coachNote);
       setAwardOpen(false);
       setSelectedMemberId(null);
+      setCoachNote('');
+      setAwardToast('Awarded — live as Award of the Week.');
+      setTimeout(() => setAwardToast(null), 4200);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Award failed');
     } finally {
@@ -243,6 +283,13 @@ export default function AchievementManagerScreen() {
           <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
         </Pressable>
       </View>
+
+      {awardToast ? (
+        <Pressable onPress={() => setAwardToast(null)} style={styles.toast}>
+          <Ionicons name="ribbon" size={16} color={colors.background} />
+          <Text style={styles.toastText}>{awardToast}</Text>
+        </Pressable>
+      ) : null}
 
       {error ? <ErrorState message={error} onRetry={load} /> : null}
 
@@ -390,17 +437,57 @@ export default function AchievementManagerScreen() {
           </View>
 
           <View style={styles.formSection}>
-            <Text style={styles.sectionLabel}>Achievement</Text>
-            <AppInput
-              label="Achievement code"
-              value={awardCode}
-              onChangeText={setAwardCode}
-              autoCapitalize="none"
-            />
+            <Text style={styles.sectionLabel}>Badge</Text>
+            <Text style={styles.helper}>Manual awards become Award of the Week for the gym.</Text>
+            <View style={styles.badgeGrid}>
+              {manualAwards.map((a) => {
+                const on = awardCode === a.code;
+                return (
+                  <Pressable
+                    key={a.id}
+                    onPress={() => setAwardCode(a.code)}
+                    style={[styles.badgeCard, on && styles.badgeCardOn]}>
+                    <AchievementMark
+                      name={a.icon_key ?? a.code}
+                      size={18}
+                      color={on ? colors.accent : colors.textMuted}
+                    />
+                    <Text style={[styles.badgeTitle, on && styles.badgeTitleOn]} numberOfLines={2}>
+                      {a.title}
+                    </Text>
+                    <Text style={styles.badgeXp}>+{a.xp_reward ?? 250} XP</Text>
+                  </Pressable>
+                );
+              })}
+              {!manualAwards.length ? (
+                <Text style={styles.helper}>No manual achievements in the catalog yet.</Text>
+              ) : null}
+            </View>
           </View>
 
           <View style={styles.formSection}>
             <Text style={styles.sectionLabel}>Athlete</Text>
+            {selectedMember ? (
+              <View style={styles.selectedAthlete}>
+                <Avatar
+                  name={selectedMember.full_name}
+                  uri={selectedMember.avatar_url}
+                  size={48}
+                />
+                <View style={styles.selectedCopy}>
+                  <Text style={styles.selectedKicker}>SELECTED</Text>
+                  <Text style={styles.selectedName}>{selectedMember.full_name}</Text>
+                  {selectedAward ? (
+                    <Text style={styles.selectedAward} numberOfLines={1}>
+                      {selectedAward.title}
+                    </Text>
+                  ) : null}
+                </View>
+                <Ionicons name="checkmark-circle" size={22} color={colors.accent} />
+              </View>
+            ) : (
+              <Text style={styles.helper}>Pick an athlete below.</Text>
+            )}
             <AppInput label="Find athlete" value={memberQuery} onChangeText={setMemberQuery} />
             <ScrollView style={styles.memberList} nestedScrollEnabled>
               {filteredMembers.slice(0, 16).map((m) => {
@@ -410,6 +497,7 @@ export default function AchievementManagerScreen() {
                     key={m.id}
                     onPress={() => setSelectedMemberId(m.id)}
                     style={[styles.memberRow, on && styles.memberOn]}>
+                    <Avatar name={m.full_name} uri={m.avatar_url} size={36} />
                     <Text style={[styles.memberName, on && styles.memberNameOn]}>{m.full_name}</Text>
                     {on ? <Ionicons name="checkmark-circle" size={18} color={colors.accent} /> : null}
                   </Pressable>
@@ -421,9 +509,19 @@ export default function AchievementManagerScreen() {
             </ScrollView>
           </View>
 
+          <View style={styles.formSection}>
+            <Text style={styles.sectionLabel}>Coach note</Text>
+            <AppInput
+              label="Optional one-liner"
+              value={coachNote}
+              onChangeText={(t) => setCoachNote(t.slice(0, 120))}
+              placeholder="Shown on Award of the Week"
+            />
+          </View>
+
           <View style={styles.formFooter}>
             <PrimaryButton
-              title={saving ? 'Awarding…' : 'Award achievement'}
+              title={saving ? 'Awarding…' : 'Award — make Award of the Week'}
               onPress={() => void onAward()}
               disabled={saving || !selectedMemberId || !awardCode.trim()}
             />
@@ -694,8 +792,8 @@ const styles = StyleSheet.create({
   memberRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingVertical: 14,
+    gap: 12,
+    paddingVertical: 12,
     paddingHorizontal: spacing.md,
     borderRadius: radius.md,
     borderWidth: 1,
@@ -708,9 +806,84 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(200,255,0,0.08)',
   },
   memberName: {
+    flex: 1,
     fontFamily: fonts.sansSemiBold,
     fontSize: 14,
     color: colors.textSecondary,
   },
   memberNameOn: { color: colors.text },
+  badgeGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  badgeCard: {
+    width: '48%',
+    flexGrow: 1,
+    minWidth: '46%',
+    gap: 6,
+    padding: spacing.md,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.1)',
+    backgroundColor: colors.surface,
+  },
+  badgeCardOn: {
+    borderColor: colors.accent,
+    backgroundColor: 'rgba(200,255,0,0.12)',
+  },
+  badgeTitle: {
+    fontFamily: fonts.sansSemiBold,
+    fontSize: 13,
+    color: colors.textMuted,
+  },
+  badgeTitleOn: { color: colors.text },
+  badgeXp: {
+    fontFamily: fonts.sansBold,
+    fontSize: 11,
+    color: colors.accent,
+  },
+  selectedAthlete: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    padding: spacing.md,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: 'rgba(200,255,0,0.45)',
+    backgroundColor: 'rgba(200,255,0,0.1)',
+  },
+  selectedCopy: { flex: 1, gap: 2 },
+  selectedKicker: {
+    fontFamily: fonts.sansBold,
+    fontSize: 10,
+    letterSpacing: 1.6,
+    color: colors.accent,
+  },
+  selectedName: {
+    fontFamily: fonts.sansSemiBold,
+    fontSize: 16,
+    color: colors.text,
+  },
+  selectedAward: {
+    fontFamily: fonts.sans,
+    fontSize: 12,
+    color: colors.textSecondary,
+  },
+  toast: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginBottom: spacing.md,
+    paddingVertical: 12,
+    paddingHorizontal: spacing.md,
+    borderRadius: radius.md,
+    backgroundColor: colors.accent,
+  },
+  toastText: {
+    flex: 1,
+    fontFamily: fonts.sansSemiBold,
+    fontSize: 13,
+    color: colors.background,
+  },
 });

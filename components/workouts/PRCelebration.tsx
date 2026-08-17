@@ -1,10 +1,11 @@
-import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Modal, Pressable, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
 import { useEffect } from 'react';
 import { Platform } from 'react-native';
+import Animated, { FadeIn, FadeInDown, ZoomIn } from 'react-native-reanimated';
 
-import { PrimaryButton } from '@/components/ui/PrimaryButton';
+import { CelebrationContinueButton } from '@/components/ui/CelebrationContinueButton';
 import type { DetectedPr } from '@/lib/training/prDetection';
 import { colors, fonts, radius, spacing } from '@/constants/theme';
 
@@ -17,6 +18,7 @@ type Props = {
 
 export function PRCelebration({ visible, prs, exerciseName, onContinue }: Props) {
   const top = prs[0];
+  const { height } = useWindowDimensions();
 
   useEffect(() => {
     if (visible && Platform.OS !== 'web') {
@@ -31,24 +33,40 @@ export function PRCelebration({ visible, prs, exerciseName, onContinue }: Props)
 
   return (
     <Modal visible={visible} transparent animationType="fade" statusBarTranslucent>
-      <View style={styles.backdrop}>
+      <View style={[styles.backdrop, { minHeight: height }]}>
         <LinearGradient
-          colors={['rgba(200,255,0,0.18)', 'rgba(10,10,10,0.96)']}
-          style={styles.card}>
-          <Text style={styles.kicker}>NEW PERSONAL RECORD</Text>
-          <Text style={styles.title}>{exerciseName ?? 'Exercise'}</Text>
-          <Text style={styles.value}>{top.label}</Text>
+          colors={['rgba(200,255,0,0.35)', 'rgba(10,10,10,0.97)', '#0A0A0A']}
+          locations={[0, 0.45, 1]}
+          style={StyleSheet.absoluteFillObject}
+        />
+        <Animated.View entering={FadeIn.duration(400)} style={styles.stage}>
+          <Animated.Text entering={FadeInDown.delay(80).duration(420)} style={styles.kicker}>
+            NEW PERSONAL RECORD
+          </Animated.Text>
+          <Animated.Text
+            entering={ZoomIn.delay(140).springify().damping(14)}
+            style={styles.title}>
+            {(exerciseName ?? 'Exercise').toUpperCase()}
+          </Animated.Text>
+          <Animated.Text entering={FadeInDown.delay(220).duration(450)} style={styles.value}>
+            {top.label}
+          </Animated.Text>
           {top.previousValue != null ? (
             <Text style={styles.prev}>Previous best · {top.previousValue}</Text>
-          ) : null}
+          ) : (
+            <Text style={styles.prev}>First recorded best</Text>
+          )}
           {delta != null && delta > 0 ? (
             <View style={styles.deltaPill}>
               <Text style={styles.deltaText}>+{delta}</Text>
             </View>
           ) : null}
-          <PrimaryButton title="CONTINUE" onPress={onContinue} style={styles.btn} />
-        </LinearGradient>
-        <Pressable onPress={onContinue} style={styles.dismiss} />
+          {prs.length > 1 ? (
+            <Text style={styles.more}>{prs.length - 1} more PR{prs.length > 2 ? 's' : ''} this set</Text>
+          ) : null}
+          <CelebrationContinueButton onPress={onContinue} style={styles.btn} />
+        </Animated.View>
+        <Pressable onPress={onContinue} style={styles.dismiss} accessibilityLabel="Dismiss" />
       </View>
     </Modal>
   );
@@ -57,58 +75,66 @@ export function PRCelebration({ visible, prs, exerciseName, onContinue }: Props)
 const styles = StyleSheet.create({
   backdrop: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.82)',
     alignItems: 'center',
     justifyContent: 'center',
     padding: spacing.lg,
   },
-  card: {
+  stage: {
     width: '100%',
-    maxWidth: 420,
-    borderRadius: radius.xl,
-    borderWidth: 1,
-    borderColor: 'rgba(200,255,0,0.35)',
-    padding: spacing.xl,
-    gap: spacing.sm,
+    maxWidth: 440,
     alignItems: 'center',
+    gap: spacing.sm,
+    zIndex: 2,
+    paddingVertical: spacing.xxl,
   },
   kicker: {
-    fontFamily: fonts.sansMedium,
-    fontSize: 11,
-    letterSpacing: 2.4,
+    fontFamily: fonts.sansBold,
+    fontSize: 12,
+    letterSpacing: 2.8,
     color: colors.accent,
   },
   title: {
     fontFamily: fonts.display,
-    fontSize: 40,
-    lineHeight: 42,
+    fontSize: 48,
+    lineHeight: 50,
     color: colors.text,
-    textTransform: 'uppercase',
     textAlign: 'center',
   },
   value: {
     fontFamily: fonts.display,
-    fontSize: 32,
+    fontSize: 40,
+    lineHeight: 42,
     color: colors.accent,
     letterSpacing: 1,
+    textAlign: 'center',
+    marginTop: spacing.sm,
   },
   prev: {
     fontFamily: fonts.sans,
-    fontSize: 13,
+    fontSize: 14,
     color: colors.textSecondary,
+    textAlign: 'center',
   },
   deltaPill: {
     marginTop: spacing.sm,
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.xs,
     borderRadius: radius.full,
-    backgroundColor: 'rgba(200,255,0,0.14)',
+    backgroundColor: 'rgba(200,255,0,0.16)',
+    borderWidth: 1,
+    borderColor: 'rgba(200,255,0,0.4)',
   },
   deltaText: {
-    fontFamily: fonts.sansSemiBold,
-    fontSize: 14,
+    fontFamily: fonts.sansBold,
+    fontSize: 16,
     color: colors.accent,
   },
-  btn: { marginTop: spacing.lg, alignSelf: 'stretch' },
-  dismiss: { ...StyleSheet.absoluteFillObject, zIndex: -1 },
+  more: {
+    fontFamily: fonts.sans,
+    fontSize: 12,
+    color: colors.textMuted,
+    marginTop: 4,
+  },
+  btn: { marginTop: spacing.xl, alignSelf: 'stretch' },
+  dismiss: { ...StyleSheet.absoluteFillObject, zIndex: 1 },
 });

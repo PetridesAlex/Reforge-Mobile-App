@@ -6,7 +6,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { AppInput } from '@/components/ui/AppInput';
 import { PrimaryButton } from '@/components/ui/PrimaryButton';
 import { Screen } from '@/components/ui/Screen';
-import { homeRouteForRole, useAuth } from '@/hooks/useAuth';
+import { postAuthRoute, useAuth } from '@/hooks/useAuth';
 import { colors, fonts, radius, spacing, typography } from '@/constants/theme';
 
 const BENEFITS = [
@@ -38,7 +38,7 @@ export default function RegisterScreen() {
         fullName: fullName.trim(),
         phone: phone.trim() || undefined,
       });
-      router.replace(homeRouteForRole(profile.role));
+      router.replace(postAuthRoute(profile));
     } catch (e) {
       if (e instanceof Error && e.message === 'CONFIRM_EMAIL') {
         router.replace({

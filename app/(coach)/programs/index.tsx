@@ -29,12 +29,23 @@ import * as adminService from '@/services/admin';
 import * as coachService from '@/services/coach';
 import { toWeekStartKey } from '@/services/weeks.supabase';
 import { formatPrescription, parsePrescription } from '@/lib/workouts/prescription';
-import type { Exercise, Program, ProgramExercise } from '@/types';
+import type { Exercise, MuscleGroup, Program, ProgramExercise } from '@/types';
 import type { WeekDayAttendance } from '@/services/weeks.supabase';
 import { colors, fonts, radius, spacing, typography } from '@/constants/theme';
 
 type WeekBoard = NonNullable<Awaited<ReturnType<typeof coachService.getWeekBoard>>>;
 type DaySlot = WeekBoard['board'][number];
+
+const QUICK_MUSCLES: MuscleGroup[] = [
+  'Chest',
+  'Back',
+  'Shoulders',
+  'Arms',
+  'Legs',
+  'Core',
+  'Cardio',
+  'Mobility',
+];
 
 export default function ProgramsScreen() {
   const { profile } = useAuth();
@@ -72,6 +83,8 @@ function AdminWeekBoard({ profileId }: { profileId: string }) {
   const [pendingExercise, setPendingExercise] = useState<Exercise | null>(null);
   const [configSaving, setConfigSaving] = useState(false);
   const [sheetError, setSheetError] = useState<string | null>(null);
+  const [creatingExercise, setCreatingExercise] = useState(false);
+  const [createMuscle, setCreateMuscle] = useState<MuscleGroup>('Legs');
   const [attendance, setAttendance] = useState<WeekDayAttendance[]>([]);
   const [attendanceLoading, setAttendanceLoading] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<DaySlot | null>(null);
@@ -86,6 +99,14 @@ function AdminWeekBoard({ profileId }: { profileId: string }) {
         ex.equipment?.toLowerCase().includes(q),
     );
   }, [exerciseQuery, exercises]);
+
+  const exactNameMatch = useMemo(() => {
+    const q = exerciseQuery.trim().toLowerCase();
+    if (!q) return null;
+    return exercises.find((ex) => ex.name.toLowerCase() === q) ?? null;
+  }, [exerciseQuery, exercises]);
+
+  const canCreateFromQuery = exerciseQuery.trim().length >= 2 && !exactNameMatch;
 
   const load = useCallback(async () => {
     try {
@@ -243,6 +264,44 @@ function AdminWeekBoard({ profileId }: { profileId: string }) {
     setPendingExercise(exercise);
   };
 
+  /** Create a new library exercise from the search box, then open sets/reps. */
+  const createAndConfigure = async () => {
+    const name = exerciseQuery.trim();
+    if (name.length < 2) {
+      setSheetError('Type an exercise name (at least 2 characters).');
+      return;
+    }
+    if (!activeSlot?.day && !dayName.trim()) {
+      setPickerOpen(false);
+      setSheetError('Name the workout first, then add exercises.');
+      return;
+    }
+    setCreatingExercise(true);
+    setSheetError(null);
+    try {
+      const created = await coachService.createExercise(profileId, {
+        name,
+        muscle_group: createMuscle,
+        equipment: null,
+        description: null,
+        instructions: null,
+        image_url: null,
+        video_url: null,
+      });
+      setExercises((prev) => {
+        if (prev.some((e) => e.id === created.id)) return prev;
+        return [...prev, created].sort((a, b) => a.name.localeCompare(b.name));
+      });
+      setPickerOpen(false);
+      setExerciseQuery('');
+      setPendingExercise(created);
+    } catch (e) {
+      setSheetError(e instanceof Error ? e.message : 'Could not create exercise');
+    } finally {
+      setCreatingExercise(false);
+    }
+  };
+
   /** Ensure the day row exists; return the fresh slot (never rely on stale React state). */
   const ensureDayReady = async (slot: DaySlot, name: string): Promise<DaySlot | null> => {
     if (programId == null) return null;
@@ -342,8 +401,9 @@ function AdminWeekBoard({ profileId }: { profileId: string }) {
       const next = refreshed?.board.find((d) => d.dayOfWeek === ready.dayOfWeek) ?? null;
       setActiveSlot(next);
       setPendingExercise(null);
-      setPickerOpen(false);
-      setToast(`${exercise.name} added`);
+      setPickerOpen(true);
+      setExerciseQuery('');
+      setToast(`${exercise.name} added — pick the next one`);
     } catch (e) {
       const message = e instanceof Error ? e.message : 'Could not add exercise';
       setSheetError(message);
@@ -757,7 +817,7 @@ function AdminWeekBoard({ profileId }: { profileId: string }) {
                   <Ionicons name="barbell-outline" size={22} color={colors.textMuted} />
                   <Text style={styles.emptyDayTitle}>No movements yet</Text>
                   <Text style={styles.emptyDayCopy}>
-                    Name the workout, then add exercises with sets, rounds, and reps.
+                    Name the workout, then add exercises. You can create new movements on the spot and set sets, rounds & reps.
                   </Text>
                   <PrimaryButton
                     title="Add first exercise"
@@ -854,22 +914,62 @@ function AdminWeekBoard({ profileId }: { profileId: string }) {
       <Modal visible={showPicker} animationType="fade" transparent onRequestClose={() => setPickerOpen(false)}>
         <View style={styles.modalBackdrop}>
           <View style={styles.modalSheet}>
-            <Text style={styles.modalKicker}>STEP 1</Text>
-            <Text style={styles.modalTitle}>Pick exercise</Text>
-            <Text style={styles.modalHint}>Search by name or muscle — then set sets, rounds & reps</Text>
+            <Text style={styles.modalKicker}>STEP 1 · EXERCISE</Text>
+            <Text style={styles.modalTitle}>Add exercise</Text>
+            <Text style={styles.modalHint}>
+              Search the library, or type a new name to create it — then set sets, rounds & reps.
+            </Text>
+            {sheetError && pickerOpen ? <Text style={styles.sheetError}>{sheetError}</Text> : null}
             <AppInput
               value={exerciseQuery}
-              onChangeText={setExerciseQuery}
-              placeholder="Search squat, pull-up, chest…"
-              autoCapitalize="none"
+              onChangeText={(t) => {
+                setExerciseQuery(t);
+                if (sheetError) setSheetError(null);
+              }}
+              placeholder="e.g. Back squat, Pull-up, DB press…"
+              autoCapitalize="words"
               autoCorrect={false}
             />
+
+            {canCreateFromQuery ? (
+              <View style={styles.createBox}>
+                <Text style={styles.createLabel}>NEW EXERCISE · MUSCLE</Text>
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  contentContainerStyle={styles.muscleRow}>
+                  {QUICK_MUSCLES.map((m) => {
+                    const active = createMuscle === m;
+                    return (
+                      <Pressable
+                        key={m}
+                        onPress={() => setCreateMuscle(m)}
+                        style={[styles.muscleChip, active && styles.muscleChipOn]}>
+                        <Text style={[styles.muscleChipText, active && styles.muscleChipTextOn]}>
+                          {m}
+                        </Text>
+                      </Pressable>
+                    );
+                  })}
+                </ScrollView>
+                <PrimaryButton
+                  title={
+                    creatingExercise
+                      ? 'Creating…'
+                      : `Create “${exerciseQuery.trim()}” & set reps`
+                  }
+                  onPress={() => void createAndConfigure()}
+                  disabled={creatingExercise}
+                />
+              </View>
+            ) : null}
+
             <ScrollView style={styles.exScroll} keyboardShouldPersistTaps="handled">
               {filteredExercises.length === 0 ? (
                 <Text style={styles.exMeta}>
                   {exercises.length === 0
-                    ? 'No exercises in your library yet. Add movements under Exercises, then come back.'
-                    : 'No exercises match that search.'}
+                    ? 'Library is empty. Type a name above, pick a muscle, then create & set reps.'
+                    : 'No match. Create it with the button above.'}
                 </Text>
               ) : (
                 filteredExercises.map((ex) => (
@@ -890,11 +990,12 @@ function AdminWeekBoard({ profileId }: { profileId: string }) {
               )}
             </ScrollView>
             <PrimaryButton
-              title="Back"
+              title="Done adding"
               variant="secondary"
               onPress={() => {
                 setPickerOpen(false);
                 setSheetError(null);
+                setExerciseQuery('');
               }}
             />
           </View>
@@ -1415,4 +1516,42 @@ const styles = StyleSheet.create({
     borderBottomColor: colors.border,
   },
   pickerAdd: { ...typography.title, color: colors.accent, fontSize: 22 },
+  createBox: {
+    gap: spacing.sm,
+    padding: spacing.md,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: 'rgba(200,255,0,0.28)',
+    backgroundColor: 'rgba(200,255,0,0.06)',
+  },
+  createLabel: {
+    fontFamily: fonts.sansMedium,
+    fontSize: 10,
+    letterSpacing: 1.6,
+    color: colors.accent,
+  },
+  muscleRow: {
+    gap: 8,
+    paddingBottom: 4,
+  },
+  muscleChip: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: radius.full,
+    backgroundColor: colors.surfaceElevated,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  muscleChipOn: {
+    borderColor: colors.accent,
+    backgroundColor: 'rgba(200,255,0,0.16)',
+  },
+  muscleChipText: {
+    fontFamily: fonts.sansMedium,
+    fontSize: 12,
+    color: colors.textSecondary,
+  },
+  muscleChipTextOn: {
+    color: colors.accent,
+  },
 });

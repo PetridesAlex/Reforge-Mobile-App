@@ -312,6 +312,14 @@ export const mockProfiles: Profile[] = [
 for (const profile of mockProfiles) {
   if (profile.role === 'member') {
     profile.app_onboarding_complete = true;
+    profile.onboarding_completed = true;
+    profile.onboarding_step = 10;
+    if (!profile.primary_goal) profile.primary_goal = 'build_strength';
+    if (!profile.training_level) profile.training_level = 'intermediate';
+    if (!profile.training_days_per_week) profile.training_days_per_week = 4;
+    if (!profile.training_interests?.length) {
+      profile.training_interests = ['strength', 'hypertrophy'];
+    }
   }
 }
 

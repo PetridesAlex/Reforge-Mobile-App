@@ -387,7 +387,7 @@ export default function CoachProfileScreen() {
             style={styles.brandRule}
           />
         </View>
-        <ReforgeLogo width={128} height={32} />
+        <ReforgeLogo width={44} height={44} />
         <View style={styles.brandCaptionRow}>
           <Text style={styles.brandWord}>REFORGE</Text>
           <View style={styles.brandDot} />

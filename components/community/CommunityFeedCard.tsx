@@ -111,6 +111,12 @@ export function CommunityFeedCard({
               <Text style={styles.name} numberOfLines={1}>
                 {post.author_name}
               </Text>
+              {post.media?.some((m) => m.media_type === 'video') ? (
+                <View style={styles.videoBadge}>
+                  <Ionicons name="videocam" size={10} color={colors.accent} />
+                  <Text style={styles.roleText}>VIDEO</Text>
+                </View>
+              ) : null}
               {post.author_role !== 'member' ? (
                 <View style={styles.roleBadge}>
                   <Text style={styles.roleText}>{post.author_role.toUpperCase()}</Text>
@@ -271,6 +277,17 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(200,255,0,0.28)',
   },
   pinBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 2,
+    backgroundColor: 'rgba(200,255,0,0.12)',
+    borderWidth: 1,
+    borderColor: 'rgba(200,255,0,0.28)',
+  },
+  videoBadge: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 3,

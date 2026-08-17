@@ -3,7 +3,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
 import { useEffect } from 'react';
 
-import { PrimaryButton } from '@/components/ui/PrimaryButton';
+import { CelebrationContinueButton } from '@/components/ui/CelebrationContinueButton';
 import type { Achievement } from '@/types';
 import { colors, fonts, radius, spacing } from '@/constants/theme';
 
@@ -34,7 +34,7 @@ export function AchievementUnlockedModal({ visible, achievement, onClose }: Prop
           <Text style={styles.title}>{achievement.title}</Text>
           <Text style={styles.body}>{achievement.description}</Text>
           <Text style={styles.xp}>+{achievement.xp_reward ?? 50} XP</Text>
-          <PrimaryButton title="Continue" onPress={onClose} />
+          <CelebrationContinueButton onPress={onClose} />
         </Pressable>
       </Pressable>
     </Modal>

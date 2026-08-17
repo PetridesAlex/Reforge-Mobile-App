@@ -51,6 +51,13 @@ export function AthleteHomeDashboard({ data, activeSessionId }: Props) {
           <View style={styles.track}>
             <View style={[styles.fill, { width: `${weeklyPct}%` }]} />
           </View>
+          <Text style={styles.goalNudge}>
+            {Math.max(0, goal - data.weeklyProgress.completed) === 0
+              ? 'Weekly goal done'
+              : Math.max(0, goal - data.weeklyProgress.completed) === 1
+                ? '1 workout away from your weekly goal'
+                : `${Math.max(0, goal - data.weeklyProgress.completed)} away from weekly goal`}
+          </Text>
         </View>
         <View style={styles.metricCard}>
           <Text style={styles.metricKicker}>STREAK</Text>
@@ -58,23 +65,28 @@ export function AthleteHomeDashboard({ data, activeSessionId }: Props) {
             <Ionicons name="flame" size={18} color={colors.accent} />
             <AnimatedCount value={data.weeklyProgress.streak} style={styles.metricValue} />
           </View>
-          <Text style={styles.metricLabel}>DAYS</Text>
+          <Text style={styles.metricLabel}>DAY STREAK</Text>
         </View>
       </Animated.View>
 
-      <Animated.View entering={FadeInDown.delay(80).duration(420)} style={styles.prCard}>
-        <Text style={styles.metricKicker}>LATEST PR</Text>
-        {data.latestPr ? (
-          <>
-            <Text style={styles.prName}>{data.latestPr.exerciseName}</Text>
-            <Text style={styles.prValue}>{data.latestPr.label}</Text>
-          </>
-        ) : (
-          <>
-            <Text style={styles.prName}>No personal records yet</Text>
-            <Text style={styles.prHint}>Complete your first workout and REFORGE will track PRs.</Text>
-          </>
-        )}
+      <Animated.View entering={FadeInDown.delay(80).duration(420)}>
+        <Pressable
+          onPress={() => router.push('/(member)/progress/prs')}
+          style={({ pressed }) => [styles.prCard, pressed && styles.pressed]}>
+          <Text style={styles.metricKicker}>MY PRS</Text>
+          {data.latestPr ? (
+            <>
+              <Text style={styles.prName}>{data.latestPr.exerciseName}</Text>
+              <Text style={styles.prValue}>{data.latestPr.label}</Text>
+              <Text style={styles.prHint}>Tap to open all personal records</Text>
+            </>
+          ) : (
+            <>
+              <Text style={styles.prName}>No personal records yet</Text>
+              <Text style={styles.prHint}>Complete your first workout and REFORGE will track PRs.</Text>
+            </>
+          )}
+        </Pressable>
       </Animated.View>
 
       {data.recentCoachMessage ? (
@@ -204,6 +216,13 @@ const styles = StyleSheet.create({
     fontSize: 11,
     letterSpacing: 1,
     color: colors.textSecondary,
+  },
+  goalNudge: {
+    fontFamily: fonts.sans,
+    fontSize: 11,
+    lineHeight: 14,
+    color: colors.textMuted,
+    marginTop: 4,
   },
   track: {
     height: 5,

@@ -360,10 +360,34 @@ export async function updatePassword(password: string): Promise<void> {
 
 export async function updateAvatar(userId: string, uri: string): Promise<Profile> {
   const supabase = getSupabase();
-  // When storage buckets are configured, upload the file first and store the public URL.
+  let avatarUrl = uri;
+
+  // Upload local / picked images to the public avatars bucket when possible.
+  const isRemote = /^https?:\/\//i.test(uri);
+  if (!isRemote) {
+    try {
+      const extMatch = uri.split('.').pop()?.toLowerCase();
+      const ext = extMatch && extMatch.length <= 5 ? extMatch.replace(/[^a-z0-9]/g, '') : 'jpg';
+      const path = `${userId}/${Date.now()}.${ext || 'jpg'}`;
+      const response = await fetch(uri);
+      const blob = await response.blob();
+      const contentType = blob.type || 'image/jpeg';
+      const { error: uploadError } = await supabase.storage.from('avatars').upload(path, blob, {
+        upsert: true,
+        contentType,
+      });
+      if (!uploadError) {
+        const { data: pub } = supabase.storage.from('avatars').getPublicUrl(path);
+        if (pub?.publicUrl) avatarUrl = pub.publicUrl;
+      }
+    } catch {
+      // Fall back to storing the local URI so profile save still works.
+    }
+  }
+
   const { data, error } = await supabase
     .from('profiles')
-    .update({ avatar_url: uri })
+    .update({ avatar_url: avatarUrl })
     .eq('id', userId)
     .select('*')
     .single();
@@ -375,16 +399,48 @@ export async function updateProfile(
   userId: string,
   patch: {
     fullName?: string;
+    firstName?: string | null;
+    lastName?: string | null;
     phone?: string | null;
     email?: string;
     communityBio?: string | null;
     communityMood?: string | null;
+    username?: string | null;
+    gender?: string | null;
+    dateOfBirth?: string | null;
+    primaryGoal?: string | null;
+    trainingLevel?: string | null;
+    trainingDaysPerWeek?: number | null;
+    trainingInterests?: string[] | null;
+    preferredWorkoutTime?: string | null;
+    preferredWorkoutDuration?: string | null;
+    motivationType?: string | null;
   },
 ): Promise<{ profile: Profile; emailConfirmRequired?: boolean }> {
   const supabase = getSupabase();
-  const corePayload: Record<string, string | null> = {};
+  const corePayload: Record<string, unknown> = {};
   let emailConfirmRequired = false;
   const moodRequested = patch.communityMood !== undefined;
+
+  if (patch.firstName !== undefined || patch.lastName !== undefined) {
+    const { data: current } = await supabase
+      .from('profiles')
+      .select('first_name, last_name, full_name')
+      .eq('id', userId)
+      .single();
+    const first =
+      patch.firstName !== undefined
+        ? (patch.firstName?.trim() || null)
+        : ((current?.first_name as string | null) ?? null);
+    const last =
+      patch.lastName !== undefined
+        ? (patch.lastName?.trim() || null)
+        : ((current?.last_name as string | null) ?? null);
+    corePayload.first_name = first;
+    corePayload.last_name = last;
+    const joined = [first, last].filter(Boolean).join(' ').trim();
+    if (joined) corePayload.full_name = joined;
+  }
 
   if (patch.fullName != null) {
     const name = patch.fullName.trim();
@@ -399,6 +455,26 @@ export async function updateProfile(
     if (bio && bio.length > 280) throw new Error('Bio must be 280 characters or less');
     corePayload.community_bio = bio;
   }
+  if (patch.username !== undefined) {
+    corePayload.username = patch.username?.trim().replace(/^@/, '').toLowerCase() || null;
+  }
+  if (patch.gender !== undefined) corePayload.gender = patch.gender;
+  if (patch.dateOfBirth !== undefined) corePayload.date_of_birth = patch.dateOfBirth || null;
+  if (patch.primaryGoal !== undefined) corePayload.primary_goal = patch.primaryGoal;
+  if (patch.trainingLevel !== undefined) corePayload.training_level = patch.trainingLevel;
+  if (patch.trainingDaysPerWeek !== undefined) {
+    corePayload.training_days_per_week = patch.trainingDaysPerWeek;
+  }
+  if (patch.trainingInterests !== undefined) {
+    corePayload.training_interests = patch.trainingInterests ?? [];
+  }
+  if (patch.preferredWorkoutTime !== undefined) {
+    corePayload.preferred_workout_time = patch.preferredWorkoutTime;
+  }
+  if (patch.preferredWorkoutDuration !== undefined) {
+    corePayload.preferred_workout_duration = patch.preferredWorkoutDuration;
+  }
+  if (patch.motivationType !== undefined) corePayload.motivation_type = patch.motivationType;
 
   if (patch.email != null) {
     const nextEmail = patch.email.trim().toLowerCase();

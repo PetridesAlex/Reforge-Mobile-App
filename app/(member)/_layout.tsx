@@ -12,7 +12,8 @@ import {
   ProfileTabIcon,
   ProgressTabIcon,
 } from '@/components/ui/TabIcons';
-import { useAuth } from '@/hooks/useAuth';
+import { postAuthRoute, useAuth } from '@/hooks/useAuth';
+import { needsProfileOnboarding } from '@/services/memberOnboarding';
 import { useMessageToast } from '@/hooks/useMessageToast';
 import { StoreCartProvider } from '@/hooks/useStoreCart';
 import { hasCompletedAppOnboarding, completeMemberAppOnboarding } from '@/services/onboarding';
@@ -22,6 +23,7 @@ export default function MemberLayout() {
   const { isLoading, isAuthenticated, role, profile, refreshProfile } = useAuth();
   const { toast, dismiss, open } = useMessageToast(
     role === 'member' ? profile?.id : undefined,
+    { role },
   );
   const [guideDismissed, setGuideDismissed] = useState(false);
 
@@ -56,6 +58,10 @@ export default function MemberLayout() {
 
   if (role === 'coach' || role === 'admin') {
     return <Redirect href="/(coach)" />;
+  }
+
+  if (needsProfileOnboarding(profile)) {
+    return <Redirect href={postAuthRoute(profile)} />;
   }
 
   return (
@@ -124,9 +130,10 @@ export default function MemberLayout() {
         <Tabs.Screen name="store" options={{ href: null }} />
         <Tabs.Screen name="challenges" options={{ href: null }} />
         <Tabs.Screen name="achievements" options={{ href: null }} />
+        <Tabs.Screen name="league" options={{ href: null }} />
       </Tabs>
 
-      <MessageToast notification={toast} onPress={open} onDismiss={dismiss} />
+      <MessageToast notification={toast} onPress={(n) => void open(n)} onDismiss={dismiss} />
 
       <MemberAppGuide
         visible={showAppGuide}

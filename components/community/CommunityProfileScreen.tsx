@@ -1,47 +1,65 @@
 import { router, useLocalSearchParams } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
-import { Pressable, RefreshControl, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
+import {
+  Pressable,
+  RefreshControl,
+  StyleSheet,
+  Text,
+  View,
+  useWindowDimensions,
+} from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 
 import { MediaImage } from '@/components/ui/MediaImage';
 import { Avatar } from '@/components/ui/Avatar';
 import { BackButton } from '@/components/ui/BackButton';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { ErrorState } from '@/components/ui/ErrorState';
+import { PrimaryButton } from '@/components/ui/PrimaryButton';
 import { Screen } from '@/components/ui/Screen';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { useAuth } from '@/hooks/useAuth';
 import { activeMoodForDisplay } from '@/lib/community/moods';
 import { communityPathsFor, type CommunitySurface } from '@/lib/community/paths';
+import * as community from '@/services/community';
+import * as challenges from '@/services/challenges';
 import * as feed from '@/services/communityFeed';
-import type { CommunityPost, CommunityProfilePublic } from '@/types';
-import { colors, fonts, spacing } from '@/constants/theme';
+import type { AthleteXp, CommunityPost, CommunityProfilePublic, TrophyCabinet } from '@/types';
+import { colors, fonts, radius, spacing } from '@/constants/theme';
 
 type Props = { surface: CommunitySurface };
 
 export function CommunityProfileScreen({ surface }: Props) {
   const paths = communityPathsFor(surface);
   const { userId: paramId } = useLocalSearchParams<{ userId: string }>();
-  const { profile } = useAuth();
+  const { profile, role } = useAuth();
   const viewerId = profile?.id ?? '';
   const { width } = useWindowDimensions();
   const cell = Math.floor((Math.min(width, 520) - 32 - 8) / 3);
 
   const [person, setPerson] = useState<CommunityProfilePublic | null>(null);
   const [posts, setPosts] = useState<CommunityPost[]>([]);
+  const [xp, setXp] = useState<AthleteXp | null>(null);
+  const [trophy, setTrophy] = useState<TrophyCabinet | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [messaging, setMessaging] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     if (!paramId || !viewerId) return;
     try {
       setError(null);
-      const [p, rows] = await Promise.all([
+      const [p, rows, athleteXp, cabinet] = await Promise.all([
         feed.getCommunityProfile(paramId),
         feed.listAuthorPosts(paramId, viewerId),
+        challenges.getAthleteXp(paramId).catch(() => null),
+        challenges.getTrophyCabinet(paramId).catch(() => null),
       ]);
       setPerson(p);
       setPosts(rows.filter((r) => r.visibility === 'community' || r.author_id === viewerId));
+      setXp(athleteXp);
+      setTrophy(cabinet);
       if (!p) setError('Profile not available');
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to load profile');
@@ -55,6 +73,22 @@ export function CommunityProfileScreen({ surface }: Props) {
     void load();
   }, [load]);
 
+  const openMessage = async () => {
+    if (!profile || !person || person.id === viewerId) return;
+    setMessaging(true);
+    try {
+      const thread =
+        surface === 'coach'
+          ? await community.createCoachAthleteChat(profile.id, person.id, role)
+          : await community.createPrivateChat(profile.id, person.id);
+      router.push(`${paths.messages}/${thread.id}` as never);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not open chat');
+    } finally {
+      setMessaging(false);
+    }
+  };
+
   if (loading) {
     return (
       <Screen>
@@ -64,8 +98,7 @@ export function CommunityProfileScreen({ surface }: Props) {
     );
   }
 
-  const settingsHref =
-    surface === 'coach' ? '/(coach)/profile' : '/(member)/profile';
+  const settingsHref = surface === 'coach' ? '/(coach)/profile' : '/(member)/profile';
 
   const todayMood = person
     ? activeMoodForDisplay(person.community_mood, person.community_mood_updated_at)
@@ -105,13 +138,57 @@ export function CommunityProfileScreen({ surface }: Props) {
             </View>
           ) : null}
           {person.community_bio ? <Text style={styles.bio}>{person.community_bio}</Text> : null}
+
+          {xp || trophy ? (
+            <View style={styles.progressStrip}>
+              <View style={styles.stat}>
+                <Text style={styles.statValue}>{xp ? `LVL ${xp.level}` : '—'}</Text>
+                <Text style={styles.statLabel}>LEVEL</Text>
+              </View>
+              <View style={styles.stat}>
+                <Text style={styles.statValue}>{trophy?.longest_streak ?? 0}d</Text>
+                <Text style={styles.statLabel}>STREAK</Text>
+              </View>
+              <View style={styles.stat}>
+                <Text style={styles.statValue}>{trophy?.total_workouts ?? 0}</Text>
+                <Text style={styles.statLabel}>WORKOUTS</Text>
+              </View>
+              <View style={styles.stat}>
+                <Text style={styles.statValue}>{trophy?.personal_records ?? 0}</Text>
+                <Text style={styles.statLabel}>PRS</Text>
+              </View>
+            </View>
+          ) : null}
+
           {person.id === viewerId ? (
             <Pressable
               onPress={() => router.push(settingsHref as '/(member)/profile')}
               style={styles.settingsLink}>
               <Text style={styles.settingsText}>EDIT PROFILE</Text>
             </Pressable>
-          ) : null}
+          ) : (
+            <View style={styles.ctaRow}>
+              <View style={{ flex: 1 }}>
+                <PrimaryButton
+                  title={messaging ? 'Opening…' : 'Message'}
+                  onPress={() => void openMessage()}
+                  disabled={messaging}
+                  icon={
+                    messaging ? undefined : (
+                      <Ionicons name="chatbubble" size={16} color={colors.background} />
+                    )
+                  }
+                />
+              </View>
+              {surface === 'coach' && person.role === 'member' ? (
+                <Pressable
+                  onPress={() => router.push(`/(coach)/clients/${person.id}` as never)}
+                  style={styles.progressLink}>
+                  <Text style={styles.progressLinkText}>PROGRESS</Text>
+                </Pressable>
+              ) : null}
+            </View>
+          )}
         </View>
       ) : null}
 
@@ -132,11 +209,18 @@ export function CommunityProfileScreen({ surface }: Props) {
                 onPress={() => router.push(paths.post(post.id) as '/(member)/community/post/[id]')}
                 style={[styles.cell, { width: cell, height: cell }]}>
                 {cover ? (
-                  <MediaImage
-                    uri={cover.public_url ?? cover.storage_path}
-                    rounded={2}
-                    style={{ width: cell, height: cell }}
-                  />
+                  <>
+                    <MediaImage
+                      uri={cover.public_url ?? cover.storage_path}
+                      rounded={2}
+                      style={{ width: cell, height: cell }}
+                    />
+                    {cover.media_type === 'video' ? (
+                      <View style={styles.videoMark}>
+                        <Ionicons name="play" size={12} color={colors.background} />
+                      </View>
+                    ) : null}
+                  </>
                 ) : (
                   <View style={styles.textCell}>
                     <Text style={styles.textCellBody} numberOfLines={4}>
@@ -200,7 +284,7 @@ const styles = StyleSheet.create({
   },
   moodText: {
     fontFamily: fonts.sansSemiBold,
-    fontSize: 13,
+    fontSize: 12,
     color: colors.text,
   },
   bio: {
@@ -209,22 +293,74 @@ const styles = StyleSheet.create({
     lineHeight: 20,
     color: colors.textSecondary,
     textAlign: 'center',
-    marginTop: 4,
     paddingHorizontal: spacing.md,
   },
-  settingsLink: { marginTop: 8 },
+  progressStrip: {
+    flexDirection: 'row',
+    marginTop: spacing.md,
+    width: '100%',
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: 'rgba(200,255,0,0.22)',
+    backgroundColor: colors.surfaceElevated,
+    overflow: 'hidden',
+  },
+  stat: {
+    flex: 1,
+    alignItems: 'center',
+    paddingVertical: spacing.md,
+    gap: 2,
+  },
+  statValue: {
+    fontFamily: fonts.display,
+    fontSize: 18,
+    color: colors.accent,
+  },
+  statLabel: {
+    fontFamily: fonts.sansBold,
+    fontSize: 9,
+    letterSpacing: 1,
+    color: colors.textMuted,
+  },
+  settingsLink: {
+    marginTop: spacing.sm,
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+  },
   settingsText: {
     fontFamily: fonts.sansBold,
     fontSize: 11,
     letterSpacing: 1.4,
     color: colors.accent,
   },
+  ctaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    width: '100%',
+    marginTop: spacing.sm,
+    paddingHorizontal: spacing.sm,
+  },
+  progressLink: {
+    paddingHorizontal: 14,
+    paddingVertical: 14,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: 'rgba(200,255,0,0.35)',
+    backgroundColor: 'rgba(200,255,0,0.08)',
+  },
+  progressLinkText: {
+    fontFamily: fonts.sansBold,
+    fontSize: 11,
+    letterSpacing: 1.2,
+    color: colors.accent,
+  },
   section: {
     fontFamily: fonts.sansBold,
     fontSize: 11,
     letterSpacing: 1.8,
-    color: colors.accent,
-    marginBottom: spacing.md,
+    color: colors.textMuted,
+    marginBottom: spacing.sm,
   },
   grid: {
     flexDirection: 'row',
@@ -236,16 +372,27 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     backgroundColor: colors.surface,
   },
+  videoMark: {
+    position: 'absolute',
+    top: 6,
+    right: 6,
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.accent,
+  },
   textCell: {
     flex: 1,
     padding: 8,
     justifyContent: 'center',
-    backgroundColor: 'rgba(255,255,255,0.04)',
+    backgroundColor: colors.surfaceElevated,
   },
   textCellBody: {
     fontFamily: fonts.sans,
     fontSize: 11,
-    lineHeight: 15,
+    lineHeight: 14,
     color: colors.textSecondary,
   },
 });

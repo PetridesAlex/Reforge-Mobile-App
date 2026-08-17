@@ -5,8 +5,10 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 
 import { AnimatedCount } from '@/components/ui/AnimatedCount';
+import { AwardOfTheWeekCard } from '@/components/achievements/AwardOfTheWeekCard';
 import { AppCard } from '@/components/ui/AppCard';
 import { Avatar } from '@/components/ui/Avatar';
+import { MessageAlertsButton } from '@/components/community/MessageAlertsButton';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { ErrorState } from '@/components/ui/ErrorState';
 import { LiveDateTime } from '@/components/ui/LiveDateTime';
@@ -290,13 +292,21 @@ export default function CoachDashboardScreen() {
             />
             <View style={styles.heroTopBar}>
               <View style={styles.heroActions}>
-                <Pressable
-                  onPress={() => router.push('/(coach)/messages')}
-                  hitSlop={10}
-                  style={({ pressed }) => [styles.heroIconBtn, pressed && styles.pressed]}
-                  accessibilityLabel="Open class chats">
-                  <Ionicons name="chatbubbles-outline" size={20} color={colors.accent} />
-                </Pressable>
+                {profile?.id ? (
+                  <MessageAlertsButton
+                    userId={profile.id}
+                    role={profile.role}
+                    accessibilityLabel="Open class chats and message alerts"
+                  />
+                ) : (
+                  <Pressable
+                    onPress={() => router.push('/(coach)/messages')}
+                    hitSlop={10}
+                    style={({ pressed }) => [styles.heroIconBtn, pressed && styles.pressed]}
+                    accessibilityLabel="Open class chats">
+                    <Ionicons name="chatbubbles-outline" size={20} color={colors.accent} />
+                  </Pressable>
+                )}
                 <MoreMenu items={studioMenuItems} title="Studio" />
                 <View style={styles.heroAvatarWrap}>
                   <Avatar
@@ -330,6 +340,8 @@ export default function CoachDashboardScreen() {
             </View>
           </View>
         </View>
+
+        <AwardOfTheWeekCard audience="coach" />
 
         {/* KPI tiles */}
         <View style={styles.kpiGrid}>
@@ -641,10 +653,12 @@ export default function CoachDashboardScreen() {
           tintColor={colors.accent}
         />
       }>
-      <ReforgeLogo width={140} height={36} variant="badge" style={styles.logo} />
+      <ReforgeLogo width={48} height={48} variant="badge" style={styles.logo} />
       <Text style={styles.badge}>COACH DASHBOARD</Text>
       <Text style={styles.title}>Dashboard</Text>
       <Text style={styles.subtitle}>Limassol training floor overview</Text>
+
+      <AwardOfTheWeekCard audience="coach" />
 
       <View style={styles.stats}>
         <AppCard style={styles.statCard}>
@@ -682,8 +696,10 @@ export default function CoachDashboardScreen() {
         onActionPress={() => router.push('/(coach)/messages')}
       />
       <AppCard accent onPress={() => router.push('/(coach)/messages')} style={styles.card}>
-        <Text style={styles.cardTitle}>Afternoon groups</Text>
-        <Text style={styles.cardMeta}>Message 5:30 and 6:30 class chats</Text>
+        <Text style={styles.cardTitle}>Athlete & class messages</Text>
+        <Text style={styles.cardMeta}>
+          Open chats to reply. New messages also pop up as alerts on this screen.
+        </Text>
       </AppCard>
 
       <SectionHeader title="Recently completed workouts" />

@@ -45,7 +45,7 @@ export default function ResetPasswordScreen() {
   return (
     <Screen contentContainerStyle={styles.content}>
       <View style={styles.header}>
-        <ReforgeLogo width={200} height={52} />
+        <ReforgeLogo width={112} height={112} />
         <Text style={styles.title}>Reset password</Text>
         <Text style={styles.subtitle}>Choose a new password for your account</Text>
       </View>

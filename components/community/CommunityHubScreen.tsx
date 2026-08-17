@@ -8,8 +8,10 @@ import {
   Text,
   View,
 } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 
 import { CommunityFeedCard } from '@/components/community/CommunityFeedCard';
+import { CommunityPeopleTab } from '@/components/community/CommunityPeopleTab';
 import {
   CommunityPostActionsSheet,
   type PostActionItem,
@@ -26,9 +28,9 @@ import { useSupabaseCommunity } from '@/lib/community/config';
 import { canModerateCommunity } from '@/lib/permissions';
 import * as feed from '@/services/communityFeed';
 import type { ActivityFeedEvent, CommunityFeedCursor, CommunityPost } from '@/types';
-import { colors, fonts, spacing } from '@/constants/theme';
+import { colors, fonts, radius, spacing } from '@/constants/theme';
 
-type TabKey = 'community' | 'gym';
+type TabKey = 'feed' | 'people' | 'gym';
 
 type Props = {
   surface: CommunitySurface;
@@ -39,7 +41,7 @@ export function CommunityHubScreen({ surface }: Props) {
   const { profile } = useAuth();
   const userId = profile?.id ?? '';
   const canModerate = canModerateCommunity(profile?.role);
-  const [tab, setTab] = useState<TabKey>('community');
+  const [tab, setTab] = useState<TabKey>('feed');
   const [posts, setPosts] = useState<CommunityPost[]>([]);
   const [cursor, setCursor] = useState<CommunityFeedCursor | null>(null);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -84,8 +86,13 @@ export function CommunityHubScreen({ surface }: Props) {
   }, []);
 
   useEffect(() => {
+    if (tab === 'people') {
+      setLoading(false);
+      setRefreshing(false);
+      return;
+    }
     setLoading(true);
-    if (tab === 'community') void loadFeed();
+    if (tab === 'feed') void loadFeed();
     else void loadGym();
   }, [tab, loadFeed, loadGym]);
 
@@ -234,7 +241,7 @@ export function CommunityHubScreen({ surface }: Props) {
     }
   };
 
-  if (loading) {
+  if (loading && tab !== 'people') {
     return (
       <Screen>
         <Skeleton height={40} width="50%" style={{ marginTop: spacing.md }} />
@@ -246,50 +253,64 @@ export function CommunityHubScreen({ surface }: Props) {
   return (
     <Screen
       refreshControl={
-        <RefreshControl
-          refreshing={refreshing}
-          onRefresh={() => {
-            setRefreshing(true);
-            if (tab === 'community') void loadFeed();
-            else void loadGym();
-          }}
-          tintColor={colors.accent}
-        />
-      }>
-      <View style={styles.topBar}>
-        <View style={{ flex: 1 }}>
-          <Text style={styles.kicker}>REFORGE</Text>
-          <Text style={styles.title}>COMMUNITY</Text>
-        </View>
-        {canModerate && paths.moderate ? (
-          <HeaderIconButton
-            icon="shield-checkmark-outline"
-            onPress={() => router.push(paths.moderate as '/(coach)/admin/community')}
-            accessibilityLabel="Moderate community"
+        tab === 'people' ? undefined : (
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={() => {
+              setRefreshing(true);
+              if (tab === 'feed') void loadFeed();
+              else void loadGym();
+            }}
+            tintColor={colors.accent}
           />
-        ) : null}
-        <HeaderIconButton
-          icon="bookmark-outline"
-          onPress={() => router.push(paths.saved as '/(member)/community/saved')}
-          accessibilityLabel="Saved"
+        )
+      }>
+      <View style={styles.hero}>
+        <LinearGradient
+          colors={['rgba(200,255,0,0.16)', 'rgba(200,255,0,0.02)', 'transparent']}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={StyleSheet.absoluteFillObject}
         />
-        <HeaderIconButton
-          icon="chatbubbles-outline"
-          onPress={() => router.push(paths.messages as '/(member)/messages')}
-          accessibilityLabel="Messages"
-        />
-        <HeaderIconButton
-          icon="add"
-          onPress={() => router.push(paths.compose as '/(member)/community/compose')}
-          accessibilityLabel="Create post"
-        />
+        <View style={styles.topBar}>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.kicker}>REFORGE</Text>
+            <Text style={styles.title}>COMMUNITY</Text>
+            <Text style={styles.subtitle}>Train together. Share the floor.</Text>
+          </View>
+          {canModerate && paths.moderate ? (
+            <HeaderIconButton
+              icon="shield-checkmark-outline"
+              onPress={() => router.push(paths.moderate as '/(coach)/admin/community')}
+              accessibilityLabel="Moderate community"
+            />
+          ) : null}
+          <HeaderIconButton
+            icon="bookmark-outline"
+            onPress={() => router.push(paths.saved as '/(member)/community/saved')}
+            accessibilityLabel="Saved"
+          />
+          <HeaderIconButton
+            icon="chatbubbles-outline"
+            onPress={() => router.push(paths.messages as '/(member)/messages')}
+            accessibilityLabel="Messages"
+          />
+          <HeaderIconButton
+            icon="add"
+            onPress={() => router.push(paths.compose as '/(member)/community/compose')}
+            accessibilityLabel="Create post"
+          />
+        </View>
       </View>
 
       <View style={styles.tabs}>
-        {([
-          { id: 'community' as const, label: 'COMMUNITY' },
-          { id: 'gym' as const, label: 'GYM' },
-        ]).map((t) => (
+        {(
+          [
+            { id: 'feed' as const, label: 'FEED' },
+            { id: 'people' as const, label: 'PEOPLE' },
+            { id: 'gym' as const, label: 'GYM' },
+          ] as const
+        ).map((t) => (
           <Pressable
             key={t.id}
             onPress={() => setTab(t.id)}
@@ -299,14 +320,18 @@ export function CommunityHubScreen({ surface }: Props) {
         ))}
       </View>
 
-      {error ? <ErrorState message={error} onRetry={tab === 'community' ? loadFeed : loadGym} /> : null}
+      {error && tab !== 'people' ? (
+        <ErrorState message={error} onRetry={tab === 'feed' ? loadFeed : loadGym} />
+      ) : null}
 
-      {tab === 'community' ? (
+      {tab === 'people' ? (
+        <CommunityPeopleTab surface={surface} />
+      ) : tab === 'feed' ? (
         posts.length === 0 && !error ? (
           <EmptyState
             icon="people-outline"
             title="YOUR COMMUNITY STARTS HERE"
-            description="Share a training update or follow the gym activity tab."
+            description="Share a photo or video from the floor — or find athletes in People."
             actionLabel="CREATE POST"
             onAction={() => router.push(paths.compose as '/(member)/community/compose')}
           />
@@ -413,12 +438,20 @@ export function CommunityHubScreen({ surface }: Props) {
 }
 
 const styles = StyleSheet.create({
-  topBar: {
+  hero: {
     marginTop: spacing.sm,
+    marginBottom: spacing.md,
+    padding: spacing.md,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    borderColor: 'rgba(200,255,0,0.22)',
+    backgroundColor: colors.surfaceElevated,
+    overflow: 'hidden',
+  },
+  topBar: {
     flexDirection: 'row',
     alignItems: 'flex-start',
     gap: 8,
-    marginBottom: spacing.md,
   },
   kicker: {
     fontFamily: fonts.sansBold,
@@ -432,17 +465,26 @@ const styles = StyleSheet.create({
     lineHeight: 44,
     color: colors.text,
   },
+  subtitle: {
+    fontFamily: fonts.sans,
+    fontSize: 13,
+    color: colors.textSecondary,
+    marginTop: 4,
+  },
   tabs: {
     flexDirection: 'row',
     gap: 8,
     marginBottom: spacing.lg,
   },
   tab: {
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 2,
+    flex: 1,
+    alignItems: 'center',
+    paddingHorizontal: 10,
+    paddingVertical: 10,
+    borderRadius: radius.sm,
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.12)',
+    backgroundColor: colors.surface,
   },
   tabActive: {
     borderColor: 'rgba(200,255,0,0.5)',
@@ -468,7 +510,7 @@ const styles = StyleSheet.create({
   },
   eventCard: {
     padding: spacing.md,
-    borderRadius: 4,
+    borderRadius: radius.md,
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.08)',
     backgroundColor: colors.surface,

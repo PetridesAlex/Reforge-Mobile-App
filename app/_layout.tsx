@@ -97,6 +97,7 @@ function RootNavigator({ fontsReady }: { fontsReady: boolean }) {
         <Stack.Screen name="index" />
         <Stack.Screen name="(auth)" />
         <Stack.Screen name="auth/callback" options={{ headerShown: false }} />
+        <Stack.Screen name="(onboarding)" />
         <Stack.Screen name="(member)" />
         <Stack.Screen name="(coach)" />
       </Stack>

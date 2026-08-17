@@ -204,10 +204,18 @@ export default function ProgressScreen() {
 
       {prs.length > 0 ? (
         <>
-          <SectionHeader title="Personal records" kicker="Strength" />
+          <SectionHeader
+            title="Personal records"
+            kicker="Strength"
+            actionLabel="My PRs"
+            onActionPress={() => router.push('/(member)/progress/prs')}
+          />
           <View style={styles.prList}>
             {prs.slice(0, 6).map((pr) => (
-              <View key={pr.id} style={styles.prRow}>
+              <Pressable
+                key={pr.id}
+                onPress={() => router.push('/(member)/progress/prs')}
+                style={styles.prRow}>
                 <View style={styles.prMark}>
                   <Ionicons name="flash" size={14} color={colors.accent} />
                 </View>
@@ -229,11 +237,18 @@ export default function ProgressScreen() {
                     ? ' KG'
                     : ''}
                 </Text>
-              </View>
+              </Pressable>
             ))}
           </View>
         </>
-      ) : null}
+      ) : (
+        <SectionHeader
+          title="Personal records"
+          kicker="Strength"
+          actionLabel="My PRs"
+          onActionPress={() => router.push('/(member)/progress/prs')}
+        />
+      )}
 
       {achievements.length > 0 ? (
         <>

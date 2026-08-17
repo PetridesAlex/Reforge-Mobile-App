@@ -299,6 +299,22 @@ export async function getCoachMessageRoster(
     .sort((a, b) => a.full_name.localeCompare(b.full_name));
 }
 
+/** Studio-wide active members for community People tab (excludes inactive roster). */
+export async function listStudioCommunityMembers(viewerId: string): Promise<Profile[]> {
+  const supabase = getSupabase();
+  const { data, error } = await supabase
+    .from('profiles')
+    .select('*')
+    .eq('role', 'member')
+    .order('full_name', { ascending: true })
+    .limit(300);
+  if (error) throw new Error(formatSupabaseError(error));
+
+  return (data ?? [])
+    .map((row) => row as Profile)
+    .filter((p) => p.id !== viewerId && p.roster_active !== false);
+}
+
 export async function getChatNotifications(userId: string): Promise<AppNotification[]> {
   const supabase = getSupabase();
   const { data, error } = await supabase
@@ -647,18 +663,26 @@ export async function sendMessage(input: {
     thread.member_ids.includes(input.senderId) &&
     input.senderId !== thread.coach_id;
 
+  // Studio owners should also see athlete DMs even if another coach is assigned.
+  if (isAthleteDm) {
+    const { data: admins } = await supabase.from('profiles').select('id').eq('role', 'admin');
+    for (const row of admins ?? []) {
+      if (row.id !== input.senderId) recipients.add(row.id as string);
+    }
+  }
+
   for (const userId of recipients) {
     await pushNotification({
       userId,
       title:
         thread.kind === 'group'
           ? `New message · ${thread.name}`
-          : isAthleteDm && userId === thread.coach_id
-            ? 'Athlete wants to chat'
+          : isAthleteDm
+            ? `Message from ${senderName}`
             : `Message from ${senderName}`,
-      body: isAthleteDm && userId === thread.coach_id ? `${senderName} sent you a message.` : preview,
+      body: preview,
       threadId: thread.id,
-      type: isAthleteDm && userId === thread.coach_id ? 'chat_request' : 'chat_message',
+      type: 'chat_message',
     }).catch(() => undefined);
   }
 

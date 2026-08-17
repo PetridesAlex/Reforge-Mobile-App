@@ -324,7 +324,7 @@ export function AppPreload({
       <View style={styles.center}>
         <Animated.View
           style={[styles.logoWrap, { opacity: logoOpacity, transform: [{ scale: logoScale }] }]}>
-          <ReforgeLogo width={280} height={74} />
+          <ReforgeLogo width={148} height={148} />
         </Animated.View>
 
         <View style={styles.welcomeBlock}>

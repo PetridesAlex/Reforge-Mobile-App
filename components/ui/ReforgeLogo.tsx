@@ -1,19 +1,22 @@
 import { Image, ImageStyle, StyleProp, StyleSheet, View, ViewStyle } from 'react-native';
 
-import { colors, radius } from '@/constants/theme';
+import { radius } from '@/constants/theme';
+
+const REFORGE_APP_ICON = require('../../assets/images/reforge-app-icon.png');
 
 type ReforgeLogoProps = {
+  /** Display size — official mark is square; keep width ≈ height. */
   width?: number;
   height?: number;
-  /** compact = small wordmark; badge = framed brand mark for headers */
+  /** compact = brand mark; badge = framed mark for headers */
   variant?: 'wordmark' | 'badge';
   style?: StyleProp<ViewStyle>;
   imageStyle?: StyleProp<ImageStyle>;
 };
 
 export function ReforgeLogo({
-  width = 180,
-  height = 48,
+  width = 120,
+  height = 120,
   variant = 'wordmark',
   style,
   imageStyle,
@@ -22,7 +25,7 @@ export function ReforgeLogo({
     return (
       <View style={[styles.badge, { width, height }, style]}>
         <Image
-          source={require('../../assets/images/reforge-logo.png')}
+          source={REFORGE_APP_ICON}
           style={[styles.badgeImage, imageStyle]}
           resizeMode="contain"
           accessibilityLabel="REFORGE"
@@ -34,7 +37,7 @@ export function ReforgeLogo({
   return (
     <View style={[{ width, height }, style]}>
       <Image
-        source={require('../../assets/images/reforge-logo.png')}
+        source={REFORGE_APP_ICON}
         style={[styles.image, imageStyle]}
         resizeMode="contain"
         accessibilityLabel="REFORGE"
@@ -53,7 +56,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#0B0B0B',
     borderWidth: 1,
     borderColor: 'rgba(200,255,0,0.25)',
-    paddingHorizontal: 10,
+    paddingHorizontal: 6,
     paddingVertical: 6,
     overflow: 'hidden',
     alignItems: 'center',

@@ -47,11 +47,25 @@ const MEMBER_MENU_ITEMS: readonly MoreMenuItem[] = [
     href: '/(member)/challenges',
   },
   {
+    id: 'league',
+    label: 'REFORGE League',
+    description: 'Bronze → Elite weekly divisions',
+    icon: 'podium-outline',
+    href: '/(member)/league',
+  },
+  {
     id: 'achievements',
     label: 'Achievements',
-    description: 'Badges, XP & progress',
+    description: 'Level, XP, and unlocked badges',
     icon: 'ribbon-outline',
     href: '/(member)/achievements',
+  },
+  {
+    id: 'prs',
+    label: 'My PRs',
+    description: 'Personal records catalog',
+    icon: 'flash-outline',
+    href: '/(member)/progress/prs',
   },
   {
     id: 'store',

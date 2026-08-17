@@ -36,7 +36,7 @@ export default function ForgotPasswordScreen() {
   return (
     <Screen contentContainerStyle={styles.content}>
       <View style={styles.header}>
-        <ReforgeLogo width={200} height={52} />
+        <ReforgeLogo width={112} height={112} />
         <Text style={styles.title}>Forgot password</Text>
         <Text style={styles.subtitle}>We&apos;ll send reset instructions to your email</Text>
       </View>

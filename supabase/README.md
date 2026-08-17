@@ -38,6 +38,9 @@
    - [`migrations/035_profile_mood_bio.sql`](migrations/035_profile_mood_bio.sql) — **member bio + daily “how I feel” mood on community profiles**
    - [`migrations/036_achievements_weekly_challenges.sql`](migrations/036_achievements_weekly_challenges.sql) — **achievements rarity/XP, athlete XP, weekly challenges, results verification, podium RPCs**
    - [`migrations/037_fix_community_profiles_security_invoker.sql`](migrations/037_fix_community_profiles_security_invoker.sql) — **fix community_profiles Security Definer View advisory**
+   - [`migrations/038_member_profile_onboarding.sql`](migrations/038_member_profile_onboarding.sql) — **member profile onboarding fields, gender extend, backfill existing members**
+   - [`migrations/039_weekly_award_spotlight.sql`](migrations/039_weekly_award_spotlight.sql) — **Award of the Week gym spotlight + manual award RPC upsert**
+   - [`migrations/040_community_media_video.sql`](migrations/040_community_media_video.sql) — **raise community-media size limit for short video posts**
    - Optional demo catalogue: [`seed/004_store_example_products.sql`](seed/004_store_example_products.sql) — **12 Essentials products (3 per category)**
 3. In **Authentication → Providers**, enable **Email** and **Google**
 4. In **Authentication → URL configuration**:
@@ -154,6 +157,48 @@ Until keys are set, the app uses mock auth and mock data (`EXPO_PUBLIC_USE_MOCK_
    - Or keep the magic link button and use **Confirm signup** template for 6-digit codes
 3. Configure **SMTP** (Resend / SendGrid) so codes are delivered reliably (see Admin invites below)
 4. In the app: **Sign in → Sign in with email code**
+
+### Member profile onboarding (`038`)
+
+Run [`migrations/038_member_profile_onboarding.sql`](migrations/038_member_profile_onboarding.sql) in the SQL Editor after `037`.
+
+This gates new members behind `/(onboarding)` until `profiles.onboarding_completed = true`. It is separate from:
+- `app_onboarding_complete` — in-app MemberAppGuide tour
+- `member_fitness_profiles.onboarding_complete` — Progress fitness setup
+
+Existing engaged members are backfilled to `onboarding_completed = true` so they are not forced through the wizard.
+
+**Manual test matrix**
+
+| Scenario | Expected |
+|----------|----------|
+| Brand-new email signup | Lands on onboarding welcome; must complete to reach member home |
+| New Google OAuth user | Same as email — onboarding gate |
+| Returning backfilled member | Skips onboarding; goes to `/(member)` |
+| Logout mid-onboarding | Resume at `onboarding_step` on next login |
+| Completed user | Never re-enters onboarding |
+| Edit Profile after complete | Can change goal/level/frequency/interests/height/weight |
+| Coach client detail | Shows primary goal, level, frequency, interests, preferences, age, join date |
+
+Confirm Storage policies on `avatars` (from migration `030`) still allow authenticated uploads.
+
+### Community video posts (`040`)
+
+Run [`migrations/040_community_media_video.sql`](migrations/040_community_media_video.sql) after `039` to raise the `community-media` bucket limit to **80MB** (short videos). Compose accepts photos + videos; feed plays video via `expo-video`.
+
+### Weekly Award of the Week (`039`)
+
+Run [`migrations/039_weekly_award_spotlight.sql`](migrations/039_weekly_award_spotlight.sql) in the SQL Editor after `038`.
+
+Creates `weekly_award_spotlights` (one row per Monday week) and extends `manual_award_achievement` so staff awards upsert the gym-wide showcase and enqueue a premium winner celebration.
+
+**Manual test path**
+
+1. As admin/coach → Achievements → Award to athlete
+2. Pick a manual badge (e.g. Coach’s Choice), select a member, optional coach note → Award
+3. Confirm toast: “Awarded — live as Award of the Week.”
+4. Coach/admin home shows **Award of the Week** card
+5. Member home shows the same card; winner sees personal “YOU WERE SELECTED” modal on next open
 
 ### Go live (App Store / Play Store)
 

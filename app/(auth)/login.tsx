@@ -7,7 +7,7 @@ import { GoogleIcon } from '@/components/ui/GoogleIcon';
 import { PrimaryButton } from '@/components/ui/PrimaryButton';
 import { ReforgeLogo } from '@/components/ui/ReforgeLogo';
 import { Screen } from '@/components/ui/Screen';
-import { homeRouteForRole, useAuth } from '@/hooks/useAuth';
+import { postAuthRoute, useAuth } from '@/hooks/useAuth';
 import { isGoogleSignInCancelled } from '@/lib/auth/oauth';
 import { getAuthCallbackUrl } from '@/lib/auth/redirect';
 import { isSupabaseConfigured } from '@/lib/supabase/client';
@@ -50,7 +50,7 @@ export default function LoginScreen() {
     setLoading(true);
     try {
       const profile = await signIn(email.trim(), password);
-      router.replace(homeRouteForRole(profile.role));
+      router.replace(postAuthRoute(profile));
     } catch (e) {
       const message =
         e instanceof Error
@@ -70,7 +70,7 @@ export default function LoginScreen() {
     setGoogleLoading(true);
     try {
       const profile = await signInWithGoogle();
-      router.replace(homeRouteForRole(profile.role));
+      router.replace(postAuthRoute(profile));
     } catch (e) {
       if (isGoogleSignInCancelled(e)) return;
       setError(e instanceof Error ? e.message : 'Google sign-in failed');
@@ -82,7 +82,7 @@ export default function LoginScreen() {
   return (
     <Screen contentContainerStyle={styles.content}>
       <View style={styles.header}>
-        <ReforgeLogo width={340} height={90} style={styles.logo} />
+        <ReforgeLogo width={168} height={168} style={styles.logo} />
         <Text style={styles.kicker}>LIMASSOL</Text>
         <Text style={styles.title}>WELCOME BACK</Text>
         <Text style={styles.subtitle}>Sign in to continue your training</Text>

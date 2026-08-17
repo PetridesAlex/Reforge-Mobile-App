@@ -42,14 +42,26 @@ function StoreFeatureCta({ label, onPress }: { label: string; onPress: () => voi
   const hover = useSharedValue(0);
   const press = useSharedValue(0);
   const arrowIdle = useSharedValue(0);
+  const sheenSweep = useSharedValue(0);
+  const glow = useSharedValue(0);
 
   useEffect(() => {
     arrowIdle.value = withRepeat(
-      withTiming(1, { duration: 1400, easing: Easing.inOut(Easing.quad) }),
+      withTiming(1, { duration: 1200, easing: Easing.inOut(Easing.quad) }),
       -1,
       true,
     );
-  }, [arrowIdle]);
+    sheenSweep.value = withRepeat(
+      withTiming(1, { duration: 2200, easing: Easing.inOut(Easing.quad) }),
+      -1,
+      false,
+    );
+    glow.value = withRepeat(
+      withTiming(1, { duration: 1600, easing: Easing.inOut(Easing.sin) }),
+      -1,
+      true,
+    );
+  }, [arrowIdle, sheenSweep, glow]);
 
   const setHover = (active: boolean) => {
     hover.value = withTiming(active ? 1 : 0, {
@@ -63,29 +75,43 @@ function StoreFeatureCta({ label, onPress }: { label: string; onPress: () => voi
   };
 
   const ctaStyle = useAnimatedStyle(() => {
+    const idleScale = 1 + glow.value * 0.012;
     return {
       backgroundColor: interpolateColor(hover.value, [0, 1], [CTA_REST, CTA_HOVER]),
-      transform: [{ scale: 1 - press.value * 0.035 + hover.value * 0.02 }],
+      transform: [
+        {
+          scale:
+            idleScale * (1 - press.value * 0.04) * (1 + hover.value * 0.02),
+        },
+      ],
       shadowColor: '#C8FF00',
-      shadowOpacity: 0.12 + hover.value * 0.35,
-      shadowRadius: 4 + hover.value * 12,
-      shadowOffset: { width: 0, height: 2 + hover.value * 4 },
-      elevation: 2 + hover.value * 5,
+      shadowOpacity: 0.18 + glow.value * 0.22 + hover.value * 0.25,
+      shadowRadius: 6 + glow.value * 10 + hover.value * 8,
+      shadowOffset: { width: 0, height: 2 + glow.value * 2 + hover.value * 3 },
+      elevation: 3 + glow.value * 3 + hover.value * 4,
       opacity: 1 - press.value * 0.04,
     };
   });
 
   const arrowStyle = useAnimatedStyle(() => {
-    const idle = arrowIdle.value * (1 - hover.value) * 3;
-    const boost = hover.value * 5;
+    const idle = arrowIdle.value * (1 - hover.value * 0.35) * 5;
+    const boost = hover.value * 6;
     return {
       transform: [{ translateX: idle + boost }],
     };
   });
 
   const sheenStyle = useAnimatedStyle(() => ({
-    opacity: 0.06 + hover.value * 0.28,
-    transform: [{ translateX: -48 + hover.value * 140 }, { rotate: '18deg' }],
+    opacity: 0.14 + glow.value * 0.16 + hover.value * 0.22,
+    transform: [
+      { translateX: -56 + sheenSweep.value * 200 + hover.value * 24 },
+      { rotate: '18deg' },
+    ],
+  }));
+
+  const ringStyle = useAnimatedStyle(() => ({
+    opacity: 0.2 + glow.value * 0.45,
+    transform: [{ scale: 1 + glow.value * 0.04 }],
   }));
 
   return (
@@ -98,6 +124,7 @@ function StoreFeatureCta({ label, onPress }: { label: string; onPress: () => voi
       accessibilityRole="button"
       accessibilityLabel={label}>
       <Animated.View style={[styles.cta, ctaStyle]}>
+        <Animated.View pointerEvents="none" style={[styles.ctaRing, ringStyle]} />
         <Animated.View pointerEvents="none" style={[styles.ctaSheen, sheenStyle]} />
         <Text style={styles.ctaText}>{label}</Text>
         <Animated.View style={arrowStyle}>
@@ -361,6 +388,12 @@ const styles = StyleSheet.create({
     borderRadius: 2,
     backgroundColor: colors.accent,
     overflow: 'hidden',
+  },
+  ctaRing: {
+    ...StyleSheet.absoluteFillObject,
+    borderRadius: 2,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.35)',
   },
   ctaSheen: {
     position: 'absolute',

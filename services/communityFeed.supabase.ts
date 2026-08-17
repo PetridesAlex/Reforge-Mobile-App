@@ -168,11 +168,21 @@ export async function createCommunityPost(input: {
   body: string;
   visibility?: CommunityPostVisibility;
   localImageUris?: string[];
+  /** Preferred: typed local assets (image + video). Falls back to localImageUris. */
+  localMedia?: Array<{ uri: string; mediaType?: 'image' | 'video'; durationSeconds?: number | null }>;
 }): Promise<CommunityPost> {
   const supabase = getSupabase();
   const body = input.body.trim();
-  if (!body && !(input.localImageUris?.length)) {
-    throw new Error('Add text or a photo');
+  const assets: Array<{
+    uri: string;
+    mediaType?: 'image' | 'video';
+    durationSeconds?: number | null;
+  }> =
+    input.localMedia?.length
+      ? input.localMedia
+      : (input.localImageUris ?? []).map((uri) => ({ uri, mediaType: 'image' as const }));
+  if (!body && !assets.length) {
+    throw new Error('Add text, a photo, or a video');
   }
 
   const { data: post, error } = await supabase
@@ -181,21 +191,34 @@ export async function createCommunityPost(input: {
       author_id: input.authorId,
       body,
       visibility: input.visibility ?? 'community',
-      post_type: (input.localImageUris?.length ?? 0) > 0 ? 'media' : 'status',
+      post_type: assets.length > 0 ? 'media' : 'status',
     })
     .select('*')
     .single();
   if (error) throw new Error(formatSupabaseError(error));
 
   const mediaRows: CommunityPostMedia[] = [];
-  for (let i = 0; i < (input.localImageUris ?? []).length; i++) {
-    const uri = input.localImageUris![i];
-    const ext = uri.split('.').pop()?.toLowerCase().split('?')[0] || 'jpg';
-    const safeExt = ['jpg', 'jpeg', 'png', 'webp', 'heic'].includes(ext) ? ext : 'jpg';
+  for (let i = 0; i < assets.length; i++) {
+    const asset = assets[i];
+    const uri = asset.uri;
+    const extRaw = uri.split('.').pop()?.toLowerCase().split('?')[0] || 'jpg';
+    const isVideo =
+      asset.mediaType === 'video' ||
+      ['mp4', 'mov', 'qt', 'm4v'].includes(extRaw);
+    const safeExt = isVideo
+      ? extRaw === 'mov' || extRaw === 'qt'
+        ? 'mov'
+        : 'mp4'
+      : ['jpg', 'jpeg', 'png', 'webp', 'heic'].includes(extRaw)
+        ? extRaw
+        : 'jpg';
     const path = `${input.authorId}/${post.id}/${Date.now()}-${i}.${safeExt}`;
     const bodyBuf = await uriToArrayBuffer(uri);
-    const contentType =
-      safeExt === 'png'
+    const contentType = isVideo
+      ? safeExt === 'mov'
+        ? 'video/quicktime'
+        : 'video/mp4'
+      : safeExt === 'png'
         ? 'image/png'
         : safeExt === 'webp'
           ? 'image/webp'
@@ -214,7 +237,8 @@ export async function createCommunityPost(input: {
         post_id: post.id,
         storage_path: path,
         public_url: pub.publicUrl,
-        media_type: 'image',
+        media_type: isVideo ? 'video' : 'image',
+        duration_seconds: isVideo ? (asset.durationSeconds ?? null) : null,
         sort_order: i,
       })
       .select('*')

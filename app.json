@@ -4,7 +4,7 @@
     "slug": "reforge",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/images/reforge-logo.png",
+    "icon": "./assets/images/reforge-app-icon.png",
     "scheme": "reforge",
     "userInterfaceStyle": "dark",
     "newArchEnabled": true,
@@ -13,15 +13,18 @@
       "bundleIdentifier": "cy.reforge.app",
       "buildNumber": "1",
       "infoPlist": {
+        "CFBundleDisplayName": "REFORGE",
+        "CFBundleName": "REFORGE",
         "NSPhotoLibraryUsageDescription": "Allow REFORGE to access your photos for your profile picture.",
         "ITSAppUsesNonExemptEncryption": false
       }
     },
     "android": {
       "package": "cy.reforge.app",
+      "icon": "./assets/images/reforge-app-icon.png",
       "adaptiveIcon": {
-        "backgroundColor": "#0A0A0A",
-        "foregroundImage": "./assets/images/reforge-logo.png"
+        "foregroundImage": "./assets/images/reforge-app-icon.png",
+        "backgroundColor": "#0A0A0A"
       },
       "intentFilters": [
         {
@@ -43,18 +46,19 @@
     },
     "web": {
       "output": "static",
-      "favicon": "./assets/images/reforge-logo.png"
+      "favicon": "./assets/images/reforge-app-icon.png"
     },
     "plugins": [
       "expo-router",
       [
         "expo-splash-screen",
         {
-          "image": "./assets/images/reforge-logo.png",
-          "imageWidth": 240,
+          "image": "./assets/images/reforge-app-icon.png",
+          "imageWidth": 220,
           "resizeMode": "contain",
           "backgroundColor": "#0A0A0A",
           "dark": {
+            "image": "./assets/images/reforge-app-icon.png",
             "backgroundColor": "#0A0A0A"
           }
         }

@@ -3,6 +3,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 
 import { AchievementUnlockedModal } from '@/components/achievements/AchievementUnlockedModal';
+import { WorkoutCompleteHero } from '@/components/workouts/WorkoutCompleteHero';
 import { WorkoutSummaryCard } from '@/components/workouts/WorkoutSummaryCard';
 import { WorkoutShareCard } from '@/components/share/WorkoutShareCard';
 import { ErrorState } from '@/components/ui/ErrorState';
@@ -64,34 +65,22 @@ export default function WorkoutSummaryScreen() {
         }
       }
 
-      setSummary({
-        sessionId,
-        durationSeconds: detail.session.duration_seconds ?? 0,
-        exercisesCompleted: new Set(completed.map((s) => s.exercise_id)).size,
-        totalSets: completed.length,
-        estimatedVolumeKg: Math.round(volume),
-        personalRecords,
-        completionPct,
-        workoutName: detail.day?.name ?? 'Workout complete',
-        highlight:
-          personalRecords[0]
-            ? {
-                title: 'PERSONAL RECORD',
-                subtitle: personalRecords[0],
-                kind: 'pr',
-              }
-            : volume > 0
-              ? {
-                  title: 'TODAY’S VOLUME',
-                  subtitle: `${Math.round(volume).toLocaleString()} KG`,
-                  kind: 'volume',
-                }
-              : null,
-      });
+      const durationSeconds = detail.session.duration_seconds ?? 0;
+      const estimatedCalories =
+        detail.session.estimated_calories ??
+        (durationSeconds > 0 ? Math.round(durationSeconds / 60) * 7 : null);
 
+      let xpEarned = 0;
       if (profile) {
         try {
+          const before = await challenges.getAthleteXp(profile.id);
           const result = await challenges.evaluateSessionAchievements(profile.id);
+          const after = await challenges.getAthleteXp(profile.id);
+          xpEarned = Math.max(
+            0,
+            after.total_xp - before.total_xp,
+            result.unlocked.reduce((sum, a) => sum + (a.xp_reward ?? 0), 0),
+          );
           if (result.unlocked.length) {
             setUnlockedQueue(result.unlocked);
             setActiveUnlock(result.unlocked[0] ?? null);
@@ -116,6 +105,34 @@ export default function WorkoutSummaryScreen() {
           // non-blocking
         }
       }
+
+      setSummary({
+        sessionId,
+        durationSeconds,
+        exercisesCompleted: new Set(completed.map((s) => s.exercise_id)).size,
+        totalSets: completed.length,
+        estimatedVolumeKg: Math.round(volume),
+        personalRecords,
+        completionPct,
+        workoutName: detail.day?.name ?? 'Workout complete',
+        estimatedCalories,
+        xpEarned,
+        highlight:
+          personalRecords[0]
+            ? {
+                title: 'PERSONAL RECORD',
+                subtitle: personalRecords[0],
+                kind: 'pr',
+              }
+            : volume > 0
+              ? {
+                  title: 'TODAY’S VOLUME',
+                  subtitle: `${Math.round(volume).toLocaleString()} KG`,
+                  kind: 'volume',
+                }
+              : null,
+      });
+
       await refreshActiveSession();
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to load summary');
@@ -144,8 +161,13 @@ export default function WorkoutSummaryScreen() {
 
   return (
     <Screen contentContainerStyle={styles.content}>
-      <Text style={styles.badge}>SESSION COMPLETE</Text>
-      <Text style={styles.title}>Great work</Text>
+      <WorkoutCompleteHero
+        durationSeconds={summary.durationSeconds}
+        calories={summary.estimatedCalories ?? null}
+        xpEarned={summary.xpEarned ?? 0}
+        hasNewPr={summary.personalRecords.length > 0}
+        workoutName={summary.workoutName}
+      />
       <WorkoutSummaryCard summary={summary} />
       {progressionHint ? (
         <View style={styles.hint}>
@@ -160,8 +182,13 @@ export default function WorkoutSummaryScreen() {
         style={styles.btn}
       />
       <PrimaryButton
-        title="View Progress"
+        title="My PRs"
         variant="secondary"
+        onPress={() => router.replace('/(member)/progress/prs')}
+      />
+      <PrimaryButton
+        title="View Progress"
+        variant="ghost"
         onPress={() => router.replace('/(member)/progress')}
       />
       <AchievementUnlockedModal
@@ -182,15 +209,6 @@ const styles = StyleSheet.create({
     gap: spacing.md,
     paddingTop: spacing.xl,
   },
-  badge: {
-    ...typography.label,
-    color: colors.accent,
-  },
-  title: {
-    ...typography.hero,
-    color: colors.text,
-    marginBottom: spacing.sm,
-  },
   hint: {
     borderWidth: 1,
     borderColor: 'rgba(200,255,0,0.25)',
@@ -199,17 +217,18 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   hintKicker: {
-    fontFamily: fonts.sansMedium,
+    fontFamily: fonts.sansBold,
     fontSize: 10,
     letterSpacing: 1.6,
     color: colors.accent,
   },
   hintBody: {
     fontFamily: fonts.sans,
-    fontSize: 14,
-    color: colors.text,
+    fontSize: 13,
+    lineHeight: 18,
+    color: colors.textSecondary,
   },
   btn: {
-    marginTop: spacing.md,
+    marginTop: spacing.sm,
   },
 });

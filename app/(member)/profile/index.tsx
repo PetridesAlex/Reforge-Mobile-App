@@ -20,6 +20,14 @@ import { Screen } from '@/components/ui/Screen';
 import { SectionHeader } from '@/components/ui/SectionHeader';
 import { useAuth } from '@/hooks/useAuth';
 import {
+  PRIMARY_GOAL_OPTIONS,
+  TRAINING_FREQUENCY_OPTIONS,
+  TRAINING_INTEREST_OPTIONS,
+  TRAINING_LEVEL_OPTIONS,
+  WORKOUT_DURATION_OPTIONS,
+  WORKOUT_TIME_OPTIONS,
+} from '@/lib/onboarding/types';
+import {
   activeMoodForDisplay,
   COMMUNITY_MOODS,
   type CommunityMoodId,
@@ -61,8 +69,23 @@ export default function ProfileScreen() {
   const [savingProfile, setSavingProfile] = useState(false);
   const [editError, setEditError] = useState<string | null>(null);
   const [fullName, setFullName] = useState(profile?.full_name ?? '');
+  const [firstName, setFirstName] = useState(profile?.first_name ?? '');
+  const [lastName, setLastName] = useState(profile?.last_name ?? '');
+  const [username, setUsername] = useState(profile?.username ?? '');
   const [email, setEmail] = useState(profile?.email ?? '');
   const [phone, setPhone] = useState(profile?.phone ?? '');
+  const [primaryGoal, setPrimaryGoal] = useState(profile?.primary_goal ?? '');
+  const [trainingLevel, setTrainingLevel] = useState(profile?.training_level ?? '');
+  const [trainingDays, setTrainingDays] = useState(
+    profile?.training_days_per_week != null ? String(profile.training_days_per_week) : '',
+  );
+  const [interests, setInterests] = useState<string[]>(profile?.training_interests ?? []);
+  const [workoutTime, setWorkoutTime] = useState(profile?.preferred_workout_time ?? '');
+  const [workoutDuration, setWorkoutDuration] = useState(
+    profile?.preferred_workout_duration ?? '',
+  );
+  const [heightCm, setHeightCm] = useState('');
+  const [weightKg, setWeightKg] = useState('');
   const [bio, setBio] = useState(profile?.community_bio ?? '');
   const [moodId, setMoodId] = useState<CommunityMoodId | null>(
     isMoodFreshToday(profile?.community_mood_updated_at)
@@ -85,8 +108,19 @@ export default function ProfileScreen() {
 
   useEffect(() => {
     setFullName(profile?.full_name ?? '');
+    setFirstName(profile?.first_name ?? '');
+    setLastName(profile?.last_name ?? '');
+    setUsername(profile?.username ?? '');
     setEmail(profile?.email ?? '');
     setPhone(profile?.phone ?? '');
+    setPrimaryGoal(profile?.primary_goal ?? '');
+    setTrainingLevel(profile?.training_level ?? '');
+    setTrainingDays(
+      profile?.training_days_per_week != null ? String(profile.training_days_per_week) : '',
+    );
+    setInterests(profile?.training_interests ?? []);
+    setWorkoutTime(profile?.preferred_workout_time ?? '');
+    setWorkoutDuration(profile?.preferred_workout_duration ?? '');
     setBio(profile?.community_bio ?? '');
     setMoodId(
       isMoodFreshToday(profile?.community_mood_updated_at)
@@ -95,12 +129,32 @@ export default function ProfileScreen() {
     );
   }, [
     profile?.full_name,
+    profile?.first_name,
+    profile?.last_name,
+    profile?.username,
     profile?.email,
     profile?.phone,
+    profile?.primary_goal,
+    profile?.training_level,
+    profile?.training_days_per_week,
+    profile?.training_interests,
+    profile?.preferred_workout_time,
+    profile?.preferred_workout_duration,
     profile?.community_bio,
     profile?.community_mood,
     profile?.community_mood_updated_at,
   ]);
+
+  useEffect(() => {
+    if (!profile) return;
+    void memberService.getFitnessProfile(profile.id).then((fitness) => {
+      if (fitness?.height_cm) setHeightCm(String(fitness.height_cm));
+    });
+    void memberService.getMeasurements(profile.id).then((rows) => {
+      const last = rows.length ? rows[rows.length - 1] : null;
+      if (last?.weight_kg) setWeightKg(String(last.weight_kg));
+    });
+  }, [profile]);
 
   useEffect(() => {
     if (!profile) return;
@@ -121,8 +175,19 @@ export default function ProfileScreen() {
 
   const openEdit = () => {
     setFullName(profile?.full_name ?? '');
+    setFirstName(profile?.first_name ?? '');
+    setLastName(profile?.last_name ?? '');
+    setUsername(profile?.username ?? '');
     setEmail(profile?.email ?? '');
     setPhone(profile?.phone ?? '');
+    setPrimaryGoal(profile?.primary_goal ?? '');
+    setTrainingLevel(profile?.training_level ?? '');
+    setTrainingDays(
+      profile?.training_days_per_week != null ? String(profile.training_days_per_week) : '',
+    );
+    setInterests(profile?.training_interests ?? []);
+    setWorkoutTime(profile?.preferred_workout_time ?? '');
+    setWorkoutDuration(profile?.preferred_workout_duration ?? '');
     setBio(profile?.community_bio ?? '');
     setMoodId(
       isMoodFreshToday(profile?.community_mood_updated_at)
@@ -141,13 +206,49 @@ export default function ProfileScreen() {
     setError(null);
     try {
       const hadFreshMood = isMoodFreshToday(profile?.community_mood_updated_at);
+      const days = trainingDays.trim() ? Number(trainingDays) : null;
       await updateProfile({
-        fullName: fullName.trim(),
+        firstName: firstName.trim() || null,
+        lastName: lastName.trim() || null,
+        fullName: [firstName, lastName].filter(Boolean).join(' ').trim() || fullName.trim(),
+        username: username.trim() || null,
         email: email.trim(),
         phone: phone.trim() || null,
+        primaryGoal: primaryGoal || null,
+        trainingLevel: trainingLevel || null,
+        trainingDaysPerWeek: days && days > 0 ? days : null,
+        trainingInterests: interests,
+        preferredWorkoutTime: workoutTime || null,
+        preferredWorkoutDuration: workoutDuration || null,
         communityBio: bio.trim() || null,
         ...(moodId != null || hadFreshMood ? { communityMood: moodId } : {}),
       });
+
+      if (profile?.id) {
+        const height = heightCm.trim() ? Number(heightCm) : null;
+        const daysNum = days && days > 0 ? days : undefined;
+        if (height && height > 0) {
+          const existing = await memberService.getFitnessProfile(profile.id);
+          await memberService.saveFitnessProfile({
+            memberId: profile.id,
+            heightCm: height,
+            weeklySessionGoal: daysNum ?? existing?.weekly_session_goal ?? undefined,
+            birthYear: existing?.birth_year ?? undefined,
+            goalWeightKg: existing?.goal_weight_kg ?? undefined,
+            bio: existing?.bio ?? undefined,
+            onboardingComplete: existing?.onboarding_complete,
+          });
+        }
+        const weight = weightKg.trim() ? Number(weightKg) : null;
+        if (weight && weight > 0) {
+          await memberService.logWeight({
+            memberId: profile.id,
+            weightKg: weight,
+            measuredAt: new Date().toISOString().slice(0, 10),
+          });
+        }
+      }
+
       setEditOpen(false);
       setSuccess('Profile updated');
       void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
@@ -542,7 +643,7 @@ export default function ProfileScreen() {
             style={styles.brandRule}
           />
         </View>
-        <ReforgeLogo width={128} height={32} />
+        <ReforgeLogo width={44} height={44} />
         <View style={styles.brandCaptionRow}>
           <Text style={styles.brandWord}>REFORGE</Text>
           <View style={styles.brandDot} />
@@ -569,17 +670,36 @@ export default function ProfileScreen() {
             <PrimaryButton
               title={savingProfile ? 'Saving…' : 'Save changes'}
               onPress={() => void onSaveProfile()}
-              disabled={savingProfile || !fullName.trim() || !email.trim()}
+              disabled={
+                savingProfile ||
+                !(firstName.trim() || lastName.trim() || fullName.trim()) ||
+                !email.trim()
+              }
             />
             <PrimaryButton title="Cancel" variant="ghost" onPress={() => setEditOpen(false)} />
           </>
         }>
         <AppInput
-          label="Full name"
-          value={fullName}
-          onChangeText={setFullName}
-          placeholder="Your name"
+          label="First name"
+          value={firstName}
+          onChangeText={setFirstName}
+          placeholder="First name"
           autoCapitalize="words"
+        />
+        <AppInput
+          label="Last name"
+          value={lastName}
+          onChangeText={setLastName}
+          placeholder="Last name"
+          autoCapitalize="words"
+        />
+        <AppInput
+          label="Username"
+          value={username}
+          onChangeText={setUsername}
+          placeholder="username"
+          autoCapitalize="none"
+          autoCorrect={false}
         />
         <AppInput
           label="Email"
@@ -597,6 +717,131 @@ export default function ProfileScreen() {
           placeholder="+357 99 000000"
           keyboardType="phone-pad"
         />
+        <AppInput
+          label="Height (cm)"
+          value={heightCm}
+          onChangeText={setHeightCm}
+          keyboardType="number-pad"
+          placeholder="175"
+        />
+        <AppInput
+          label="Weight (kg)"
+          value={weightKg}
+          onChangeText={setWeightKg}
+          keyboardType="decimal-pad"
+          placeholder="75"
+        />
+
+        <Text style={styles.moodLabel}>PRIMARY GOAL</Text>
+        <View style={styles.chipWrap}>
+          {PRIMARY_GOAL_OPTIONS.map((opt) => {
+            const active = primaryGoal === opt.id;
+            return (
+              <Pressable
+                key={opt.id}
+                onPress={() => {
+                  void Haptics.selectionAsync();
+                  setPrimaryGoal(opt.id);
+                }}
+                style={[styles.chip, active && styles.chipActive]}>
+                <Text style={[styles.chipText, active && styles.chipTextActive]}>{opt.label}</Text>
+              </Pressable>
+            );
+          })}
+        </View>
+
+        <Text style={styles.moodLabel}>TRAINING LEVEL</Text>
+        <View style={styles.chipWrap}>
+          {TRAINING_LEVEL_OPTIONS.map((opt) => {
+            const active = trainingLevel === opt.id;
+            return (
+              <Pressable
+                key={opt.id}
+                onPress={() => {
+                  void Haptics.selectionAsync();
+                  setTrainingLevel(opt.id);
+                }}
+                style={[styles.chip, active && styles.chipActive]}>
+                <Text style={[styles.chipText, active && styles.chipTextActive]}>{opt.label}</Text>
+              </Pressable>
+            );
+          })}
+        </View>
+
+        <Text style={styles.moodLabel}>DAYS PER WEEK</Text>
+        <View style={styles.chipWrap}>
+          {TRAINING_FREQUENCY_OPTIONS.map((opt) => {
+            const active = trainingDays === String(opt.id);
+            return (
+              <Pressable
+                key={opt.id}
+                onPress={() => {
+                  void Haptics.selectionAsync();
+                  setTrainingDays(String(opt.id));
+                }}
+                style={[styles.chip, active && styles.chipActive]}>
+                <Text style={[styles.chipText, active && styles.chipTextActive]}>{opt.label}</Text>
+              </Pressable>
+            );
+          })}
+        </View>
+
+        <Text style={styles.moodLabel}>INTERESTS</Text>
+        <View style={styles.chipWrap}>
+          {TRAINING_INTEREST_OPTIONS.map((opt) => {
+            const active = interests.includes(opt.id);
+            return (
+              <Pressable
+                key={opt.id}
+                onPress={() => {
+                  void Haptics.selectionAsync();
+                  setInterests((prev) =>
+                    prev.includes(opt.id) ? prev.filter((id) => id !== opt.id) : [...prev, opt.id],
+                  );
+                }}
+                style={[styles.chip, active && styles.chipActive]}>
+                <Text style={[styles.chipText, active && styles.chipTextActive]}>{opt.label}</Text>
+              </Pressable>
+            );
+          })}
+        </View>
+
+        <Text style={styles.moodLabel}>WORKOUT TIME</Text>
+        <View style={styles.chipWrap}>
+          {WORKOUT_TIME_OPTIONS.map((opt) => {
+            const active = workoutTime === opt.id;
+            return (
+              <Pressable
+                key={opt.id}
+                onPress={() => {
+                  void Haptics.selectionAsync();
+                  setWorkoutTime(opt.id);
+                }}
+                style={[styles.chip, active && styles.chipActive]}>
+                <Text style={[styles.chipText, active && styles.chipTextActive]}>{opt.label}</Text>
+              </Pressable>
+            );
+          })}
+        </View>
+
+        <Text style={styles.moodLabel}>SESSION LENGTH</Text>
+        <View style={styles.chipWrap}>
+          {WORKOUT_DURATION_OPTIONS.map((opt) => {
+            const active = workoutDuration === opt.id;
+            return (
+              <Pressable
+                key={opt.id}
+                onPress={() => {
+                  void Haptics.selectionAsync();
+                  setWorkoutDuration(opt.id);
+                }}
+                style={[styles.chip, active && styles.chipActive]}>
+                <Text style={[styles.chipText, active && styles.chipTextActive]}>{opt.label}</Text>
+              </Pressable>
+            );
+          })}
+        </View>
+
         <AppInput
           label="About you"
           value={bio}
@@ -754,6 +999,32 @@ const styles = StyleSheet.create({
     letterSpacing: 1.4,
     color: colors.accent,
     marginBottom: 4,
+  },
+  chipWrap: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginBottom: spacing.md,
+  },
+  chip: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: radius.md,
+    backgroundColor: colors.surfaceElevated,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  chipActive: {
+    borderColor: colors.accent,
+    backgroundColor: 'rgba(200,255,0,0.14)',
+  },
+  chipText: {
+    fontFamily: fonts.sansMedium,
+    fontSize: 13,
+    color: colors.textSecondary,
+  },
+  chipTextActive: {
+    color: colors.accent,
   },
   moodHint: {
     fontFamily: fonts.sans,

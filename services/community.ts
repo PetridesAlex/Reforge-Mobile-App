@@ -376,6 +376,14 @@ export async function getCoachMessageRoster(
     .sort((a, b) => a.full_name.localeCompare(b.full_name));
 }
 
+export async function listStudioCommunityMembers(viewerId: string): Promise<Profile[]> {
+  if (useSupabaseCommunity()) return communitySupabase.listStudioCommunityMembers(viewerId);
+  await delay(50);
+  return mockProfiles
+    .filter((p) => p.role === 'member' && p.id !== viewerId && !mockInactiveMemberIds.has(p.id))
+    .sort((a, b) => a.full_name.localeCompare(b.full_name));
+}
+
 function notifyThreadParticipants(
   thread: ChatThread,
   senderId: string,

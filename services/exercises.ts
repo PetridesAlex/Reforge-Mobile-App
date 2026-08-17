@@ -29,3 +29,21 @@ export async function listExercises(muscleGroups?: MuscleGroup[]): Promise<Exerc
   }
   return listExercisesMock(muscleGroups);
 }
+
+export async function createExercise(
+  coachId: string,
+  input: Omit<Exercise, 'id' | 'created_at' | 'created_by'>,
+): Promise<Exercise> {
+  if (useSupabaseContent()) {
+    return exercisesSupabase.createExercise(coachId, input).then(enrichExercise);
+  }
+  await delay(250);
+  const exercise: Exercise = {
+    ...input,
+    id: `ex-${Date.now()}`,
+    created_by: coachId,
+    created_at: new Date().toISOString(),
+  };
+  mockExercises.push(exercise);
+  return enrichExercise(exercise);
+}

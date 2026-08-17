@@ -4,14 +4,14 @@ import { useEffect, useState } from 'react';
 import { ActivityIndicator, Platform, StyleSheet, Text, View } from 'react-native';
 
 import { Screen } from '@/components/ui/Screen';
-import { homeRouteForRole, useAuth } from '@/hooks/useAuth';
+import { postAuthRoute, useAuth } from '@/hooks/useAuth';
 import { isAuthCallbackUrl } from '@/lib/auth/sessionFromUrl';
 import * as authService from '@/services/auth';
 import { colors, spacing, typography } from '@/constants/theme';
 
 /** Opened after email confirm, Google OAuth, magic link, or OTP (reforge://auth/callback or /auth/callback). */
 export default function AuthCallbackScreen() {
-  const { isAuthenticated, role, isLoading } = useAuth();
+  const { isAuthenticated, profile, isLoading } = useAuth();
   const [timedOut, setTimedOut] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [processing, setProcessing] = useState(true);
@@ -72,9 +72,9 @@ export default function AuthCallbackScreen() {
 
   useEffect(() => {
     if (!processing && !isLoading && isAuthenticated) {
-      router.replace(homeRouteForRole(role));
+      router.replace(postAuthRoute(profile));
     }
-  }, [processing, isLoading, isAuthenticated, role]);
+  }, [processing, isLoading, isAuthenticated, profile]);
 
   useEffect(() => {
     if (!processing && !isLoading && !isAuthenticated && !error && timedOut) {

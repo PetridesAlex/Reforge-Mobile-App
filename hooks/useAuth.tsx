@@ -26,10 +26,22 @@ type AuthContextValue = {
   updateAvatar: (uri: string) => Promise<Profile>;
   updateProfile: (patch: {
     fullName?: string;
+    firstName?: string | null;
+    lastName?: string | null;
     phone?: string | null;
     email?: string;
     communityBio?: string | null;
     communityMood?: string | null;
+    username?: string | null;
+    gender?: string | null;
+    dateOfBirth?: string | null;
+    primaryGoal?: string | null;
+    trainingLevel?: string | null;
+    trainingDaysPerWeek?: number | null;
+    trainingInterests?: string[] | null;
+    preferredWorkoutTime?: string | null;
+    preferredWorkoutDuration?: string | null;
+    motivationType?: string | null;
   }) => Promise<Profile>;
 };
 
@@ -268,5 +280,18 @@ export function useAuth(): AuthContextValue {
 export function homeRouteForRole(role: UserRole | null | undefined): '/(member)' | '/(coach)' | '/(auth)/login' {
   if (role === 'member') return '/(member)';
   if (role === 'coach' || role === 'admin') return '/(coach)';
+  return '/(auth)/login';
+}
+
+/** Post-auth destination including member profile onboarding gate. */
+export function postAuthRoute(
+  profile: Profile | null | undefined,
+): '/(member)' | '/(coach)' | '/(onboarding)' | '/(auth)/login' {
+  if (!profile) return '/(auth)/login';
+  if (profile.role === 'coach' || profile.role === 'admin') return '/(coach)';
+  if (profile.role === 'member' && profile.onboarding_completed !== true) {
+    return '/(onboarding)';
+  }
+  if (profile.role === 'member') return '/(member)';
   return '/(auth)/login';
 }

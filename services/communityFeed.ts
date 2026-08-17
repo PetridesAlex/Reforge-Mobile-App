@@ -14,6 +14,7 @@ type CreatePostInput = {
   body: string;
   visibility?: CommunityPostVisibility;
   localImageUris?: string[];
+  localMedia?: Array<{ uri: string; mediaType?: 'image' | 'video'; durationSeconds?: number | null }>;
 };
 
 type MockStore = {
@@ -151,8 +152,17 @@ export async function createCommunityPost(input: CreatePostInput): Promise<Commu
     return feedSupabase.createCommunityPost(input);
   }
   const now = new Date().toISOString();
+  const assets =
+    input.localMedia?.length
+      ? input.localMedia
+      : (input.localImageUris ?? []).map((uri) => ({
+          uri,
+          mediaType: 'image' as const,
+          durationSeconds: null as number | null,
+        }));
+  const postId = `mock-post-${Date.now()}`;
   const post: CommunityPost = {
-    id: `mock-post-${Date.now()}`,
+    id: postId,
     author_id: input.authorId,
     author_name: 'You',
     author_username: null,
@@ -160,22 +170,22 @@ export async function createCommunityPost(input: CreatePostInput): Promise<Commu
     author_role: 'member',
     body: input.body.trim(),
     visibility: input.visibility ?? 'community',
-    post_type: (input.localImageUris?.length ?? 0) > 0 ? 'media' : 'status',
+    post_type: assets.length > 0 ? 'media' : 'status',
     like_count: 0,
     comment_count: 0,
     is_pinned: false,
     created_at: now,
     updated_at: now,
     deleted_at: null,
-    media: (input.localImageUris ?? []).map((uri, i) => ({
+    media: assets.map((asset, i) => ({
       id: `mock-media-${Date.now()}-${i}`,
-      post_id: `mock-post-${Date.now()}`,
-      storage_path: uri,
-      public_url: uri,
-      media_type: 'image' as const,
+      post_id: postId,
+      storage_path: asset.uri,
+      public_url: asset.uri,
+      media_type: (asset.mediaType ?? 'image') as 'image' | 'video',
       width: null,
       height: null,
-      duration_seconds: null,
+      duration_seconds: asset.durationSeconds ?? null,
       sort_order: i,
       created_at: now,
     })),

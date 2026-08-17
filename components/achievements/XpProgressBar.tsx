@@ -17,16 +17,14 @@ export function XpProgressBar({ xp, compact }: Props) {
   if (compact) {
     return (
       <View style={styles.compactWrap}>
-        <View style={styles.compactHead}>
-          <Text style={styles.compactLevel}>
-            LVL {xp.level} · {xp.level_title.toUpperCase()}
-          </Text>
-          <Text style={styles.compactXp}>{xp.total_xp.toLocaleString()} XP</Text>
-        </View>
+        <Text style={styles.compactLevelLine} numberOfLines={2}>
+          LEVEL {xp.level} · {xp.total_xp.toLocaleString()} XP · {remaining.toLocaleString()} XP TO
+          LEVEL {xp.level + 1}
+        </Text>
+        <Text style={styles.compactTitle}>{xp.level_title.toUpperCase()}</Text>
         <View style={styles.track}>
           <View style={[styles.fill, { width: `${pct}%` }]} />
         </View>
-        <Text style={styles.compactHint}>{remaining} XP to Level {xp.level + 1}</Text>
       </View>
     );
   }
@@ -153,6 +151,18 @@ const styles = StyleSheet.create({
     fontSize: 20,
     color: colors.text,
     flex: 1,
+  },
+  compactLevelLine: {
+    fontFamily: fonts.display,
+    fontSize: 18,
+    lineHeight: 22,
+    color: colors.text,
+  },
+  compactTitle: {
+    fontFamily: fonts.sansSemiBold,
+    fontSize: 11,
+    letterSpacing: 1.2,
+    color: colors.textMuted,
   },
   compactXp: {
     fontFamily: fonts.sansSemiBold,

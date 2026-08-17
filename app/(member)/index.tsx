@@ -4,10 +4,13 @@ import { Pressable, RefreshControl, StyleSheet, Text, useWindowDimensions, View 
 import { Ionicons } from '@expo/vector-icons';
 
 import { WinnerCelebrationModal } from '@/components/achievements/WinnerCelebrationModal';
+import { AwardOfTheWeekCard } from '@/components/achievements/AwardOfTheWeekCard';
 import { AppBottomSheet } from '@/components/ui/AppBottomSheet';
 import { AppCard } from '@/components/ui/AppCard';
 import { AthleteHomeDashboard } from '@/components/home/AthleteHomeDashboard';
 import { HomeAchievementsStrip } from '@/components/home/HomeAchievementsStrip';
+import { HomeEngagementStrip } from '@/components/home/HomeEngagementStrip';
+import { HomeLeagueCard } from '@/components/home/HomeLeagueCard';
 import { HomeStoreFeature } from '@/components/home/HomeStoreFeature';
 import { HomeThisWeekChallenge } from '@/components/home/HomeThisWeekChallenge';
 import { Avatar } from '@/components/ui/Avatar';
@@ -104,10 +107,13 @@ export default function HomeScreen() {
       await refreshActiveSession();
       try {
         const pending = await challenges.listPendingCelebrations(profile.id);
+        const weeklyAward = pending.find(
+          (c) => c.kind === 'achievement' && Boolean(c.meta?.weekly_award),
+        );
         const win = pending.find((c) =>
           ['weekly_champion', 'weekly_runner_up', 'weekly_bronze'].includes(c.kind),
         );
-        setCelebration(win ?? pending[0] ?? null);
+        setCelebration(weeklyAward ?? win ?? pending[0] ?? null);
       } catch {
         // optional until migration applied
       }
@@ -229,7 +235,14 @@ export default function HomeScreen() {
         activeSessionId={activeSessionId ?? data.activeSessionId}
       />
 
+      <HomeEngagementStrip
+        weeklyCompleted={data.weeklyProgress.completed}
+        weeklyGoal={data.weeklyProgress.goal}
+        streak={data.weeklyProgress.streak}
+      />
+      <HomeLeagueCard />
       <HomeThisWeekChallenge />
+      <AwardOfTheWeekCard audience="member" />
       <HomeAchievementsStrip />
 
       {chatAlertCount > 0 ? (

@@ -3,7 +3,7 @@ import { Animated, Easing, Pressable, StyleSheet, Text, View } from 'react-nativ
 import { Ionicons } from '@expo/vector-icons';
 
 import type { MotivationQuote } from '@/lib/quotes/motivation';
-import { colors, radius, spacing, typography } from '@/constants/theme';
+import { colors, fonts, radius, spacing } from '@/constants/theme';
 
 type MotivationQuoteCardProps = {
   quote: MotivationQuote;
@@ -201,26 +201,29 @@ export function MotivationQuoteCard({ quote, onRequestNew }: MotivationQuoteCard
 const styles = StyleSheet.create({
   quoteCard: {
     marginBottom: spacing.lg,
-    gap: spacing.xs,
+    gap: spacing.sm,
     overflow: 'hidden',
     backgroundColor: colors.surfaceElevated,
     borderRadius: radius.lg,
-    padding: spacing.md,
+    padding: spacing.lg,
     borderWidth: 1.5,
   },
   quoteHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.xs,
-    marginBottom: spacing.xs,
+    marginBottom: 2,
   },
   quoteEyebrow: {
-    ...typography.label,
+    fontFamily: fonts.sansBold,
+    fontSize: 10,
+    letterSpacing: 2,
+    textTransform: 'uppercase',
     color: colors.accent,
-    letterSpacing: 1.2,
   },
   tapHint: {
-    ...typography.caption,
+    fontFamily: fonts.sans,
+    fontSize: 11,
     color: colors.textMuted,
     marginLeft: 'auto',
   },
@@ -228,28 +231,33 @@ const styles = StyleSheet.create({
     position: 'absolute',
     right: spacing.md,
     top: spacing.sm,
-    fontSize: 64,
-    lineHeight: 64,
-    color: 'rgba(200,255,0,0.14)',
-    fontWeight: '700',
+    fontFamily: fonts.display,
+    fontSize: 72,
+    lineHeight: 72,
+    color: 'rgba(200,255,0,0.16)',
   },
   quoteText: {
-    ...typography.subtitle,
+    fontFamily: fonts.display,
+    fontSize: 28,
+    lineHeight: 32,
+    letterSpacing: 0.6,
     color: colors.text,
-    fontSize: 17,
-    lineHeight: 26,
-    paddingRight: spacing.lg,
-    minHeight: 52,
+    paddingRight: spacing.xl,
+    minHeight: 64,
+    textTransform: 'uppercase',
   },
   caret: {
+    fontFamily: fonts.display,
     color: colors.accent,
-    opacity: 0.75,
-    fontWeight: '400',
+    opacity: 0.85,
   },
   quoteAuthor: {
-    ...typography.caption,
-    color: colors.textSecondary,
-    marginTop: spacing.xs,
+    fontFamily: fonts.sansSemiBold,
+    fontSize: 11,
+    letterSpacing: 1.6,
+    textTransform: 'uppercase',
+    color: colors.accent,
+    marginTop: spacing.sm,
   },
   pressed: {
     opacity: 0.92,
