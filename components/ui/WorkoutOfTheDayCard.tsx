@@ -1,7 +1,16 @@
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useState } from 'react';
+import { router } from 'expo-router';
+import { useEffect, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
+import Animated, {
+  FadeInDown,
+  useAnimatedStyle,
+  useSharedValue,
+  withRepeat,
+  withSequence,
+  withTiming,
+} from 'react-native-reanimated';
 
 import { MediaImage } from '@/components/ui/MediaImage';
 import { PrimaryButton } from '@/components/ui/PrimaryButton';
@@ -38,8 +47,41 @@ function MetricPill({
 export function WorkoutOfTheDayCard({ memberId, wod, onUpdated }: Props) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const liveDotScale = useSharedValue(1);
+  const heroGlowOpacity = useSharedValue(0.85);
+  const joinedPulse = useSharedValue(1);
 
   const prescriptionMovements = normalizeMovements(wod.movements, wod.moves);
+
+  useEffect(() => {
+    liveDotScale.value = withRepeat(
+      withSequence(withTiming(1.35, { duration: 700 }), withTiming(1, { duration: 700 })),
+      -1,
+      false,
+    );
+    heroGlowOpacity.value = withRepeat(
+      withSequence(withTiming(1, { duration: 1600 }), withTiming(0.72, { duration: 1600 })),
+      -1,
+      false,
+    );
+    joinedPulse.value = withRepeat(
+      withSequence(withTiming(1.04, { duration: 900 }), withTiming(1, { duration: 900 })),
+      -1,
+      false,
+    );
+  }, [heroGlowOpacity, joinedPulse, liveDotScale]);
+
+  const liveDotStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: liveDotScale.value }],
+  }));
+
+  const heroGlowStyle = useAnimatedStyle(() => ({
+    opacity: heroGlowOpacity.value,
+  }));
+
+  const joinedTilePulseStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: joinedPulse.value }],
+  }));
 
   const respond = async (status: 'joined' | 'skipped') => {
     setBusy(true);
@@ -65,32 +107,40 @@ export function WorkoutOfTheDayCard({ memberId, wod, onUpdated }: Props) {
           locations={[0, 0.45, 1]}
           style={styles.heroFade}
         />
-        <LinearGradient
-          colors={['rgba(200,255,0,0.08)', 'transparent']}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={styles.heroGlow}
-        />
+        <Animated.View style={[styles.heroGlow, heroGlowStyle]}>
+          <LinearGradient
+            colors={['rgba(200,255,0,0.08)', 'transparent']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={StyleSheet.absoluteFillObject}
+          />
+        </Animated.View>
 
-        <View style={styles.heroTop}>
+        <Animated.View entering={FadeInDown.duration(340)} style={styles.heroTop}>
           <View style={styles.liveBadge}>
-            <View style={styles.liveDot} />
+            <Animated.View style={[styles.liveDot, liveDotStyle]} />
             <Text style={styles.liveText}>TODAY</Text>
           </View>
           <View style={styles.heroIconWrap}>
             <Ionicons name="flash" size={16} color={colors.accent} />
           </View>
-        </View>
+        </Animated.View>
 
-        <View style={styles.heroCopy}>
+        <Animated.View entering={FadeInDown.delay(60).duration(360)} style={styles.heroCopy}>
           <Text style={styles.eyebrow}>Workout of the day</Text>
           <Text style={styles.title}>{wod.title}</Text>
           <View style={styles.heroMetrics}>
-            <MetricPill icon="time-outline" label={wod.startTime} />
-            <MetricPill icon="timer-outline" label={`${wod.durationMin} min`} />
-            <MetricPill icon="location-outline" label={wod.location} />
+            <Animated.View entering={FadeInDown.delay(110).duration(320)}>
+              <MetricPill icon="time-outline" label={wod.startTime} />
+            </Animated.View>
+            <Animated.View entering={FadeInDown.delay(150).duration(320)}>
+              <MetricPill icon="timer-outline" label={`${wod.durationMin} min`} />
+            </Animated.View>
+            <Animated.View entering={FadeInDown.delay(190).duration(320)}>
+              <MetricPill icon="location-outline" label={wod.location} />
+            </Animated.View>
           </View>
-        </View>
+        </Animated.View>
       </View>
 
       <View style={styles.body}>
@@ -101,20 +151,22 @@ export function WorkoutOfTheDayCard({ memberId, wod, onUpdated }: Props) {
         </View>
 
         <View style={styles.infoRow}>
-          <View style={styles.infoTile}>
+          <Animated.View entering={FadeInDown.delay(70).duration(320)} style={styles.infoTile}>
             <Text style={styles.infoValue}>{wod.level}</Text>
             <Text style={styles.infoLabel}>Level</Text>
-          </View>
+          </Animated.View>
           <View style={styles.infoDivider} />
-          <View style={styles.infoTile}>
+          <Animated.View
+            entering={FadeInDown.delay(120).duration(320)}
+            style={[styles.infoTile, joinedTilePulseStyle]}>
             <Text style={[styles.infoValue, styles.infoValueAccent]}>{wod.joinedCount}</Text>
             <Text style={styles.infoLabel}>Joined</Text>
-          </View>
+          </Animated.View>
           <View style={styles.infoDivider} />
-          <View style={styles.infoTile}>
+          <Animated.View entering={FadeInDown.delay(170).duration(320)} style={styles.infoTile}>
             <Text style={styles.infoValue}>{prescriptionMovements.length}</Text>
             <Text style={styles.infoLabel}>Movements</Text>
-          </View>
+          </Animated.View>
         </View>
 
         <View style={styles.movesSection}>
@@ -132,7 +184,42 @@ export function WorkoutOfTheDayCard({ memberId, wod, onUpdated }: Props) {
           </View>
         ) : null}
 
-        {wod.myStatus === 'joined' ? (
+        {wod.mySessionStatus === 'active' && wod.activeSessionId ? (
+          <View style={styles.statusBannerJoined}>
+            <View style={styles.statusTopRow}>
+              <View style={styles.statusIconJoined}>
+                <Ionicons name="play-circle" size={22} color={colors.accent} />
+              </View>
+              <View style={styles.statusCopy}>
+                <Text style={styles.statusTitleJoined}>In progress</Text>
+                <Text style={styles.statusTextJoined}>You have an active WOD session</Text>
+              </View>
+            </View>
+            <PrimaryButton
+              title="Resume workout"
+              onPress={() => router.push(`/(member)/workouts/session/${wod.activeSessionId}`)}
+              style={styles.statusBtnFull}
+            />
+          </View>
+        ) : wod.myStatus === 'completed' && wod.completedSessionId ? (
+          <View style={styles.statusBannerJoined}>
+            <View style={styles.statusTopRow}>
+              <View style={styles.statusIconJoined}>
+                <Ionicons name="trophy" size={22} color={colors.accent} />
+              </View>
+              <View style={styles.statusCopy}>
+                <Text style={styles.statusTitleJoined}>Completed today</Text>
+                <Text style={styles.statusTextJoined}>Great work. Your completion is saved.</Text>
+              </View>
+            </View>
+            <PrimaryButton
+              title="View summary"
+              variant="secondary"
+              onPress={() => router.push(`/(member)/workouts/summary/${wod.completedSessionId}`)}
+              style={styles.statusBtnFull}
+            />
+          </View>
+        ) : wod.myStatus === 'joined' ? (
           <View style={styles.statusBannerJoined}>
             <View style={styles.statusTopRow}>
               <View style={styles.statusIconJoined}>

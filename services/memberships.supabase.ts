@@ -1,6 +1,10 @@
 import { format } from 'date-fns';
 
 import {
+  DEFAULT_MEMBERSHIP_PLAN_LABEL,
+  GROUP_CLASS_MONTHLY_EUR,
+} from '@/lib/memberships/pricing';
+import {
   isMembershipBillingReady,
   isMissingMembershipTableError,
   MEMBERSHIP_MIGRATION_HINT,
@@ -77,9 +81,9 @@ async function ensureMembershipRow(memberId: string): Promise<MemberMembership> 
     .from('member_memberships')
     .insert({
       member_id: memberId,
-      plan_label: 'REFORGE Strength',
+      plan_label: DEFAULT_MEMBERSHIP_PLAN_LABEL,
       status: 'unpaid',
-      amount_eur: 180,
+      amount_eur: GROUP_CLASS_MONTHLY_EUR,
     })
     .select('*')
     .single();
@@ -96,9 +100,9 @@ function defaultMembership(memberId: string): MemberMembership {
     id: `pending-${memberId}`,
     member_id: memberId,
     plan: 'monthly',
-    plan_label: 'REFORGE Strength',
+    plan_label: DEFAULT_MEMBERSHIP_PLAN_LABEL,
     status: 'unpaid',
-    amount_eur: 180,
+    amount_eur: GROUP_CLASS_MONTHLY_EUR,
     period_start: start,
     period_end: end.toISOString().slice(0, 10),
     last_paid_at: null,
@@ -138,13 +142,26 @@ function filterAndSortRows(
 
 async function listMembershipsHybrid(filter?: {
   status?: MembershipStatus | 'all' | 'needs_payment';
+  coachId?: string;
 }): Promise<MembershipRow[]> {
   const memberRows = await adminSupabase.listMembers();
-  const rows: MembershipRow[] = memberRows.map(({ member, coach }) => ({
+  let rows: MembershipRow[] = memberRows.map(({ member, coach }) => ({
     membership: defaultMembership(member.id),
     member,
     coachName: coach?.full_name ?? null,
   }));
+
+  if (filter?.coachId) {
+    const supabase = getSupabase();
+    const { data: assigned, error } = await supabase
+      .from('coach_clients')
+      .select('member_id')
+      .eq('coach_id', filter.coachId);
+    if (error) throw error;
+    const allowed = new Set((assigned ?? []).map((r) => r.member_id as string));
+    rows = rows.filter((r) => allowed.has(r.member.id));
+  }
+
   return filterAndSortRows(rows, filter);
 }
 
@@ -160,8 +177,30 @@ async function enrichRow(
   };
 }
 
+export type PaymentReminderResult = {
+  ok: true;
+  memberId: string;
+};
+
+export async function sendPaymentReminder(memberId: string): Promise<PaymentReminderResult> {
+  if (!(await isMembershipBillingReady())) requireBillingSchema();
+
+  const supabase = getSupabase();
+  const row = await getMembershipForMember(memberId);
+  if (!row) throw new Error('Member not found');
+  if (row.membership.status === 'paid') throw new Error('Membership is already paid');
+
+  const { error } = await supabase.rpc('send_membership_payment_reminder', {
+    p_member_id: memberId,
+  });
+  if (error) throw error;
+
+  return { ok: true, memberId };
+}
+
 export async function listMemberships(filter?: {
   status?: MembershipStatus | 'all' | 'needs_payment';
+  coachId?: string;
 }): Promise<MembershipRow[]> {
   if (!(await isMembershipBillingReady())) {
     return listMembershipsHybrid(filter);
@@ -209,6 +248,16 @@ export async function listMemberships(filter?: {
       membership = await ensureMembershipRow(member.id);
     }
     rows.push(await enrichRow(member, membership, coachForMember.get(member.id) ?? null));
+  }
+
+  if (filter?.coachId) {
+    const { data: assigned, error: assignedError } = await supabase
+      .from('coach_clients')
+      .select('member_id')
+      .eq('coach_id', filter.coachId);
+    if (assignedError) throw assignedError;
+    const allowed = new Set((assigned ?? []).map((r) => r.member_id as string));
+    rows = rows.filter((r) => allowed.has(r.member.id));
   }
 
   return filterAndSortRows(rows, filter);
@@ -433,6 +482,7 @@ export async function sendMonthlyInvoices(): Promise<MonthlyInvoiceResult> {
       user_id: member.id,
       title: 'Membership invoice',
       body: `Your ${membership.plan_label} subscription for ${periodLabel} is €${membership.amount_eur}. Please arrange payment with the studio.`,
+      type: 'membership_invoice',
     });
 
     if (membership.status === 'paid') {

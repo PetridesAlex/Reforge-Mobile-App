@@ -23,6 +23,7 @@ import { colors, fonts, spacing, typography } from '@/constants/theme';
 export default function WorkoutSummaryScreen() {
   const { sessionId } = useLocalSearchParams<{ sessionId: string }>();
   const { profile } = useAuth();
+  const hasSupabaseWorkouts = useSupabaseWorkouts();
   const { clearActiveSession, refreshActiveSession } = useActiveWorkout();
   const [summary, setSummary] = useState<WorkoutSummary | null>(null);
   const [progressionHint, setProgressionHint] = useState<string | null>(null);
@@ -45,7 +46,7 @@ export default function WorkoutSummaryScreen() {
         detail.sets.length > 0 ? Math.round((completed.length / detail.sets.length) * 100) : 0;
 
       let personalRecords: string[] = [];
-      if (profile && useSupabaseWorkouts()) {
+      if (profile && hasSupabaseWorkouts) {
         try {
           const prs = await listPersonalRecords(profile.id, 20);
           personalRecords = prs
@@ -137,7 +138,7 @@ export default function WorkoutSummaryScreen() {
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to load summary');
     }
-  }, [sessionId, profile, clearActiveSession, refreshActiveSession]);
+  }, [sessionId, profile, hasSupabaseWorkouts, clearActiveSession, refreshActiveSession]);
 
   useEffect(() => {
     void load();

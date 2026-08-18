@@ -18,7 +18,7 @@ import { Skeleton } from '@/components/ui/Skeleton';
 import { BackButton } from '@/components/ui/BackButton';
 import { useAuth } from '@/hooks/useAuth';
 import { labelForPrimaryGoal, labelForTrainingLevel, TRAINING_INTEREST_OPTIONS } from '@/lib/onboarding/types';
-import { canManageStudio } from '@/lib/permissions';
+import { canManageMemberships, canManageStudio } from '@/lib/permissions';
 import { useSupabaseProgress } from '@/lib/progress/config';
 import { formatTime, relativeTime } from '@/lib/utils/dates';
 import { genderIcon, genderLabel, genderTone } from '@/lib/utils/gender';
@@ -78,6 +78,8 @@ export default function ClientDetailScreen() {
   const { id, tab: tabParam } = useLocalSearchParams<{ id: string; tab?: string }>();
   const { profile } = useAuth();
   const isAdmin = canManageStudio(profile?.role);
+  const canBilling = canManageMemberships(profile?.role);
+  const supabaseProgress = useSupabaseProgress();
   const [tab, setTab] = useState<Tab>('overview');
   const [data, setData] = useState<ClientDetail | null>(null);
   const [coaches, setCoaches] = useState<Profile[]>([]);
@@ -92,6 +94,7 @@ export default function ClientDetailScreen() {
   const [billing, setBilling] = useState<adminService.MembershipRow | null>(null);
   const [payments, setPayments] = useState<MembershipPayment[]>([]);
   const [billingLoading, setBillingLoading] = useState(false);
+  const [reminderBusy, setReminderBusy] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
   const [memberAbsences, setMemberAbsences] = useState<MemberAbsence[]>([]);
   const [rosterActive, setRosterActive] = useState(true);
@@ -157,7 +160,7 @@ export default function ClientDetailScreen() {
 
   useEffect(() => {
     if (!id) return;
-    if (useSupabaseProgress()) {
+    if (supabaseProgress) {
       progressSupabase
         .getPerformanceStats(id)
         .then((perf) => {
@@ -189,10 +192,10 @@ export default function ClientDetailScreen() {
         streak: 3,
       },
     });
-  }, [id, data]);
+  }, [id, data, supabaseProgress]);
 
   const loadBilling = useCallback(async () => {
-    if (!id || !isAdmin) return;
+    if (!id || !canBilling) return;
     setBillingLoading(true);
     try {
       const [membership, history] = await Promise.all([
@@ -207,11 +210,15 @@ export default function ClientDetailScreen() {
     } finally {
       setBillingLoading(false);
     }
-  }, [id, isAdmin]);
+  }, [id, canBilling]);
 
   useEffect(() => {
     if (tab === 'billing') loadBilling();
   }, [tab, loadBilling]);
+
+  useEffect(() => {
+    if (canBilling) void loadBilling();
+  }, [canBilling, loadBilling]);
 
   const addNote = async () => {
     if (!profile || !id || !note.trim()) return;
@@ -223,10 +230,10 @@ export default function ClientDetailScreen() {
 
   const tabs = useMemo<Tab[]>(
     () =>
-      isAdmin
+      canBilling
         ? ['overview', 'billing', 'program', 'progress', 'sessions', 'notes']
         : ['overview', 'program', 'progress', 'sessions', 'notes'],
-    [isAdmin],
+    [canBilling],
   );
 
   useEffect(() => {
@@ -323,7 +330,7 @@ export default function ClientDetailScreen() {
               <Text style={styles.heroChipText}>{assignedCoach.full_name}</Text>
             </View>
           ) : null}
-          {isAdmin && onBilling ? (
+          {canBilling && onBilling ? (
             <View style={[styles.heroChip, styles.heroChipBilling]}>
               <Ionicons name="checkmark-circle" size={12} color={colors.success} />
               <Text style={[styles.heroChipText, styles.heroChipBillingText]}>
@@ -823,17 +830,44 @@ export default function ClientDetailScreen() {
         </>
       ) : null}
 
-      {tab === 'billing' && isAdmin ? (
+      {tab === 'billing' && canBilling ? (
         <MembershipBillingPanel
           membership={billing}
           payments={payments}
           loading={billingLoading}
+          reminderBusy={reminderBusy}
           onMarkPaid={
             id
               ? async () => {
                   await adminService.markMembershipPaid(id);
                   loadBilling();
                   load();
+                  setToast('Marked as paid');
+                }
+              : undefined
+          }
+          onMarkUnpaid={
+            id
+              ? async () => {
+                  await adminService.markMembershipUnpaid(id);
+                  loadBilling();
+                  load();
+                  setToast('Marked as unpaid');
+                }
+              : undefined
+          }
+          onSendReminder={
+            id
+              ? async () => {
+                  setReminderBusy(true);
+                  try {
+                    await adminService.sendPaymentReminder(id);
+                    setToast('Payment reminder sent');
+                  } catch (e) {
+                    setToast(e instanceof Error ? e.message : 'Could not send reminder');
+                  } finally {
+                    setReminderBusy(false);
+                  }
                 }
               : undefined
           }

@@ -23,7 +23,7 @@ import { colors } from '@/constants/theme';
 SplashScreen.preventAutoHideAsync().catch(() => undefined);
 SplashScreen.setOptions({ duration: 600, fade: true });
 
-const MIN_PRELOAD_MS = 7000;
+const MIN_PRELOAD_MS = Platform.OS === 'web' ? 1400 : 7000;
 
 export const appFonts = {
   BebasNeue_400Regular,

@@ -2,6 +2,7 @@ import { formatDistanceToNowStrict } from 'date-fns';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { RefreshControl, StyleSheet, Text, View } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 
 import { ChallengePodium } from '@/components/challenges/ChallengePodium';
 import { LeaderboardList } from '@/components/challenges/LeaderboardList';
@@ -163,13 +164,16 @@ export default function MemberChallengeDetail() {
         </Text>
       </View>
 
-      <Text style={styles.status}>{challenge.status.toUpperCase()}</Text>
-      <Text style={styles.deadline}>
-        {live
-          ? `Ends ${formatDistanceToNowStrict(new Date(challenge.ends_at), { addSuffix: true })}`
-          : `Closed · ${challenge.participant_count ?? 0} athletes`}
-      </Text>
-      {challenge.description ? <Text style={styles.body}>{challenge.description}</Text> : null}
+      <View style={styles.heroCard}>
+        <LinearGradient colors={['rgba(200,255,0,0.1)', 'transparent']} style={styles.heroGlow} />
+        <Text style={styles.status}>{challenge.status.toUpperCase()}</Text>
+        <Text style={styles.deadline}>
+          {live
+            ? `Ends ${formatDistanceToNowStrict(new Date(challenge.ends_at), { addSuffix: true })}`
+            : `Closed · ${challenge.participant_count ?? 0} athletes`}
+        </Text>
+        {challenge.description ? <Text style={styles.body}>{challenge.description}</Text> : null}
+      </View>
       {challenge.instructions ? <Text style={styles.rules}>{challenge.instructions}</Text> : null}
 
       <SectionHeader title="Movements" kicker="Workout" />
@@ -214,17 +218,19 @@ export default function MemberChallengeDetail() {
       {live ? (
         <>
           <SectionHeader title="Submit result" kicker="Compete" />
-          <AppInput
-            label={challenge.score_type === 'lowest_time' ? 'Time (mm:ss)' : 'Score'}
-            value={scoreInput}
-            onChangeText={setScoreInput}
-            placeholder={challenge.score_type === 'lowest_time' ? '08:42' : '100'}
-          />
-          <PrimaryButton
-            title={submitting ? 'Submitting…' : mine ? 'Update submission' : 'Submit result'}
-            onPress={() => void onSubmit()}
-            disabled={submitting || !scoreInput.trim()}
-          />
+          <View style={styles.submitCard}>
+            <AppInput
+              label={challenge.score_type === 'lowest_time' ? 'Time (mm:ss)' : 'Score'}
+              value={scoreInput}
+              onChangeText={setScoreInput}
+              placeholder={challenge.score_type === 'lowest_time' ? '08:42' : '100'}
+            />
+            <PrimaryButton
+              title={submitting ? 'Submitting…' : mine ? 'Update submission' : 'Submit result'}
+              onPress={() => void onSubmit()}
+              disabled={submitting || !scoreInput.trim()}
+            />
+          </View>
         </>
       ) : null}
 
@@ -241,6 +247,16 @@ export default function MemberChallengeDetail() {
 const styles = StyleSheet.create({
   top: { flexDirection: 'row', alignItems: 'center', gap: 12, marginTop: spacing.sm, marginBottom: spacing.md },
   title: { flex: 1, fontFamily: fonts.display, fontSize: 28, color: colors.text },
+  heroCard: {
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    borderColor: 'rgba(200,255,0,0.24)',
+    backgroundColor: colors.surfaceElevated,
+    padding: spacing.md,
+    marginBottom: spacing.md,
+    overflow: 'hidden',
+  },
+  heroGlow: { ...StyleSheet.absoluteFillObject },
   status: { fontFamily: fonts.sansBold, fontSize: 11, letterSpacing: 1.6, color: colors.accent },
   deadline: { fontFamily: fonts.sans, fontSize: 13, color: colors.textMuted, marginBottom: spacing.md },
   body: { fontFamily: fonts.sans, fontSize: 14, lineHeight: 20, color: colors.textSecondary, marginBottom: 8 },
@@ -273,6 +289,14 @@ const styles = StyleSheet.create({
   compare: { marginTop: 8, gap: 4 },
   compareItem: { fontFamily: fonts.sansSemiBold, fontSize: 12, color: colors.textSecondary },
   pr: { color: colors.accent },
+  submitCard: {
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.surfaceElevated,
+    padding: spacing.md,
+    gap: spacing.sm,
+  },
   notice: { fontFamily: fonts.sans, color: colors.accent, marginVertical: 8 },
   err: { fontFamily: fonts.sans, color: colors.danger, marginVertical: 8 },
 });

@@ -27,7 +27,8 @@ import { Screen } from '@/components/ui/Screen';
 import { SectionHeader } from '@/components/ui/SectionHeader';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { useAuth } from '@/hooks/useAuth';
-import { canManageAllClients, canManageStudio } from '@/lib/permissions';
+import { GROUP_CLASS_MONTHLY_EUR } from '@/lib/memberships/pricing';
+import { canManageAllClients, canManageMemberships, canManageStudio } from '@/lib/permissions';
 import { inviteSuccessMessage, manualMemberModalHint, manualMemberSuccessMessage } from '@/lib/admin/config';
 import { formatSupabaseError } from '@/lib/supabase/errors';
 import type { TrainingPlacementType } from '@/lib/scheduling/placement';
@@ -63,6 +64,7 @@ export default function ClientsScreen() {
   const { profile } = useAuth();
   const studioWide = canManageAllClients(profile?.role);
   const admin = canManageStudio(profile?.role);
+  const canBilling = canManageMemberships(profile?.role);
 
   const [tab, setTab] = useState<Tab>('roster');
   const [clients, setClients] = useState<ClientCard[]>([]);
@@ -106,7 +108,7 @@ export default function ClientsScreen() {
   const [billingEmail, setBillingEmail] = useState('');
   const [billingPhone, setBillingPhone] = useState('');
   const [billingPlan, setBillingPlan] = useState<'monthly' | 'quarterly' | 'annual' | 'drop-in'>('monthly');
-  const [billingAmount, setBillingAmount] = useState('180');
+  const [billingAmount, setBillingAmount] = useState(String(GROUP_CLASS_MONTHLY_EUR));
   const [billingStatus, setBillingStatus] = useState<MembershipStatus>('unpaid');
   const [billingNotes, setBillingNotes] = useState('Started with REFORGE');
   const [billingSaving, setBillingSaving] = useState(false);
@@ -391,7 +393,7 @@ export default function ClientsScreen() {
         email: billingEmail.trim() || undefined,
         phone: billingPhone.trim() || undefined,
         plan: billingPlan,
-        amountEur: Number(billingAmount) || 180,
+        amountEur: Number(billingAmount) || GROUP_CLASS_MONTHLY_EUR,
         status: billingStatus,
         notes: billingNotes.trim() || 'Started with REFORGE',
       });
@@ -548,6 +550,17 @@ export default function ClientsScreen() {
             </Pressable>
           </View>
         </>
+      ) : null}
+
+      {canBilling && !admin ? (
+        <View style={styles.toolbar}>
+          <Pressable
+            onPress={() => router.push('/(coach)/memberships')}
+            style={({ pressed }) => [styles.toolSecondary, pressed && styles.pressed, styles.toolFlex]}>
+            <Ionicons name="wallet-outline" size={16} color={colors.accent} />
+            <Text style={styles.toolSecondaryText}>Memberships</Text>
+          </Pressable>
+        </View>
       ) : null}
 
       {admin && tab === 'classes' ? (
@@ -756,11 +769,17 @@ export default function ClientsScreen() {
                         {c.trainingPlacement.detail} · {c.trainingPlacement.location}
                       </Text>
                     ) : null}
-                    {admin ? (
+                    {canBilling ? (
                       <View style={styles.billingRow}>
                         {onBilling ? (
                           <Pressable
-                            onPress={() => router.push('/(coach)/admin/memberships')}
+                            onPress={() =>
+                              router.push(
+                                admin
+                                  ? '/(coach)/admin/memberships'
+                                  : '/(coach)/memberships',
+                              )
+                            }
                             style={styles.billingPill}>
                             <Ionicons name="checkmark-circle" size={12} color={colors.success} />
                             <Text style={styles.billingPillText}>Billing · {billing.status}</Text>

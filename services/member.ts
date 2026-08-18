@@ -375,6 +375,18 @@ export type WorkoutOfTheDayView = NonNullable<MemberDashboard['workoutOfTheDay']
 function mapMockWodView(wod: (typeof mockWorkoutsOfTheDay)[number], memberId: string): WorkoutOfTheDayView {
   const rsvps = mockWodRsvps.filter((r) => r.wod_id === wod.id);
   const mine = rsvps.find((r) => r.member_id === memberId);
+  const wodSessionTag = `wod:${wod.id}`;
+  const activeSession = mockSessions.find(
+    (s) => s.member_id === memberId && s.status === 'active' && s.notes === wodSessionTag,
+  );
+  const completedSession = mockSessions.find(
+    (s) => s.member_id === memberId && s.status === 'completed' && s.notes === wodSessionTag,
+  );
+  const myStatus = activeSession
+    ? 'joined'
+    : completedSession
+      ? 'completed'
+      : (mine?.status ?? null);
   return {
     id: wod.id,
     date: wod.date,
@@ -388,7 +400,10 @@ function mapMockWodView(wod: (typeof mockWorkoutsOfTheDay)[number], memberId: st
     moves: [...wod.moves],
     movements: normalizeMovements(wod.movements, wod.moves),
     joinedCount: rsvps.filter((r) => r.status === 'joined').length,
-    myStatus: mine?.status ?? null,
+    myStatus,
+    mySessionStatus: activeSession ? 'active' : completedSession ? 'completed' : null,
+    activeSessionId: activeSession?.id ?? null,
+    completedSessionId: completedSession?.id ?? null,
   };
 }
 
@@ -501,7 +516,7 @@ export async function getWodWorkoutDetail(wodId: string, memberId: string) {
     wodView = mapMockWodView(wod, memberId);
   }
 
-  if (wodView.myStatus !== 'joined') return null;
+  if (wodView.myStatus !== 'joined' && wodView.myStatus !== 'completed') return null;
 
   return {
     wod: wodView,
@@ -1367,7 +1382,7 @@ export async function getMemberProfileExtras(memberId: string) {
   if (useSupabasePrograms() || useSupabaseWorkouts() || useSupabaseContent()) {
     try {
       const supabase = (await import('@/lib/supabase/client')).getSupabase();
-      const [{ data: link }, { data: assignment }] = await Promise.all([
+      const [{ data: link }, { data: assignment }, { data: membershipRow }] = await Promise.all([
         supabase
           .from('coach_clients')
           .select('coach_id, profiles:coach_id(id, full_name, email, avatar_url, role, phone, created_at)')
@@ -1383,6 +1398,7 @@ export async function getMemberProfileExtras(memberId: string) {
           .order('start_date', { ascending: false })
           .limit(1)
           .maybeSingle(),
+        supabase.from('member_memberships').select('*').eq('member_id', memberId).maybeSingle(),
       ]);
 
       let coach: Profile | null = null;
@@ -1408,9 +1424,11 @@ export async function getMemberProfileExtras(memberId: string) {
       return {
         coach,
         programName: programRow?.name ?? null,
-        membership: 'REFORGE Training Plan',
-        membershipStatus: null as string | null,
-        membershipEnds: null as string | null,
+        membership: (membershipRow?.plan_label as string) ?? 'REFORGE Group',
+        membershipStatus: (membershipRow?.status as string) ?? null,
+        membershipEnds: (membershipRow?.period_end as string) ?? null,
+        membershipAmountEur:
+          membershipRow?.amount_eur != null ? Number(membershipRow.amount_eur) : null,
       };
     } catch {
       // fall through to mock
@@ -1426,10 +1444,11 @@ export async function getMemberProfileExtras(memberId: string) {
     coach,
     programName: program?.name ?? null,
     membership: membership
-      ? `${membership.plan_label} · ${membership.status.toUpperCase()}`
-      : 'REFORGE Training Plan',
+      ? membership.plan_label
+      : 'REFORGE Group',
     membershipStatus: membership?.status ?? null,
     membershipEnds: membership?.period_end ?? null,
+    membershipAmountEur: membership?.amount_eur ?? null,
   };
 }
 

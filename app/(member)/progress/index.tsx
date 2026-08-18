@@ -4,6 +4,15 @@ import { RefreshControl, StyleSheet, Text, View, useWindowDimensions, Pressable 
 import { LinearGradient } from 'expo-linear-gradient';
 import { LineChart, BarChart } from 'react-native-gifted-charts';
 import { Ionicons } from '@expo/vector-icons';
+import Animated, {
+  Easing,
+  FadeInDown,
+  useAnimatedStyle,
+  useSharedValue,
+  withRepeat,
+  withSequence,
+  withTiming,
+} from 'react-native-reanimated';
 
 import { AnimatedCount } from '@/components/ui/AnimatedCount';
 import { NavChevron } from '@/components/ui/BackButton';
@@ -27,12 +36,18 @@ import type { MemberAchievement, PersonalRecord } from '@/types';
 import { colors, fonts, radius, spacing } from '@/constants/theme';
 
 type ProgressData = Awaited<ReturnType<typeof memberService.getProgressStats>>;
+type WorkoutHistoryItem = Awaited<ReturnType<typeof memberService.getWorkoutHistory>>[number];
 
 export default function ProgressScreen() {
   const { profile } = useAuth();
+  const hasSupabaseWorkouts = useSupabaseWorkouts();
   const { width } = useWindowDimensions();
-  const chartWidth = Math.min(width - spacing.lg * 2 - spacing.md * 2, 440);
+  const chartWidth = Math.max(
+    220,
+    Math.min(width - spacing.lg * 2 - spacing.md * 2 - CHART_Y_AXIS_WIDTH - 20, 360),
+  );
   const [data, setData] = useState<ProgressData | null>(null);
+  const [history, setHistory] = useState<WorkoutHistoryItem[]>([]);
   const [prs, setPrs] = useState<PersonalRecord[]>([]);
   const [achievements, setAchievements] = useState<MemberAchievement[]>([]);
   const [loading, setLoading] = useState(true);
@@ -43,8 +58,13 @@ export default function ProgressScreen() {
     if (!profile) return;
     try {
       setError(null);
-      setData(await memberService.getProgressStats(profile.id));
-      if (useSupabaseWorkouts()) {
+      const [stats, recentHistory] = await Promise.all([
+        memberService.getProgressStats(profile.id),
+        memberService.getWorkoutHistory(profile.id, 6),
+      ]);
+      setData(stats);
+      setHistory(recentHistory);
+      if (hasSupabaseWorkouts) {
         try {
           setPrs(await listPersonalRecords(profile.id, 20));
           setAchievements(await achievementsService.listMemberAchievements(profile.id));
@@ -59,7 +79,7 @@ export default function ProgressScreen() {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [profile]);
+  }, [profile, hasSupabaseWorkouts]);
 
   useEffect(() => {
     load();
@@ -68,6 +88,19 @@ export default function ProgressScreen() {
   const monthVolume = useMemo(
     () => data?.volumeSeries?.reduce((s, p) => s + (p.value ?? 0), 0) ?? 0,
     [data?.volumeSeries],
+  );
+
+  const weightSeriesWithNow = useMemo(
+    () => (data ? withLiveNowPoint(data.weightSeries) : []),
+    [data?.weightSeries],
+  );
+  const strengthSeriesWithNow = useMemo(
+    () => (data ? withLiveNowPoint(data.strengthSeries) : []),
+    [data?.strengthSeries],
+  );
+  const frequencySeriesWithNow = useMemo(
+    () => (data ? withLiveNowBar(data.frequencySeries) : []),
+    [data?.frequencySeries],
   );
 
   if (loading) {
@@ -174,32 +207,91 @@ export default function ProgressScreen() {
         <NavChevron />
       </Pressable>
 
+      <SectionHeader title="Completed workouts" kicker="Execution" actionLabel="View all" onActionPress={() => router.push('/(member)/progress/history')} />
+      {history.length ? (
+        <View style={styles.completedList}>
+          {history.slice(0, 4).map((session) => (
+            <Pressable
+              key={session.sessionId}
+              onPress={() => router.push(`/(member)/workouts/summary/${session.sessionId}`)}
+              style={({ pressed }) => [styles.completedCard, pressed && { opacity: 0.92 }]}>
+              <LinearGradient
+                colors={['rgba(200,255,0,0.1)', 'transparent']}
+                style={styles.completedGlow}
+              />
+              <View style={styles.completedTop}>
+                <Text style={styles.completedTitle} numberOfLines={1}>
+                  {session.title}
+                </Text>
+                <Text style={styles.completedDate}>{new Date(session.finishedAt ?? session.startedAt).toLocaleDateString()}</Text>
+              </View>
+              <View style={styles.completedMetaRow}>
+                <Text style={styles.completedMeta}>{session.kind.toUpperCase()} · </Text>
+                <AnimatedCount
+                  value={Math.round(session.durationSeconds / 60)}
+                  style={styles.completedMeta}
+                  duration={800}
+                />
+                <Text style={styles.completedMeta}> min · </Text>
+                <AnimatedCount value={session.completedSets} style={styles.completedMeta} duration={800} />
+                <Text style={styles.completedMeta}>/</Text>
+                <AnimatedCount value={session.totalSets} style={styles.completedMeta} duration={800} />
+                <Text style={styles.completedMeta}> sets</Text>
+              </View>
+              <AnimatedCount
+                value={session.volumeKg}
+                formatter={(kg) => `${Math.round(kg).toLocaleString()} KG VOLUME`}
+                style={styles.completedValue}
+                duration={950}
+              />
+            </Pressable>
+          ))}
+        </View>
+      ) : (
+        <EmptyState title="No completed workouts yet" description="Complete a workout and your recent sessions will appear here." />
+      )}
+
       <SectionHeader title="Body composition" kicker="Metrics" />
       <View style={styles.bodyRow}>
-        <MetricHero
-          label="Weight"
-          value={data.latest?.weight_kg != null ? String(data.latest.weight_kg) : '—'}
-          unit="kg"
-          accent
-        />
-        <MetricHero
-          label="Body fat"
-          value={data.latest?.body_fat_pct != null ? String(data.latest.body_fat_pct) : '—'}
-          unit="%"
-        />
+        <Animated.View entering={FadeInDown.delay(40).duration(320)} style={styles.bodyTileWrap}>
+          <MetricHero
+            label="Weight"
+            value={data.latest?.weight_kg ?? null}
+            unit="kg"
+            accent
+            delay={120}
+          />
+        </Animated.View>
+        <Animated.View entering={FadeInDown.delay(90).duration(320)} style={styles.bodyTileWrap}>
+          <MetricHero
+            label="Body fat"
+            value={data.latest?.body_fat_pct ?? null}
+            unit="%"
+            delay={170}
+          />
+        </Animated.View>
       </View>
 
       <SectionHeader title="Consistency" kicker="Training rhythm" />
       <View style={styles.statsGrid}>
-        <ConsistencyTile label="This week" value={data.weeklyWorkouts} unit="sessions" />
-        <ConsistencyTile label="This month" value={data.monthlyWorkouts} unit="sessions" />
-        <ConsistencyTile label="Streak" value={data.streak} unit="days" featured />
-        <ConsistencyTile
-          label="Volume"
-          value={Math.round(monthVolume)}
-          unit="total load"
-          display={formatVolumeKg(monthVolume)}
-        />
+        <Animated.View entering={FadeInDown.delay(120).duration(320)} style={styles.consistencyTileWrap}>
+          <ConsistencyTile label="This week" value={data.weeklyWorkouts} unit="sessions" delay={150} />
+        </Animated.View>
+        <Animated.View entering={FadeInDown.delay(170).duration(320)} style={styles.consistencyTileWrap}>
+          <ConsistencyTile label="This month" value={data.monthlyWorkouts} unit="sessions" delay={200} />
+        </Animated.View>
+        <Animated.View entering={FadeInDown.delay(220).duration(320)} style={styles.consistencyTileWrap}>
+          <ConsistencyTile label="Streak" value={data.streak} unit="days" featured delay={250} />
+        </Animated.View>
+        <Animated.View entering={FadeInDown.delay(270).duration(320)} style={styles.consistencyTileWrap}>
+          <ConsistencyTile
+            label="Volume"
+            value={monthVolume}
+            unit="total load"
+            formatter={formatVolumeKg}
+            delay={300}
+          />
+        </Animated.View>
       </View>
 
       {prs.length > 0 ? (
@@ -231,12 +323,21 @@ export default function ProgressScreen() {
                     })}
                   </Text>
                 </View>
-                <Text style={styles.prValue}>
-                  {pr.weight_kg ?? pr.value}
-                  {pr.record_type === 'max_weight' || pr.record_type === 'estimated_1rm'
-                    ? ' KG'
-                    : ''}
-                </Text>
+                <View style={styles.prValueRow}>
+                  <AnimatedCount
+                    value={pr.weight_kg ?? pr.value ?? 0}
+                    decimals={
+                      pr.weight_kg != null || pr.record_type === 'max_weight' || pr.record_type === 'estimated_1rm'
+                        ? 1
+                        : 0
+                    }
+                    suffix={
+                      pr.record_type === 'max_weight' || pr.record_type === 'estimated_1rm' ? ' KG' : ''
+                    }
+                    style={styles.prValue}
+                    duration={900}
+                  />
+                </View>
               </Pressable>
             ))}
           </View>
@@ -258,71 +359,86 @@ export default function ProgressScreen() {
       ) : null}
 
       <SectionHeader title="Body weight" kicker="Trend" />
-      <ChartPanel empty={data.weightSeries.length === 0} emptyTitle="Log weight to see trends">
+      <ChartPanel
+        empty={data.weightSeries.length === 0}
+        emptyTitle="Log weight to see trends"
+        latest={
+          data.latest?.weight_kg != null ? `${data.latest.weight_kg} kg` : undefined
+        }>
         {data.weightSeries.length > 0 ? (
           <LineChart
-            data={data.weightSeries}
+            data={weightSeriesWithNow}
             width={chartWidth}
-            color={colors.accent}
-            thickness={2.5}
-            hideDataPoints={data.weightSeries.length > 8}
-            dataPointsColor={colors.accent}
-            dataPointsRadius={3}
+            {...lineChartChrome}
+            thickness={4}
+            dataPointsRadius={data.weightSeries.length > 8 ? 3 : 4}
             curved
             areaChart
-            startFillColor="rgba(200,255,0,0.18)"
-            endFillColor="rgba(200,255,0,0.01)"
-            startOpacity={0.35}
-            endOpacity={0.02}
-            yAxisTextStyle={chartAxis}
-            xAxisLabelTextStyle={chartAxis}
-            backgroundColor="transparent"
-            rulesColor="rgba(255,255,255,0.06)"
-            yAxisColor="transparent"
-            xAxisColor="transparent"
-            noOfSections={4}
-            height={168}
+            startFillColor="rgba(200,255,0,0.28)"
+            endFillColor="rgba(200,255,0,0)"
+            startOpacity={0.45}
+            endOpacity={0}
+            isAnimated
+            animationDuration={1100}
           />
         ) : null}
       </ChartPanel>
 
       <SectionHeader title="Strength trend" kicker="Load" />
-      <ChartPanel caption="Strength proxy from logged body data">
+      <ChartPanel
+        caption="Strength proxy from logged body data"
+        latest={
+          data.strengthSeries.length
+            ? String(data.strengthSeries[data.strengthSeries.length - 1]?.value ?? '')
+            : undefined
+        }>
         <LineChart
-          data={data.strengthSeries}
+          data={strengthSeriesWithNow}
           width={chartWidth}
-          color={colors.accent}
-          thickness={2.5}
-          dataPointsColor={colors.accent}
-          dataPointsRadius={3}
+          {...lineChartChrome}
+          thickness={4}
+          dataPointsRadius={4}
           curved
-          yAxisTextStyle={chartAxis}
-          xAxisLabelTextStyle={chartAxis}
-          backgroundColor="transparent"
-          rulesColor="rgba(255,255,255,0.06)"
-          yAxisColor="transparent"
-          xAxisColor="transparent"
-          noOfSections={4}
-          height={168}
+          areaChart
+          startFillColor="rgba(200,255,0,0.22)"
+          endFillColor="rgba(200,255,0,0)"
+          startOpacity={0.38}
+          endOpacity={0}
+          isAnimated
+          animationDuration={1100}
         />
       </ChartPanel>
 
       <SectionHeader title="Session frequency" kicker="Volume of work" />
-      <ChartPanel>
+      <ChartPanel
+        latest={
+          data.frequencySeries.length
+            ? String(data.frequencySeries[data.frequencySeries.length - 1]?.value ?? '')
+            : undefined
+        }>
         <BarChart
-          data={data.frequencySeries}
+          data={frequencySeriesWithNow}
           width={chartWidth}
-          barWidth={18}
-          spacing={18}
+          barWidth={Math.max(14, Math.min(22, Math.round(chartWidth / (data.frequencySeries.length * 2.4))))}
+          spacing={Math.max(12, Math.round(chartWidth / (data.frequencySeries.length * 3.2)))}
           roundedTop
           frontColor={colors.accent}
           yAxisTextStyle={chartAxis}
           xAxisLabelTextStyle={chartAxis}
-          rulesColor="rgba(255,255,255,0.06)"
+          rulesColor="rgba(255,255,255,0.08)"
           yAxisColor="transparent"
           xAxisColor="transparent"
+          yAxisThickness={0}
+          xAxisThickness={0}
+          yAxisLabelWidth={CHART_Y_AXIS_WIDTH}
           noOfSections={4}
-          height={168}
+          height={196}
+          overflowTop={12}
+          initialSpacing={8}
+          endSpacing={16}
+          disableScroll
+          isAnimated
+          animationDuration={1100}
         />
       </ChartPanel>
 
@@ -343,11 +459,15 @@ function MetricHero({
   value,
   unit,
   accent,
+  decimals = 0,
+  delay = 0,
 }: {
   label: string;
-  value: string;
+  value: number | null;
   unit: string;
   accent?: boolean;
+  decimals?: number;
+  delay?: number;
 }) {
   return (
     <View style={[styles.metricHero, accent && styles.metricHeroAccent]}>
@@ -359,10 +479,114 @@ function MetricHero({
       ) : null}
       <Text style={styles.metricLabel}>{label}</Text>
       <View style={styles.metricValueRow}>
-        <Text style={[styles.metricValue, accent && styles.metricValueAccent]}>{value}</Text>
+        <AnimatedCount
+          value={value}
+          decimals={decimals}
+          delay={delay}
+          duration={1000}
+          style={[styles.metricValue, accent && styles.metricValueAccent]}
+        />
         <Text style={styles.metricUnit}>{unit}</Text>
       </View>
     </View>
+  );
+}
+
+function LiveNowPoint() {
+  const dotPulse = useSharedValue(1);
+  const ripple = useSharedValue(0.35);
+
+  useEffect(() => {
+    dotPulse.value = withRepeat(
+      withSequence(withTiming(1.22, { duration: 700 }), withTiming(1, { duration: 700 })),
+      -1,
+      false,
+    );
+    ripple.value = withRepeat(
+      withSequence(withTiming(1, { duration: 1200 }), withTiming(0.25, { duration: 0 })),
+      -1,
+      false,
+    );
+  }, [dotPulse, ripple]);
+
+  const dotStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: dotPulse.value }],
+  }));
+
+  const rippleStyle = useAnimatedStyle(() => ({
+    opacity: 0.5 - ripple.value * 0.38,
+    transform: [{ scale: 0.7 + ripple.value * 1.35 }],
+  }));
+
+  return (
+    <View style={styles.liveNowWrap} pointerEvents="none">
+      <Animated.View style={[styles.liveNowRipple, rippleStyle]} />
+      <Animated.View style={[styles.liveNowDot, dotStyle]} />
+    </View>
+  );
+}
+
+function LiveNowBarBadge() {
+  const pulse = useSharedValue(1);
+
+  useEffect(() => {
+    pulse.value = withRepeat(
+      withSequence(withTiming(1.08, { duration: 700 }), withTiming(1, { duration: 700 })),
+      -1,
+      false,
+    );
+  }, [pulse]);
+
+  const pulseStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: pulse.value }],
+  }));
+
+  return (
+    <Animated.View style={[styles.liveNowBarBadge, pulseStyle]}>
+      <View style={styles.liveNowBarDot} />
+      <Text style={styles.liveNowBarText}>NOW</Text>
+    </Animated.View>
+  );
+}
+
+type ChartSeriesPoint = { label?: string; value?: number };
+
+function withLiveNowPoint<T extends ChartSeriesPoint>(series: T[]) {
+  if (series.length === 0) return series;
+  const lastIndex = series.length - 1;
+  const hideIntermediate = series.length > 8;
+
+  return series.map((point, index) => {
+    if (index === lastIndex) {
+      return {
+        ...point,
+        dataPointWidth: 18,
+        dataPointHeight: 18,
+        customDataPoint: () => <LiveNowPoint />,
+      };
+    }
+    if (hideIntermediate) {
+      return { ...point, hideDataPoint: true };
+    }
+    return point;
+  });
+}
+
+function withLiveNowBar<T extends ChartSeriesPoint>(series: T[]) {
+  if (series.length === 0) return series;
+  const lastIndex = series.length - 1;
+
+  return series.map((point, index) =>
+    index === lastIndex
+      ? {
+          ...point,
+          topLabelComponent: () => <LiveNowBarBadge />,
+          frontColor: colors.accent,
+        }
+      : {
+          ...point,
+          frontColor: 'rgba(200,255,0,0.42)',
+        },
   );
 }
 
@@ -371,63 +595,175 @@ function ConsistencyTile({
   value,
   unit,
   featured,
-  display,
+  formatter,
+  delay = 0,
 }: {
   label: string;
   value: number;
   unit: string;
   featured?: boolean;
-  display?: string;
+  formatter?: (value: number) => string;
+  delay?: number;
 }) {
+  const pulse = useSharedValue(1);
+
+  useEffect(() => {
+    if (!featured) return;
+    pulse.value = withRepeat(
+      withSequence(withTiming(1.025, { duration: 900 }), withTiming(1, { duration: 900 })),
+      -1,
+      false,
+    );
+  }, [featured, pulse]);
+
+  const pulseStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: pulse.value }],
+  }));
+
   return (
-    <View style={[styles.statCard, featured && styles.statCardFeatured]}>
+    <Animated.View style={[styles.statCard, featured && styles.statCardFeatured, pulseStyle]}>
       <Text style={styles.statLabel}>{label}</Text>
-      {display ? (
-        <Text style={[styles.statValue, featured && styles.statValueFeatured]}>{display}</Text>
-      ) : (
-        <AnimatedCount
-          value={value}
-          style={[styles.statValue, featured && styles.statValueFeatured]}
-          duration={900}
-        />
-      )}
+      <AnimatedCount
+        value={value}
+        formatter={formatter}
+        delay={delay}
+        style={[styles.statValue, featured && styles.statValueFeatured]}
+        duration={1000}
+      />
       <Text style={styles.statUnit}>{unit}</Text>
-    </View>
+    </Animated.View>
   );
 }
 
 function ChartPanel({
   children,
   caption,
+  latest,
   empty,
   emptyTitle,
 }: {
   children?: ReactNode;
   caption?: string;
+  latest?: string;
   empty?: boolean;
   emptyTitle?: string;
 }) {
+  const dotPulse = useSharedValue(0.55);
+  const ripple = useSharedValue(0.35);
+  const badgeGlow = useSharedValue(0.28);
+  const sweep = useSharedValue(0);
+
+  useEffect(() => {
+    dotPulse.value = withRepeat(
+      withSequence(withTiming(1, { duration: 650 }), withTiming(0.5, { duration: 650 })),
+      -1,
+      false,
+    );
+    ripple.value = withRepeat(
+      withSequence(withTiming(1, { duration: 1400 }), withTiming(0.25, { duration: 0 })),
+      -1,
+      false,
+    );
+    badgeGlow.value = withRepeat(
+      withSequence(withTiming(0.55, { duration: 900 }), withTiming(0.22, { duration: 900 })),
+      -1,
+      false,
+    );
+    sweep.value = withRepeat(
+      withTiming(1, { duration: 4200, easing: Easing.inOut(Easing.quad) }),
+      -1,
+      false,
+    );
+  }, [badgeGlow, dotPulse, ripple, sweep]);
+
+  const dotStyle = useAnimatedStyle(() => ({
+    opacity: dotPulse.value,
+    transform: [{ scale: 0.9 + dotPulse.value * 0.25 }],
+  }));
+
+  const rippleStyle = useAnimatedStyle(() => ({
+    opacity: 0.42 - ripple.value * 0.32,
+    transform: [{ scale: 0.7 + ripple.value * 1.8 }],
+  }));
+
+  const badgeStyle = useAnimatedStyle(() => ({
+    borderColor: `rgba(200,255,0,${badgeGlow.value})`,
+  }));
+
+  const sweepStyle = useAnimatedStyle(() => ({
+    opacity: 0.1,
+    transform: [{ translateX: -220 + sweep.value * 460 }],
+  }));
+
   return (
-    <View style={styles.chartCard}>
+    <Animated.View entering={FadeInDown.duration(320)} style={styles.chartCard}>
       <LinearGradient
-        colors={['rgba(255,255,255,0.03)', 'transparent']}
+        colors={['rgba(200,255,0,0.05)', 'rgba(255,255,255,0.02)', 'transparent']}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
         style={StyleSheet.absoluteFillObject}
       />
+      <Animated.View pointerEvents="none" style={[styles.chartSweep, sweepStyle]}>
+        <LinearGradient
+          colors={['rgba(200,255,0,0)', 'rgba(200,255,0,0.14)', 'rgba(200,255,0,0)']}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 0 }}
+          style={StyleSheet.absoluteFillObject}
+        />
+      </Animated.View>
+      <View style={styles.chartTopRow}>
+        <Animated.View style={[styles.chartLiveBadge, badgeStyle]}>
+          <View style={styles.chartLiveDotWrap}>
+            <Animated.View style={[styles.chartLiveRipple, rippleStyle]} />
+            <Animated.View style={[styles.chartLiveDot, dotStyle]} />
+          </View>
+          <Text style={styles.chartLiveText}>LIVE</Text>
+        </Animated.View>
+        {latest ? (
+          <View style={styles.chartLatestChip}>
+            <Text style={styles.chartLatestKicker}>NOW</Text>
+            <Text style={styles.chartLatestValue}>{latest}</Text>
+          </View>
+        ) : null}
+      </View>
       {caption ? <Text style={styles.chartCaption}>{caption}</Text> : null}
       {empty ? (
         <EmptyState title={emptyTitle ?? 'No data yet'} />
       ) : (
         <View style={styles.chartInner}>{children}</View>
       )}
-    </View>
+    </Animated.View>
   );
 }
 
+const CHART_Y_AXIS_WIDTH = 40;
+
 const chartAxis = {
-  color: colors.textMuted,
+  color: 'rgba(255,255,255,0.45)',
   fontSize: 10,
-  fontFamily: fonts.sans,
+  fontFamily: fonts.sansMedium,
 };
+
+const lineChartChrome = {
+  color: colors.accent,
+  dataPointsColor: colors.accent,
+  yAxisTextStyle: chartAxis,
+  xAxisLabelTextStyle: chartAxis,
+  backgroundColor: 'transparent',
+  rulesColor: 'rgba(255,255,255,0.08)',
+  yAxisColor: 'transparent',
+  xAxisColor: 'transparent',
+  yAxisThickness: 0,
+  xAxisThickness: 0,
+  yAxisLabelWidth: CHART_Y_AXIS_WIDTH,
+  noOfSections: 4,
+  height: 196,
+  overflowTop: 18,
+  initialSpacing: 6,
+  endSpacing: 22,
+  disableScroll: true,
+  hideOrigin: true,
+} as const;
 
 const styles = StyleSheet.create({
   headerRow: {
@@ -500,10 +836,62 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: colors.textSecondary,
   },
+  completedList: {
+    gap: spacing.sm,
+    marginBottom: spacing.lg,
+  },
+  completedCard: {
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    borderColor: 'rgba(200,255,0,0.2)',
+    backgroundColor: colors.surfaceElevated,
+    padding: spacing.md,
+    overflow: 'hidden',
+    gap: 6,
+  },
+  completedGlow: {
+    ...StyleSheet.absoluteFillObject,
+  },
+  completedTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: spacing.sm,
+  },
+  completedTitle: {
+    flex: 1,
+    fontFamily: fonts.sansSemiBold,
+    fontSize: 15,
+    color: colors.text,
+  },
+  completedDate: {
+    fontFamily: fonts.sans,
+    fontSize: 11,
+    color: colors.textMuted,
+  },
+  completedMeta: {
+    fontFamily: fonts.sans,
+    fontSize: 12,
+    color: colors.textSecondary,
+  },
+  completedMetaRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'center',
+  },
+  completedValue: {
+    fontFamily: fonts.sansBold,
+    fontSize: 12,
+    letterSpacing: 0.8,
+    color: colors.accent,
+  },
   bodyRow: {
     flexDirection: 'row',
     gap: spacing.sm,
     marginBottom: spacing.lg,
+  },
+  bodyTileWrap: {
+    flex: 1,
   },
   metricHero: {
     flex: 1,
@@ -552,10 +940,13 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
     marginBottom: spacing.lg,
   },
-  statCard: {
+  consistencyTileWrap: {
     width: '48%',
     flexGrow: 1,
     minWidth: 150,
+  },
+  statCard: {
+    width: '100%',
     borderRadius: radius.xl,
     borderWidth: 1,
     borderColor: colors.border,
@@ -628,25 +1019,148 @@ const styles = StyleSheet.create({
     fontSize: 22,
     color: colors.accent,
   },
+  prValueRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+  },
   chartCard: {
     marginBottom: spacing.lg,
     borderRadius: radius.xl,
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: 'rgba(200,255,0,0.16)',
     backgroundColor: colors.surfaceElevated,
-    padding: spacing.md,
+    paddingTop: spacing.md,
+    paddingBottom: spacing.sm,
+    paddingHorizontal: spacing.sm,
     overflow: 'hidden',
-    minHeight: 200,
+    minHeight: 248,
   },
   chartCaption: {
     fontFamily: fonts.sans,
     fontSize: 12,
     color: colors.textSecondary,
     marginBottom: spacing.sm,
+    paddingHorizontal: spacing.sm,
+  },
+  chartTopRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: spacing.sm,
+    paddingHorizontal: spacing.sm,
+    zIndex: 2,
+  },
+  chartSweep: {
+    position: 'absolute',
+    top: 48,
+    bottom: 28,
+    width: 90,
+    borderRadius: 16,
+  },
+  chartLiveBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: radius.full,
+    borderWidth: 1,
+    borderColor: 'rgba(200,255,0,0.28)',
+    backgroundColor: 'rgba(200,255,0,0.08)',
+  },
+  chartLiveDotWrap: {
+    width: 12,
+    height: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  chartLiveRipple: {
+    position: 'absolute',
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: colors.accent,
+    backgroundColor: 'rgba(200,255,0,0.12)',
+  },
+  chartLiveDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: colors.accent,
+  },
+  chartLiveText: {
+    fontFamily: fonts.sansMedium,
+    fontSize: 10,
+    letterSpacing: 1.6,
+    color: colors.accent,
+  },
+  chartLatestChip: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    gap: 6,
+  },
+  chartLatestKicker: {
+    fontFamily: fonts.sansMedium,
+    fontSize: 9,
+    letterSpacing: 1.4,
+    color: colors.textMuted,
+  },
+  chartLatestValue: {
+    fontFamily: fonts.display,
+    fontSize: 22,
+    lineHeight: 24,
+    color: colors.accent,
   },
   chartInner: {
+    alignItems: 'flex-start',
+    marginLeft: -4,
+    zIndex: 1,
+  },
+  liveNowWrap: {
+    width: 18,
+    height: 18,
     alignItems: 'center',
-    overflow: 'hidden',
+    justifyContent: 'center',
+  },
+  liveNowRipple: {
+    position: 'absolute',
+    width: 16,
+    height: 16,
+    borderRadius: 8,
+    borderWidth: 1.5,
+    borderColor: colors.accent,
+    backgroundColor: 'rgba(200,255,0,0.16)',
+  },
+  liveNowDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: colors.accent,
+  },
+  liveNowBarBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+    borderRadius: radius.full,
+    borderWidth: 1,
+    borderColor: 'rgba(200,255,0,0.35)',
+    backgroundColor: 'rgba(200,255,0,0.12)',
+    marginBottom: 4,
+  },
+  liveNowBarDot: {
+    width: 5,
+    height: 5,
+    borderRadius: 2.5,
+    backgroundColor: colors.accent,
+  },
+  liveNowBarText: {
+    fontFamily: fonts.sansMedium,
+    fontSize: 8,
+    letterSpacing: 1.2,
+    color: colors.accent,
   },
   photoCard: {
     marginBottom: spacing.xl,

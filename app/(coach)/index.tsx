@@ -52,7 +52,7 @@ const ADMIN_ACTIONS: Action[] = [
     key: 'memberships',
     title: 'Memberships',
     meta: 'Paid & unpaid',
-    href: '/(coach)/admin/memberships',
+    href: '/(coach)/memberships',
     icon: 'card-outline',
     accent: true,
   },
@@ -699,6 +699,14 @@ export default function CoachDashboardScreen() {
         <Text style={styles.cardTitle}>Athlete & class messages</Text>
         <Text style={styles.cardMeta}>
           Open chats to reply. New messages also pop up as alerts on this screen.
+        </Text>
+      </AppCard>
+
+      <SectionHeader title="Memberships" />
+      <AppCard accent onPress={() => router.push('/(coach)/memberships')} style={styles.card}>
+        <Text style={styles.cardTitle}>Subscription billing</Text>
+        <Text style={styles.cardMeta}>
+          Mark athletes paid or unpaid and send payment reminders in one place.
         </Text>
       </AppCard>
 

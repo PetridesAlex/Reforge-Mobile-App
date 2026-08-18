@@ -152,7 +152,7 @@ export const ADMIN_MENU_ITEMS: readonly MoreMenuItem[] = [
     label: 'Memberships',
     description: 'Paid & unpaid status',
     icon: 'card-outline',
-    href: '/(coach)/admin/memberships',
+    href: '/(coach)/memberships',
   },
   {
     id: 'store',

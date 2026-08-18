@@ -1,5 +1,6 @@
 import { StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import Animated, { FadeInDown } from 'react-native-reanimated';
 
 import { movementSummary, type WodMovement } from '@/lib/workouts/wod';
 import { colors, fonts, radius, spacing } from '@/constants/theme';
@@ -54,8 +55,9 @@ export function WodPrescriptionList({ movements, variant = 'member' }: WodPrescr
         }
 
         return (
-          <View
+          <Animated.View
             key={move.id}
+            entering={FadeInDown.delay(idx * 70).duration(320)}
             style={[styles.card, variant === 'admin' && styles.cardAdmin]}>
             <View style={styles.indexCol}>
               <Text style={styles.indexText}>{idx + 1}</Text>
@@ -79,7 +81,7 @@ export function WodPrescriptionList({ movements, variant = 'member' }: WodPrescr
                 </View>
               ) : null}
             </View>
-          </View>
+          </Animated.View>
         );
       })}
     </View>

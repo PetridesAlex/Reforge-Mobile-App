@@ -1,19 +1,23 @@
 import { StyleSheet, Text, View } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 
 import { AppCard } from '@/components/ui/AppCard';
 import { PrimaryButton } from '@/components/ui/PrimaryButton';
 import { formatDateTime } from '@/lib/utils/dates';
 import type { MembershipRow } from '@/services/admin';
-import type { MembershipPayment } from '@/services/mock/data';
-import { colors, radius, spacing, typography } from '@/constants/theme';
+import type { MembershipPayment, MembershipStatus } from '@/services/mock/data';
+import { colors, fonts, radius, spacing, typography } from '@/constants/theme';
 
 type Props = {
   membership: MembershipRow | null;
   payments: MembershipPayment[];
   onMarkPaid?: () => void;
+  onMarkUnpaid?: () => void;
+  onSendReminder?: () => void;
   onViewProfile?: () => void;
   loading?: boolean;
   historyOnly?: boolean;
+  reminderBusy?: boolean;
 };
 
 function paymentTone(p: MembershipPayment): 'ok' | 'warn' | 'muted' {
@@ -22,30 +26,62 @@ function paymentTone(p: MembershipPayment): 'ok' | 'warn' | 'muted' {
   return 'muted';
 }
 
+function statusMeta(status: MembershipStatus) {
+  switch (status) {
+    case 'paid':
+      return { label: 'Active', icon: 'checkmark-circle' as const, tone: 'ok' as const };
+    case 'overdue':
+      return { label: 'Overdue', icon: 'alert-circle' as const, tone: 'danger' as const };
+    case 'trial':
+      return { label: 'Trial', icon: 'sparkles' as const, tone: 'trial' as const };
+    case 'paused':
+      return { label: 'Paused', icon: 'pause-circle' as const, tone: 'muted' as const };
+    default:
+      return { label: 'Unpaid', icon: 'card-outline' as const, tone: 'warn' as const };
+  }
+}
+
 export function MembershipBillingPanel({
   membership,
   payments,
   onMarkPaid,
+  onMarkUnpaid,
+  onSendReminder,
   onViewProfile,
   loading,
   historyOnly,
+  reminderBusy,
 }: Props) {
   if (!membership) {
     return <Text style={styles.empty}>No membership on file</Text>;
   }
 
   const { membership: m } = membership;
+  const meta = statusMeta(m.status);
+  const needsPayment = m.status === 'unpaid' || m.status === 'overdue';
 
   return (
     <View style={styles.wrap}>
       {!historyOnly ? (
         <AppCard accent style={styles.card}>
+          <View style={styles.statusRow}>
+            <View style={[styles.statusPill, styles[`pill_${meta.tone}`]]}>
+              <Ionicons
+                name={meta.icon}
+                size={13}
+                color={styles[`pillText_${meta.tone}`].color}
+              />
+              <Text style={[styles.statusPillText, styles[`pillText_${meta.tone}`]]}>
+                {meta.label}
+              </Text>
+            </View>
+            <Text style={styles.amount}>€{m.amount_eur}</Text>
+          </View>
+
           <Text style={styles.label}>Plan</Text>
           <Text style={styles.value}>
-            {m.plan_label} · €{m.amount_eur} · {m.plan}
+            {m.plan_label} · {m.plan}
           </Text>
-          <Text style={styles.label}>Status</Text>
-          <Text style={styles.value}>{m.status}</Text>
           <Text style={styles.label}>Current period</Text>
           <Text style={styles.value}>
             {m.period_start} → {m.period_end}
@@ -57,14 +93,32 @@ export function MembershipBillingPanel({
             </>
           ) : null}
           {m.notes ? <Text style={styles.notes}>{m.notes}</Text> : null}
+
           <View style={styles.actions}>
-            {onMarkPaid && m.status !== 'paid' ? (
+            {needsPayment && onMarkPaid ? (
               <PrimaryButton title="Mark paid" onPress={onMarkPaid} style={styles.actionBtn} />
+            ) : null}
+            {m.status === 'paid' && onMarkUnpaid ? (
+              <PrimaryButton
+                title="Mark unpaid"
+                variant="secondary"
+                onPress={onMarkUnpaid}
+                style={styles.actionBtn}
+              />
+            ) : null}
+            {needsPayment && onSendReminder ? (
+              <PrimaryButton
+                title={reminderBusy ? 'Sending…' : 'Send payment reminder'}
+                variant="secondary"
+                onPress={onSendReminder}
+                disabled={reminderBusy}
+                style={styles.actionBtn}
+              />
             ) : null}
             {onViewProfile ? (
               <PrimaryButton
                 title="Open client profile"
-                variant="secondary"
+                variant="ghost"
                 onPress={onViewProfile}
                 style={styles.actionBtn}
               />
@@ -115,11 +169,62 @@ export function MembershipBillingPanel({
 const styles = StyleSheet.create({
   wrap: { gap: spacing.sm },
   card: { gap: spacing.xs },
+  statusRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: spacing.sm,
+  },
+  statusPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: radius.full,
+    borderWidth: 1,
+  },
+  pill_ok: {
+    backgroundColor: 'rgba(74,222,128,0.12)',
+    borderColor: 'rgba(74,222,128,0.35)',
+  },
+  pill_warn: {
+    backgroundColor: 'rgba(250,204,21,0.12)',
+    borderColor: 'rgba(250,204,21,0.35)',
+  },
+  pill_danger: {
+    backgroundColor: 'rgba(255,77,77,0.12)',
+    borderColor: 'rgba(255,77,77,0.35)',
+  },
+  pill_trial: {
+    backgroundColor: 'rgba(200,255,0,0.1)',
+    borderColor: 'rgba(200,255,0,0.28)',
+  },
+  pill_muted: {
+    backgroundColor: 'rgba(255,255,255,0.05)',
+    borderColor: colors.border,
+  },
+  statusPillText: {
+    fontFamily: fonts.sansSemiBold,
+    fontSize: 10,
+    letterSpacing: 1.1,
+    textTransform: 'uppercase',
+  },
+  pillText_ok: { color: colors.success },
+  pillText_warn: { color: '#FACC15' },
+  pillText_danger: { color: colors.danger },
+  pillText_trial: { color: colors.accent },
+  pillText_muted: { color: colors.textMuted },
+  amount: {
+    fontFamily: fonts.display,
+    fontSize: 24,
+    color: colors.accent,
+  },
   label: { ...typography.label, color: colors.textMuted, marginTop: spacing.sm },
   value: { ...typography.subtitle, color: colors.text, fontSize: 16 },
   notes: { ...typography.caption, color: colors.textMuted, fontStyle: 'italic', marginTop: spacing.sm },
-  actions: { flexDirection: 'row', gap: spacing.sm, marginTop: spacing.md },
-  actionBtn: { flex: 1 },
+  actions: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, marginTop: spacing.md },
+  actionBtn: { flexGrow: 1, minWidth: 140 },
   sectionTitle: {
     ...typography.subtitle,
     color: colors.text,

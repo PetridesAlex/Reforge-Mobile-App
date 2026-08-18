@@ -2,6 +2,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import Animated, { FadeInRight } from 'react-native-reanimated';
 
 import { colors, fonts, radius, spacing } from '@/constants/theme';
 
@@ -71,30 +72,34 @@ export function GymCalendarToolbar({ onTrainSolo }: Props) {
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
-        contentContainerStyle={styles.row}>
-        {tools.map((tool) => (
-          <Pressable
-            key={tool.id}
-            onPress={() => {
-              if (tool.onPress) {
-                tool.onPress();
-                return;
-              }
-              if (tool.href) router.push(tool.href as never);
-            }}
-            style={({ pressed }) => [styles.card, pressed && styles.pressed]}>
-            <LinearGradient
-              colors={[`${tool.accent ?? colors.accent}22`, 'transparent']}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-              style={styles.cardGlow}
-            />
-            <View style={[styles.iconWrap, { borderColor: `${tool.accent ?? colors.accent}44` }]}>
-              <Ionicons name={tool.icon} size={18} color={tool.accent ?? colors.accent} />
-            </View>
-            <Text style={styles.cardLabel}>{tool.label}</Text>
-            <Text style={styles.cardHint}>{tool.hint}</Text>
-          </Pressable>
+        contentContainerStyle={styles.row}
+        // Helps the toolbar look "anchored" when content is short.
+        // (On web, ScrollView content containers can feel vertically off.)
+        automaticallyAdjustsScrollIndicatorInsets={false}>
+        {tools.map((tool, index) => (
+          <Animated.View key={tool.id} entering={FadeInRight.delay(index * 60).duration(320)}>
+            <Pressable
+              onPress={() => {
+                if (tool.onPress) {
+                  tool.onPress();
+                  return;
+                }
+                if (tool.href) router.push(tool.href as never);
+              }}
+              style={({ pressed }) => [styles.card, pressed && styles.pressed]}>
+              <LinearGradient
+                colors={[`${tool.accent ?? colors.accent}22`, 'transparent']}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={styles.cardGlow}
+              />
+              <View style={[styles.iconWrap, { borderColor: `${tool.accent ?? colors.accent}44` }]}>
+                <Ionicons name={tool.icon} size={18} color={tool.accent ?? colors.accent} />
+              </View>
+              <Text style={styles.cardLabel}>{tool.label}</Text>
+              <Text style={styles.cardHint}>{tool.hint}</Text>
+            </Pressable>
+          </Animated.View>
         ))}
       </ScrollView>
     </View>
@@ -104,10 +109,12 @@ export function GymCalendarToolbar({ onTrainSolo }: Props) {
 const styles = StyleSheet.create({
   wrap: {
     marginBottom: spacing.lg,
+    paddingBottom: spacing.sm,
     gap: spacing.sm,
   },
   header: {
     gap: 2,
+    marginLeft: spacing.md,
   },
   kicker: {
     fontFamily: fonts.sansMedium,
@@ -126,7 +133,9 @@ const styles = StyleSheet.create({
   },
   row: {
     gap: spacing.sm,
+    paddingLeft: spacing.md,
     paddingRight: spacing.md,
+    alignItems: 'flex-start',
   },
   card: {
     width: 132,
@@ -138,6 +147,12 @@ const styles = StyleSheet.create({
     padding: spacing.md,
     gap: 6,
     overflow: 'hidden',
+    // "Premium" depth: shadow + subtle elevation.
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.35,
+    shadowRadius: 16,
+    elevation: 6,
   },
   cardGlow: {
     ...StyleSheet.absoluteFillObject,
@@ -161,6 +176,7 @@ const styles = StyleSheet.create({
     fontFamily: fonts.sans,
     fontSize: 11,
     color: colors.textMuted,
+    lineHeight: 14,
   },
   pressed: { opacity: 0.9, transform: [{ scale: 0.985 }] },
 });

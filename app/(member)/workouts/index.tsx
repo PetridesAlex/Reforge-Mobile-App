@@ -14,6 +14,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 
 import { GymCalendarToolbar } from '@/components/calendar/GymCalendarToolbar';
 import { AppBottomSheet } from '@/components/ui/AppBottomSheet';
+import { ErrorState } from '@/components/ui/ErrorState';
 import { MediaImage } from '@/components/ui/MediaImage';
 import { MoreMenu } from '@/components/ui/MoreMenu';
 import { PrimaryButton } from '@/components/ui/PrimaryButton';
@@ -409,8 +410,20 @@ export default function WorkoutsScreen() {
             key={cat.id}
             onPress={() => router.push(`/(member)/workouts/category/${cat.id}`)}
             style={[styles.categoryCard, { backgroundColor: cat.tint }]}>
-            <MediaImage uri={cat.image} style={styles.categoryImage} rounded={radius.lg} />
+            <MediaImage
+              source={typeof cat.image === 'string' ? { uri: cat.image } : cat.image}
+              style={styles.categoryImage}
+              rounded={radius.lg}
+            />
+            <LinearGradient
+              colors={['rgba(0,0,0,0.03)', 'rgba(0,0,0,0.38)']}
+              style={StyleSheet.absoluteFillObject}
+            />
+            <View style={styles.categoryBadge}>
+              <Text style={styles.categoryBadgeText}>REFORGE</Text>
+            </View>
             <Text style={styles.categoryLabel}>{cat.label}</Text>
+            <Text style={styles.categorySub}>Coach uploads</Text>
           </Pressable>
         ))}
       </ScrollView>
@@ -520,15 +533,22 @@ function WodScheduleCard({
   return (
     <View style={styles.scheduleCard}>
       <LinearGradient
-        colors={['rgba(200,255,0,0.1)', 'transparent']}
+        colors={['rgba(200,255,0,0.14)', 'rgba(200,255,0,0.04)', 'transparent']}
         style={styles.scheduleCardGlow}
       />
+      <View style={styles.scheduleAccentOrb} />
       <View style={styles.scheduleCardTop}>
         <View style={styles.scheduleIcon}>
           <Ionicons name="flash" size={18} color={colors.accent} />
         </View>
         <View style={styles.scheduleCopy}>
-          <Text style={styles.scheduleKicker}>STUDIO WOD</Text>
+          <View style={styles.scheduleKickerRow}>
+            <Text style={styles.scheduleKicker}>STUDIO WOD</Text>
+            <View style={styles.liveNowPill}>
+              <View style={styles.liveNowDot} />
+              <Text style={styles.liveNowText}>LIVE</Text>
+            </View>
+          </View>
           <Text style={styles.scheduleTitle}>{wod.title}</Text>
           <Text style={styles.scheduleMeta}>
             {wod.startTime} · {wod.durationMin} min · {wod.location}
@@ -541,8 +561,43 @@ function WodScheduleCard({
         </View>
       </View>
       <Text style={styles.scheduleFocus}>{wod.focus}</Text>
+      <View style={styles.scheduleFeatureRow}>
+        <View style={styles.featureChip}>
+          <Ionicons name="time-outline" size={13} color={colors.accent} />
+          <Text style={styles.featureChipText}>{wod.durationMin} min</Text>
+        </View>
+        <View style={styles.featureChip}>
+          <Ionicons name="barbell-outline" size={13} color={colors.accent} />
+          <Text style={styles.featureChipText}>Coach programmed</Text>
+        </View>
+      </View>
       <View style={styles.scheduleActions}>
-        {wod.myStatus === 'joined' ? (
+        {wod.mySessionStatus === 'active' && wod.activeSessionId ? (
+          <>
+            <View style={styles.joinedBadge}>
+              <Ionicons name="play-circle" size={16} color={colors.accent} />
+              <Text style={styles.joinedBadgeText}>In progress</Text>
+            </View>
+            <PrimaryButton
+              title="Resume"
+              onPress={() => router.push(`/(member)/workouts/session/${wod.activeSessionId}`)}
+              style={styles.scheduleBtn}
+            />
+          </>
+        ) : wod.myStatus === 'completed' && wod.completedSessionId ? (
+          <>
+            <View style={styles.joinedBadge}>
+              <Ionicons name="trophy" size={16} color={colors.accent} />
+              <Text style={styles.joinedBadgeText}>Completed</Text>
+            </View>
+            <PrimaryButton
+              title="View summary"
+              variant="secondary"
+              onPress={() => router.push(`/(member)/workouts/summary/${wod.completedSessionId}`)}
+              style={styles.scheduleBtnSecondary}
+            />
+          </>
+        ) : wod.myStatus === 'joined' ? (
           <>
             <View style={styles.joinedBadge}>
               <Ionicons name="checkmark-circle" size={16} color={colors.accent} />
@@ -793,6 +848,15 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surfaceElevated,
     gap: spacing.sm,
   },
+  scheduleAccentOrb: {
+    position: 'absolute',
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    right: -34,
+    top: -28,
+    backgroundColor: 'rgba(200,255,0,0.08)',
+  },
   scheduleCardJoined: {
     borderColor: 'rgba(200,255,0,0.32)',
   },
@@ -847,6 +911,35 @@ const styles = StyleSheet.create({
     ...typography.sectionKicker,
     fontSize: 9,
   },
+  scheduleKickerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    flexWrap: 'wrap',
+  },
+  liveNowPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 6,
+    paddingVertical: 3,
+    borderRadius: radius.full,
+    backgroundColor: 'rgba(200,255,0,0.12)',
+    borderWidth: 1,
+    borderColor: 'rgba(200,255,0,0.28)',
+  },
+  liveNowDot: {
+    width: 5,
+    height: 5,
+    borderRadius: 3,
+    backgroundColor: colors.accent,
+  },
+  liveNowText: {
+    fontFamily: fonts.sansSemiBold,
+    fontSize: 9,
+    letterSpacing: 0.8,
+    color: colors.accent,
+  },
   scheduleTitle: {
     fontFamily: fonts.sansSemiBold,
     fontSize: 17,
@@ -861,6 +954,28 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
     fontSize: 14,
     zIndex: 1,
+  },
+  scheduleFeatureRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.xs,
+    zIndex: 1,
+  },
+  featureChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    paddingHorizontal: 9,
+    paddingVertical: 5,
+    borderRadius: radius.full,
+    backgroundColor: 'rgba(0,0,0,0.22)',
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  featureChipText: {
+    fontFamily: fonts.sansMedium,
+    fontSize: 11,
+    color: colors.textSecondary,
   },
   interestPill: {
     alignItems: 'center',
@@ -1063,23 +1178,45 @@ const styles = StyleSheet.create({
     paddingBottom: spacing.xl,
   },
   categoryCard: {
-    width: 118,
-    height: 140,
+    width: 132,
+    height: 164,
     borderRadius: radius.xl,
     overflow: 'hidden',
-    padding: spacing.sm,
+    padding: spacing.md,
     justifyContent: 'flex-end',
     borderWidth: 1,
     borderColor: colors.border,
   },
   categoryImage: {
     ...StyleSheet.absoluteFillObject,
-    opacity: 0.85,
+    opacity: 1,
+  },
+  categoryBadge: {
+    position: 'absolute',
+    top: spacing.sm,
+    left: spacing.sm,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: radius.full,
+    backgroundColor: 'rgba(0,0,0,0.45)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.14)',
+  },
+  categoryBadgeText: {
+    fontFamily: fonts.sansSemiBold,
+    fontSize: 9,
+    letterSpacing: 1.1,
+    color: colors.textMuted,
   },
   categoryLabel: {
     ...typography.subtitle,
     color: colors.text,
     fontSize: 15,
+    zIndex: 1,
+  },
+  categorySub: {
+    ...typography.caption,
+    color: 'rgba(255,255,255,0.84)',
     zIndex: 1,
   },
 });

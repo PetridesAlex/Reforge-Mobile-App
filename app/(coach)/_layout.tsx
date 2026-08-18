@@ -110,6 +110,7 @@ export default function CoachLayout() {
         <Tabs.Screen name="messages" options={{ href: null }} />
         <Tabs.Screen name="challenges" options={{ href: null }} />
         <Tabs.Screen name="achievements" options={{ href: null }} />
+        <Tabs.Screen name="memberships" options={{ href: null }} />
       </Tabs>
       <MessageToast notification={toast} onPress={(n) => void open(n)} onDismiss={dismiss} />
     </View>

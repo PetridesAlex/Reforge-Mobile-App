@@ -27,7 +27,7 @@ export function canManageClasses(role: UserRole | null | undefined): boolean {
 }
 
 export function canManageMemberships(role: UserRole | null | undefined): boolean {
-  return role === 'admin';
+  return role === 'coach' || role === 'admin';
 }
 
 export function canManageStaff(role: UserRole | null | undefined): boolean {

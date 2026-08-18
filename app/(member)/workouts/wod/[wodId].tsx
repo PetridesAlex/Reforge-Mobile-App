@@ -115,12 +115,27 @@ export default function WodWorkoutScreen() {
           />
         </View>
 
-        <PrimaryButton
-          title={starting ? 'Starting…' : 'Start WOD session'}
-          onPress={onStart}
-          disabled={starting}
-          style={styles.startBtn}
-        />
+        {wod.mySessionStatus === 'active' && wod.activeSessionId ? (
+          <PrimaryButton
+            title="Resume WOD session"
+            onPress={() => router.push(`/(member)/workouts/session/${wod.activeSessionId}`)}
+            style={styles.startBtn}
+          />
+        ) : wod.myStatus === 'completed' && wod.completedSessionId ? (
+          <PrimaryButton
+            title="View completed summary"
+            variant="secondary"
+            onPress={() => router.push(`/(member)/workouts/summary/${wod.completedSessionId}`)}
+            style={styles.startBtn}
+          />
+        ) : (
+          <PrimaryButton
+            title={starting ? 'Starting…' : 'Start WOD session'}
+            onPress={onStart}
+            disabled={starting}
+            style={styles.startBtn}
+          />
+        )}
       </View>
     </Screen>
   );

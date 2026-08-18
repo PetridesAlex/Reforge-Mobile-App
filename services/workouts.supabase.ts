@@ -11,6 +11,7 @@ import type {
   WorkoutSet,
   WorkoutSummary,
 } from '@/types';
+import * as prService from '@/services/pr.supabase';
 
 type SetRowInput = {
   exercise_id?: string | null;
@@ -78,6 +79,12 @@ async function insertSets(sessionId: string, exercises: ProgramExercise[]) {
     })),
   );
   if (error) throw new Error(formatSupabaseError(error));
+
+  // Ensure completion XP/achievements are evaluated at session completion time
+  // (not only when the summary screen is opened).
+  await supabase
+    .rpc('evaluate_session_achievements', { p_member: session.member_id })
+    .catch(() => undefined);
 }
 
 export async function findActiveSession(
@@ -301,13 +308,51 @@ export async function finishSession(
 
   if (error) throw new Error(formatSupabaseError(error));
 
+  // Best-effort PR sweep.
+  // Normally PRs are detected during set logging (persistSetUpdate). This makes sure
+  // PRs still get created after the session completes even if the UI/network
+  // missed some set updates.
+  const exerciseNameById = new Map<string, string>();
+  for (const e of exercises) {
+    const id = e.exercise_id;
+    if (!id) continue;
+    if (e.exercise?.name) exerciseNameById.set(id, e.exercise.name);
+  }
+  const detectedByExerciseId = new Map<string, string>();
+  for (const set of completedSets) {
+    const exerciseId = set.exercise_id?.toString() ?? '';
+    if (!exerciseId) continue;
+    // Our PR detection only works when we have positive weight + reps.
+    const weight = set.weight_kg ?? 0;
+    const reps = set.reps ?? 0;
+    if (weight <= 0 || reps <= 0) continue;
+
+    try {
+      const exerciseName = exerciseNameById.get(exerciseId) ?? set.exercise_name ?? undefined;
+      const detected = await prService.evaluateAndStorePrs({
+        memberId: session.member_id,
+        exerciseId,
+        exerciseName,
+        sessionId,
+        set,
+      });
+
+      if (detected.length) {
+        const label = `${exerciseName ?? 'Exercise'} · ${detected[0].label}`;
+        if (!detectedByExerciseId.has(exerciseId)) detectedByExerciseId.set(exerciseId, label);
+      }
+    } catch {
+      // Never fail session completion because of PR detection.
+    }
+  }
+
   return {
     sessionId,
     durationSeconds: duration,
     exercisesCompleted: exerciseIds.size,
     totalSets: completedSets.length,
     estimatedVolumeKg: volume,
-    personalRecords: [],
+    personalRecords: Array.from(detectedByExerciseId.values()),
     completionPct,
     workoutName: day?.name ?? exercises[0]?.exercise?.name ?? 'Workout',
     highlight:
@@ -344,6 +389,10 @@ export async function finishSoloSession(input: {
     .single();
 
   if (error) throw new Error(formatSupabaseError(error));
+
+  await supabase
+    .rpc('evaluate_session_achievements', { p_member: input.memberId })
+    .catch(() => undefined);
 
   return {
     sessionId: data.id as string,

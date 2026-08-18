@@ -4,6 +4,7 @@ import {
   serializeMovements,
   type WodMovement,
 } from '@/lib/workouts/wod';
+import { DEFAULT_MEMBERSHIP_PLAN_LABEL, GROUP_CLASS_MONTHLY_EUR } from '@/lib/memberships/pricing';
 import {
   delay,
   IDS,
@@ -23,6 +24,7 @@ import {
   mockStudioSettings,
   mockWorkoutsOfTheDay,
   mockWodRsvps,
+  mockSessions,
   mockMemberships,
   mockMembershipPayments,
   newId,
@@ -787,9 +789,15 @@ export type WodAdminView = WorkoutOfTheDay & {
   joined: Profile[];
   skipped: Profile[];
   pending: Profile[];
+  completed: Profile[];
+  inProgress: Profile[];
+  notStarted: Profile[];
   joinedCount: number;
   skippedCount: number;
   pendingCount: number;
+  completedCount: number;
+  inProgressCount: number;
+  completionRatePct: number;
 };
 
 function todayKey() {
@@ -800,20 +808,42 @@ function buildWodAdminView(wod: WorkoutOfTheDay): WodAdminView {
   const rsvps = mockWodRsvps.filter((r) => r.wod_id === wod.id);
   const joinedIds = new Set(rsvps.filter((r) => r.status === 'joined').map((r) => r.member_id));
   const skippedIds = new Set(rsvps.filter((r) => r.status === 'skipped').map((r) => r.member_id));
+  const wodSessionTag = `wod:${wod.id}`;
+  const completedIds = new Set(
+    mockSessions
+      .filter((s) => s.notes === wodSessionTag && s.status === 'completed')
+      .map((s) => s.member_id),
+  );
+  const inProgressIds = new Set(
+    mockSessions
+      .filter((s) => s.notes === wodSessionTag && s.status === 'active')
+      .map((s) => s.member_id),
+  );
   const members = mockProfiles.filter(
     (p) => p.role === 'member' && !mockInactiveMemberIds.has(p.id),
   );
   const joined = members.filter((m) => joinedIds.has(m.id));
   const skipped = members.filter((m) => skippedIds.has(m.id));
   const pending = members.filter((m) => !joinedIds.has(m.id) && !skippedIds.has(m.id));
+  const completed = members.filter((m) => completedIds.has(m.id));
+  const inProgress = members.filter((m) => inProgressIds.has(m.id));
+  const notStarted = joined.filter((m) => !completedIds.has(m.id) && !inProgressIds.has(m.id));
+  const completionRatePct =
+    joined.length > 0 ? Math.round((completed.length / Math.max(1, joined.length)) * 100) : 0;
   return {
     ...wod,
     joined,
     skipped,
     pending,
+    completed,
+    inProgress,
+    notStarted,
     joinedCount: joined.length,
     skippedCount: skipped.length,
     pendingCount: pending.length,
+    completedCount: completed.length,
+    inProgressCount: inProgress.length,
+    completionRatePct,
   };
 }
 
@@ -1036,7 +1066,7 @@ function ensureMembership(memberId: string): MemberMembership {
     plan: 'monthly',
     plan_label: mockStudioSettings.membershipLabel,
     status: 'unpaid',
-    amount_eur: 180,
+    amount_eur: GROUP_CLASS_MONTHLY_EUR,
     period_start: start,
     period_end: end.toISOString().slice(0, 10),
     last_paid_at: null,
@@ -1071,6 +1101,7 @@ export async function isMembershipBillingReady(): Promise<boolean> {
 
 export async function listMemberships(filter?: {
   status?: MembershipStatus | 'all' | 'needs_payment';
+  coachId?: string;
 }): Promise<MembershipRow[]> {
   if (useSupabaseMemberships()) return membershipsSupabase.listMemberships(filter);
   await delay();
@@ -1115,8 +1146,8 @@ export async function addExistingMemberToBilling(memberId: string): Promise<Memb
 
   return updateMembership(memberId, {
     plan: 'monthly',
-    planLabel: 'REFORGE Strength',
-    amountEur: 180,
+    planLabel: DEFAULT_MEMBERSHIP_PLAN_LABEL,
+    amountEur: GROUP_CLASS_MONTHLY_EUR,
     status: row.membership.status === 'paid' ? 'paid' : 'unpaid',
     notes: row.membership.notes ?? 'Started with REFORGE',
   });
@@ -1227,6 +1258,27 @@ export async function markMembershipPaid(memberId: string): Promise<MembershipRo
 export async function markMembershipUnpaid(memberId: string): Promise<MembershipRow> {
   if (useSupabaseMemberships()) return membershipsSupabase.markMembershipUnpaid(memberId);
   return updateMembership(memberId, { status: 'unpaid' });
+}
+
+export async function sendPaymentReminder(memberId: string): Promise<membershipsSupabase.PaymentReminderResult> {
+  if (useSupabaseMemberships()) return membershipsSupabase.sendPaymentReminder(memberId);
+
+  await delay(150);
+  const row = await getMembershipForMember(memberId);
+  if (!row) throw new Error('Member not found');
+  if (row.membership.status === 'paid') throw new Error('Membership is already paid');
+
+  mockNotifications.unshift({
+    id: newId('notif'),
+    user_id: memberId,
+    title: 'Subscription payment due',
+    body: `Your ${row.membership.plan_label} subscription (€${row.membership.amount_eur}) needs payment. Please contact the studio to renew your membership.`,
+    read: false,
+    created_at: new Date().toISOString(),
+    type: 'membership_invoice',
+  });
+
+  return { ok: true, memberId };
 }
 
 export async function sendMonthlyInvoices(): Promise<membershipsSupabase.MonthlyInvoiceResult> {
@@ -1344,8 +1396,8 @@ export async function createBillingMember(input: {
   ensureMembership(profile.id);
   const membershipPatch = {
     plan: input.plan ?? 'monthly',
-    planLabel: input.planLabel ?? 'REFORGE Strength',
-    amountEur: input.amountEur ?? 180,
+    planLabel: input.planLabel ?? DEFAULT_MEMBERSHIP_PLAN_LABEL,
+    amountEur: input.amountEur ?? GROUP_CLASS_MONTHLY_EUR,
     status: input.status ?? 'unpaid',
     notes: input.notes ?? null,
   };

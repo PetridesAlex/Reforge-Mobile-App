@@ -2,6 +2,7 @@ import { router, useFocusEffect } from 'expo-router';
 import { useCallback, useMemo, useRef, useState } from 'react';
 import { Pressable, RefreshControl, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import Animated, { FadeInDown } from 'react-native-reanimated';
 
 import { WinnerCelebrationModal } from '@/components/achievements/WinnerCelebrationModal';
 import { AwardOfTheWeekCard } from '@/components/achievements/AwardOfTheWeekCard';
@@ -305,8 +306,9 @@ export default function HomeScreen() {
         <View style={styles.newsSection}>
           <SectionHeader title="Studio news" kicker="Updates" />
           {data.studioNews.map((item, index) => (
-            <View
+            <Animated.View
               key={item.id}
+              entering={FadeInDown.delay(index * 70).duration(320)}
               style={[styles.newsCard, index === 0 && styles.newsCardFeatured]}>
               <View style={styles.newsRail} />
               <View style={styles.newsCopy}>
@@ -317,7 +319,7 @@ export default function HomeScreen() {
                 <Text style={styles.newsTitle}>{item.title}</Text>
                 <Text style={styles.newsBody}>{item.body}</Text>
               </View>
-            </View>
+            </Animated.View>
           ))}
         </View>
       ) : null}

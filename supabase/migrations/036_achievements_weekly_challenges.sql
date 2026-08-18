@@ -415,6 +415,7 @@ declare
   v_day date;
   v_streak integer := 0;
   v_cursor date;
+  v_latest_completed_session uuid;
 begin
   if p_member is null or p_member <> auth.uid() then
     if not public.is_coach_or_admin() then
@@ -451,14 +452,22 @@ begin
     end loop;
   end if;
 
-  -- Workout completion XP — at most once per calendar day
-  if not exists (
+  -- Workout completion XP — once per completed session (deduped by session id)
+  select ws.id
+    into v_latest_completed_session
+  from public.workout_sessions ws
+  where ws.member_id = p_member
+    and ws.status = 'completed'
+  order by coalesce(ws.finished_at, ws.started_at) desc
+  limit 1;
+
+  if v_latest_completed_session is not null and not exists (
     select 1 from public.athlete_xp_ledger
     where member_id = p_member
       and reason = 'workout_complete'
-      and created_at::date = current_date
+      and ref_id = v_latest_completed_session
   ) then
-    perform public.award_xp(p_member, 50, 'workout_complete', 'session', null);
+    perform public.award_xp(p_member, 50, 'workout_complete', 'session', v_latest_completed_session);
   end if;
 
   if v_sessions >= 1 then

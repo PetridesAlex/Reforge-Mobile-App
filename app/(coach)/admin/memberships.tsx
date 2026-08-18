@@ -20,6 +20,7 @@ import { PrimaryButton } from '@/components/ui/PrimaryButton';
 import { Screen } from '@/components/ui/Screen';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { BackButton } from '@/components/ui/BackButton';
+import { GROUP_CLASS_MONTHLY_EUR } from '@/lib/memberships/pricing';
 import * as adminService from '@/services/admin';
 import type { MembershipPayment, MembershipPlan, MembershipStatus } from '@/services/mock/data';
 import { colors, fonts, radius, spacing, typography } from '@/constants/theme';
@@ -65,7 +66,7 @@ export default function AdminMembershipsScreen() {
   const [status, setStatus] = useState<MembershipStatus>('paid');
   const [plan, setPlan] = useState<MembershipPlan>('monthly');
   const [planLabel, setPlanLabel] = useState('');
-  const [amount, setAmount] = useState('180');
+  const [amount, setAmount] = useState(String(GROUP_CLASS_MONTHLY_EUR));
   const [periodEnd, setPeriodEnd] = useState('');
   const [notes, setNotes] = useState('');
   const [paymentHistory, setPaymentHistory] = useState<MembershipPayment[]>([]);
@@ -77,7 +78,7 @@ export default function AdminMembershipsScreen() {
   const [addEmail, setAddEmail] = useState('');
   const [addPhone, setAddPhone] = useState('');
   const [addPlan, setAddPlan] = useState<MembershipPlan>('monthly');
-  const [addAmount, setAddAmount] = useState('180');
+  const [addAmount, setAddAmount] = useState(String(GROUP_CLASS_MONTHLY_EUR));
   const [addStatus, setAddStatus] = useState<MembershipStatus>('unpaid');
   const [addNotes, setAddNotes] = useState('');
   const [addSaving, setAddSaving] = useState(false);
@@ -182,12 +183,21 @@ export default function AdminMembershipsScreen() {
     await load();
   };
 
+  const quickReminder = async (memberId: string, name: string) => {
+    try {
+      await adminService.sendPaymentReminder(memberId);
+      setToast(`Reminder sent to ${name}`);
+    } catch (e) {
+      setToast(e instanceof Error ? e.message : 'Could not send reminder');
+    }
+  };
+
   const resetAddForm = () => {
     setAddName('');
     setAddEmail('');
     setAddPhone('');
     setAddPlan('monthly');
-    setAddAmount('180');
+    setAddAmount(String(GROUP_CLASS_MONTHLY_EUR));
     setAddStatus('unpaid');
     setAddNotes('');
     setAddError(null);
@@ -202,7 +212,7 @@ export default function AdminMembershipsScreen() {
         email: addEmail.trim() || undefined,
         phone: addPhone.trim() || undefined,
         plan: addPlan,
-        amountEur: Number(addAmount) || 180,
+        amountEur: Number(addAmount) || GROUP_CLASS_MONTHLY_EUR,
         status: addStatus,
         notes: addNotes.trim() || null,
       });
@@ -390,11 +400,19 @@ export default function AdminMembershipsScreen() {
               ) : null}
               <View style={styles.quickRow}>
                 {row.membership.status !== 'paid' ? (
-                  <PrimaryButton
-                    title="Mark paid"
-                    onPress={() => quickPaid(row.member.id, row.member.full_name)}
-                    style={styles.quickBtn}
-                  />
+                  <>
+                    <PrimaryButton
+                      title="Mark paid"
+                      onPress={() => quickPaid(row.member.id, row.member.full_name)}
+                      style={styles.quickBtn}
+                    />
+                    <PrimaryButton
+                      title="Remind"
+                      variant="secondary"
+                      onPress={() => quickReminder(row.member.id, row.member.full_name)}
+                      style={styles.quickBtn}
+                    />
+                  </>
                 ) : (
                   <PrimaryButton
                     title="Mark unpaid"

@@ -19,9 +19,15 @@ export type WodAdminView = WorkoutOfTheDay & {
   joined: Profile[];
   skipped: Profile[];
   pending: Profile[];
+  completed: Profile[];
+  inProgress: Profile[];
+  notStarted: Profile[];
   joinedCount: number;
   skippedCount: number;
   pendingCount: number;
+  completedCount: number;
+  inProgressCount: number;
+  completionRatePct: number;
 };
 
 export type StudioClassRow = GymClass & {
@@ -205,9 +211,14 @@ export async function deleteNews(newsId: string): Promise<void> {
 
 async function buildWodAdminView(wod: WorkoutOfTheDay): Promise<WodAdminView> {
   const supabase = getSupabase();
-  const [{ data: rsvps }, { data: members }] = await Promise.all([
+  const [{ data: rsvps }, { data: members }, { data: sessions }] = await Promise.all([
     supabase.from('wod_rsvps').select('member_id, status').eq('wod_id', wod.id),
     supabase.from('profiles').select('*').eq('role', 'member'),
+    supabase
+      .from('workout_sessions')
+      .select('member_id, status')
+      .eq('wod_id', wod.id)
+      .in('status', ['active', 'completed']),
   ]);
 
   const joinedIds = new Set(
@@ -220,15 +231,36 @@ async function buildWodAdminView(wod: WorkoutOfTheDay): Promise<WodAdminView> {
   const joined = memberProfiles.filter((m) => joinedIds.has(m.id));
   const skipped = memberProfiles.filter((m) => skippedIds.has(m.id));
   const pending = memberProfiles.filter((m) => !joinedIds.has(m.id) && !skippedIds.has(m.id));
+  const completedIds = new Set(
+    (sessions ?? [])
+      .filter((s) => s.status === 'completed')
+      .map((s) => s.member_id as string),
+  );
+  const inProgressIds = new Set(
+    (sessions ?? [])
+      .filter((s) => s.status === 'active')
+      .map((s) => s.member_id as string),
+  );
+  const completed = memberProfiles.filter((m) => completedIds.has(m.id));
+  const inProgress = memberProfiles.filter((m) => inProgressIds.has(m.id));
+  const notStarted = joined.filter((m) => !completedIds.has(m.id) && !inProgressIds.has(m.id));
+  const completionRatePct =
+    joined.length > 0 ? Math.round((completed.length / Math.max(1, joined.length)) * 100) : 0;
 
   return {
     ...wod,
     joined,
     skipped,
     pending,
+    completed,
+    inProgress,
+    notStarted,
     joinedCount: joined.length,
     skippedCount: skipped.length,
     pendingCount: pending.length,
+    completedCount: completed.length,
+    inProgressCount: inProgress.length,
+    completionRatePct,
   };
 }
 
@@ -337,6 +369,21 @@ export async function getMemberWorkoutOfTheDay(memberId: string) {
 
   const { data: rsvps } = await supabase.from('wod_rsvps').select('*').eq('wod_id', wod.id);
   const mine = (rsvps ?? []).find((r) => r.member_id === memberId);
+  const { data: mySessions } = await supabase
+    .from('workout_sessions')
+    .select('id, status, finished_at, started_at')
+    .eq('member_id', memberId)
+    .eq('wod_id', wod.id)
+    .in('status', ['active', 'completed'])
+    .order('started_at', { ascending: false });
+  const activeSession = (mySessions ?? []).find((s) => s.status === 'active');
+  const completedSession = (mySessions ?? []).find((s) => s.status === 'completed');
+  const myStatus =
+    activeSession != null
+      ? 'joined'
+      : completedSession != null
+        ? 'completed'
+        : ((mine?.status as WodRsvpStatus | undefined) ?? null);
 
   return {
     id: wod.id,
@@ -351,7 +398,14 @@ export async function getMemberWorkoutOfTheDay(memberId: string) {
     moves: [...wod.moves],
     movements: [...wod.movements],
     joinedCount: (rsvps ?? []).filter((r) => r.status === 'joined').length,
-    myStatus: (mine?.status as WodRsvpStatus | undefined) ?? null,
+    myStatus,
+    mySessionStatus: activeSession
+      ? 'active'
+      : completedSession
+        ? 'completed'
+        : null,
+    activeSessionId: (activeSession?.id as string | undefined) ?? null,
+    completedSessionId: (completedSession?.id as string | undefined) ?? null,
   };
 }
 
@@ -420,10 +474,27 @@ export async function listMemberWorkoutsOfTheDay(
 
   const wodIds = rows.map((w) => w.id);
   const { data: rsvps } = await supabase.from('wod_rsvps').select('*').in('wod_id', wodIds);
+  const { data: sessions } = await supabase
+    .from('workout_sessions')
+    .select('id, wod_id, status, member_id, started_at')
+    .eq('member_id', memberId)
+    .in('wod_id', wodIds)
+    .in('status', ['active', 'completed']);
 
   return rows.map((wod) => {
     const mine = (rsvps ?? []).find((r) => r.wod_id === wod.id && r.member_id === memberId);
     const wodRsvps = (rsvps ?? []).filter((r) => r.wod_id === wod.id);
+    const myWodSessions = (sessions ?? [])
+      .filter((s) => s.wod_id === wod.id)
+      .sort((a, b) => String(b.started_at).localeCompare(String(a.started_at)));
+    const activeSession = myWodSessions.find((s) => s.status === 'active');
+    const completedSession = myWodSessions.find((s) => s.status === 'completed');
+    const myStatus =
+      activeSession != null
+        ? 'joined'
+        : completedSession != null
+          ? 'completed'
+          : ((mine?.status as WodRsvpStatus | undefined) ?? null);
     return {
       id: wod.id,
       date: wod.date,
@@ -437,7 +508,14 @@ export async function listMemberWorkoutsOfTheDay(
       moves: [...wod.moves],
       movements: [...wod.movements],
       joinedCount: wodRsvps.filter((r) => r.status === 'joined').length,
-      myStatus: (mine?.status as WodRsvpStatus | undefined) ?? null,
+      myStatus,
+      mySessionStatus: activeSession
+        ? 'active'
+        : completedSession
+          ? 'completed'
+          : null,
+      activeSessionId: (activeSession?.id as string | undefined) ?? null,
+      completedSessionId: (completedSession?.id as string | undefined) ?? null,
     };
   });
 }

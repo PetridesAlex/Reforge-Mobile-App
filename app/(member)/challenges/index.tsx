@@ -2,6 +2,7 @@ import { formatDistanceToNowStrict, format } from 'date-fns';
 import { router } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
 import { Pressable, RefreshControl, StyleSheet, Text, View } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 
 import { ChallengePodium } from '@/components/challenges/ChallengePodium';
 import { AtmosphereBackdrop } from '@/components/ui/AtmosphereBackdrop';
@@ -81,6 +82,15 @@ export default function MemberChallengesIndex() {
           onPress={() => router.push(`/(member)/challenges/${live.id}`)}
           style={styles.hero}>
           <AtmosphereBackdrop source={GYM_IMAGES.dumbbellsWod} intensity="strong" />
+          <LinearGradient colors={['rgba(200,255,0,0.12)', 'transparent']} style={styles.heroGlow} />
+          <View style={styles.heroTop}>
+            <View style={styles.livePill}>
+              <Text style={styles.livePillText}>LIVE</Text>
+            </View>
+            <View style={styles.countPill}>
+              <Text style={styles.countPillText}>{live.participant_count ?? 0} ATHLETES</Text>
+            </View>
+          </View>
           <Text style={styles.kicker}>WEEKLY CHALLENGE</Text>
           <Text style={styles.heroTitle}>{live.name}</Text>
           <Text style={styles.heroMeta}>
@@ -92,8 +102,14 @@ export default function MemberChallengesIndex() {
       ) : (
         <EmptyState
           icon="trophy-outline"
+          variant="panel"
           title="No live challenge"
           description="When coaches publish this week’s competition, it will appear here."
+          steps={[
+            { label: 'Coach publishes', desc: 'Challenge appears here immediately' },
+            { label: 'Submit score', desc: 'Compete and wait for coach verification' },
+            { label: 'Climb podium', desc: 'Top verified scores get premium rewards' },
+          ]}
         />
       )}
 
@@ -104,20 +120,41 @@ export default function MemberChallengesIndex() {
         </>
       ) : null}
 
-      <SectionHeader title="Past challenges" kicker="History" />
-      <View style={styles.list}>
-        {past.map((row) => (
-          <Pressable
-            key={row.id}
-            onPress={() => router.push(`/(member)/challenges/${row.id}`)}
-            style={styles.card}>
-            <Text style={styles.cardTitle}>{row.name}</Text>
-            <Text style={styles.cardMeta}>
-              Week of {format(new Date(row.starts_at), 'MMM d')} · {row.participant_count ?? 0} athletes
-            </Text>
-          </Pressable>
-        ))}
-        {!past.length ? <Text style={styles.empty}>No past challenges yet.</Text> : null}
+      <View style={styles.pastSection}>
+        <SectionHeader title="Past challenges" kicker="History" />
+        <View style={styles.list}>
+          {past.map((row) => (
+            <Pressable
+              key={row.id}
+              onPress={() => router.push(`/(member)/challenges/${row.id}`)}
+              style={({ pressed }) => [styles.card, pressed && styles.cardPressed]}>
+              <LinearGradient colors={['rgba(200,255,0,0.08)', 'transparent']} style={styles.cardGlow} />
+              <View style={styles.cardTop}>
+                <View style={styles.closedPill}>
+                  <Text style={styles.closedPillText}>CLOSED</Text>
+                </View>
+                <Text style={styles.cardAthletes}>{row.participant_count ?? 0} athletes</Text>
+              </View>
+              <Text style={styles.cardTitle}>{row.name}</Text>
+              <Text style={styles.cardMeta}>
+                Week of {format(new Date(row.starts_at), 'MMM d, yyyy')}
+              </Text>
+            </Pressable>
+          ))}
+          {!past.length ? (
+            <EmptyState
+              icon="time-outline"
+              variant="panel"
+              title="No past challenges yet"
+              description="Completed weekly competitions will archive here with final standings and podium results."
+              steps={[
+                { label: 'Compete live', desc: 'Join the current weekly challenge' },
+                { label: 'Get verified', desc: 'Coach confirms your submitted score' },
+                { label: 'Review history', desc: 'Past weeks stay here for reference' },
+              ]}
+            />
+          ) : null}
+        </View>
       </View>
       <View style={{ height: 40 }} />
     </Screen>
@@ -139,20 +176,97 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     justifyContent: 'flex-end',
   },
+  heroGlow: { ...StyleSheet.absoluteFillObject },
+  heroTop: {
+    position: 'absolute',
+    top: spacing.md,
+    left: spacing.md,
+    right: spacing.md,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  livePill: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: radius.full,
+    backgroundColor: 'rgba(10,10,10,0.6)',
+    borderWidth: 1,
+    borderColor: 'rgba(200,255,0,0.35)',
+  },
+  livePillText: {
+    fontFamily: fonts.sansBold,
+    fontSize: 10,
+    letterSpacing: 1.2,
+    color: colors.accent,
+  },
+  countPill: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: radius.full,
+    backgroundColor: 'rgba(10,10,10,0.6)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.16)',
+  },
+  countPillText: {
+    fontFamily: fonts.sansMedium,
+    fontSize: 10,
+    color: colors.textSecondary,
+    letterSpacing: 0.8,
+  },
   kicker: { fontFamily: fonts.sansBold, fontSize: 11, letterSpacing: 1.6, color: colors.accent },
   heroTitle: { fontFamily: fonts.display, fontSize: 36, color: colors.text, lineHeight: 38 },
   heroMeta: { fontFamily: fonts.sans, fontSize: 13, color: 'rgba(255,255,255,0.72)' },
   cta: { fontFamily: fonts.sansBold, fontSize: 12, letterSpacing: 1.4, color: colors.accent, marginTop: 8 },
-  list: { gap: 8 },
+  pastSection: {
+    marginTop: spacing.xl,
+    paddingTop: spacing.lg,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255,255,255,0.06)',
+    gap: spacing.sm,
+  },
+  list: { gap: spacing.md, marginTop: spacing.xs },
   card: {
-    padding: spacing.md,
-    borderRadius: radius.md,
+    position: 'relative',
+    padding: spacing.lg,
+    borderRadius: radius.xl,
+    borderWidth: 1,
+    borderColor: 'rgba(200,255,0,0.16)',
+    backgroundColor: colors.surfaceElevated,
+    overflow: 'hidden',
+    gap: spacing.sm,
+  },
+  cardPressed: {
+    opacity: 0.92,
+    transform: [{ scale: 0.985 }],
+  },
+  cardGlow: { ...StyleSheet.absoluteFillObject },
+  cardTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: spacing.sm,
+  },
+  closedPill: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: radius.full,
+    backgroundColor: 'rgba(255,255,255,0.05)',
     borderWidth: 1,
     borderColor: colors.border,
-    backgroundColor: colors.surface,
-    overflow: 'hidden',
   },
-  cardTitle: { fontFamily: fonts.sansBold, fontSize: 15, color: colors.text },
-  cardMeta: { fontFamily: fonts.sans, fontSize: 12, color: colors.textMuted, marginTop: 4 },
-  empty: { fontFamily: fonts.sans, color: colors.textMuted },
+  closedPillText: {
+    fontFamily: fonts.sansMedium,
+    fontSize: 9,
+    letterSpacing: 1.2,
+    color: colors.textMuted,
+  },
+  cardAthletes: {
+    fontFamily: fonts.sansMedium,
+    fontSize: 11,
+    color: colors.textSecondary,
+    letterSpacing: 0.4,
+  },
+  cardTitle: { fontFamily: fonts.sansBold, fontSize: 16, color: colors.text, lineHeight: 20 },
+  cardMeta: { fontFamily: fonts.sans, fontSize: 12, color: colors.textMuted },
 });

@@ -177,7 +177,12 @@ export default function WorkoutCategoryScreen() {
             end={{ x: 0.9, y: 1 }}
             style={styles.heroGlow}
           />
-          <MediaImage uri={config.image} style={styles.heroImage} rounded={0} overlay />
+          <MediaImage
+            source={typeof config.image === 'string' ? { uri: config.image } : config.image}
+            style={styles.heroImage}
+            rounded={0}
+            overlay
+          />
 
           <View style={styles.heroTop}>
             <BackButton compact />
@@ -322,7 +327,7 @@ export default function WorkoutCategoryScreen() {
                     style={({ pressed }) => [styles.sessionCard, pressed && styles.pressed]}>
                     <View style={styles.cardRail} />
                     <MediaImage
-                      uri={config.image}
+                      source={typeof config.image === 'string' ? { uri: config.image } : config.image}
                       style={styles.sessionThumb}
                       rounded={radius.md}
                       overlay

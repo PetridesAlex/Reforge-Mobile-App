@@ -1,8 +1,16 @@
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
+import { useEffect } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import Animated, { FadeInDown } from 'react-native-reanimated';
+import Animated, {
+  FadeInDown,
+  useAnimatedStyle,
+  useSharedValue,
+  withRepeat,
+  withSequence,
+  withTiming,
+} from 'react-native-reanimated';
 import Svg, { Circle } from 'react-native-svg';
 
 import { AnimatedCount } from '@/components/ui/AnimatedCount';
@@ -33,19 +41,34 @@ function WeeklyGoalRing({
   goal,
   pct,
   size = 76,
+  delay = 0,
 }: {
   value: number;
   goal: number;
   pct: number;
   size?: number;
+  delay?: number;
 }) {
   const stroke = 5;
   const r = (size - stroke) / 2;
   const circumference = 2 * Math.PI * r;
   const offset = circumference * (1 - Math.min(pct, 100) / 100);
+  const ringPulse = useSharedValue(1);
+
+  useEffect(() => {
+    ringPulse.value = withRepeat(
+      withSequence(withTiming(1.04, { duration: 1000 }), withTiming(1, { duration: 1000 })),
+      -1,
+      false,
+    );
+  }, [ringPulse]);
+
+  const ringPulseStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: ringPulse.value }],
+  }));
 
   return (
-    <View style={{ width: size, height: size }}>
+    <Animated.View style={[{ width: size, height: size }, ringPulseStyle]}>
       <Svg width={size} height={size}>
         <Circle
           cx={size / 2}
@@ -70,12 +93,13 @@ function WeeklyGoalRing({
         />
       </Svg>
       <View style={styles.ringCenter}>
-        <Text style={styles.ringValue}>
-          {value}/{goal}
-        </Text>
+        <View style={styles.ringValueRow}>
+          <AnimatedCount value={value} style={styles.ringValue} duration={950} delay={delay} />
+          <Text style={styles.ringValue}>/{goal}</Text>
+        </View>
         <Text style={styles.ringLabel}>WEEK</Text>
       </View>
-    </View>
+    </Animated.View>
   );
 }
 
@@ -116,7 +140,13 @@ export function PerformanceBuildProfile({
               <Text style={styles.setupBadgeText}>Premium analytics</Text>
             </View>
             <View style={styles.readinessPill}>
-              <Text style={styles.readinessPillText}>{input.profileCompletionPct}% ready</Text>
+              <AnimatedCount
+                value={input.profileCompletionPct}
+                suffix="% ready"
+                style={styles.readinessPillText}
+                duration={900}
+                delay={100}
+              />
             </View>
           </View>
 
@@ -185,12 +215,14 @@ export function PerformanceBuildProfile({
                 value={stats.weeklyWorkouts}
                 goal={input.weeklyGoal}
                 pct={build.weeklyPct}
+                delay={120}
               />
               <View style={styles.readinessBlock}>
                 <AnimatedCount
                   value={build.readinessScore}
                   style={styles.readinessValue}
-                  duration={900}
+                  duration={1000}
+                  delay={180}
                 />
                 <Text style={styles.readinessLabel}>Readiness</Text>
               </View>
@@ -199,33 +231,42 @@ export function PerformanceBuildProfile({
         </View>
 
         <View style={styles.metricsRow}>
-          <MetricTile
+          <Animated.View entering={FadeInDown.delay(80).duration(320)} style={styles.metricTileWrap}>
+            <MetricTile
             label="Streak"
             value={input.streak}
             suffix=" days"
             icon="flame-outline"
-          />
-          <MetricTile
+            delay={200}
+            />
+          </Animated.View>
+          <Animated.View entering={FadeInDown.delay(130).duration(320)} style={styles.metricTileWrap}>
+            <MetricTile
             label="This month"
             value={stats.monthlyWorkouts}
             suffix=""
             icon="calendar-outline"
-          />
-          <MetricTile
+            delay={250}
+            />
+          </Animated.View>
+          <Animated.View entering={FadeInDown.delay(180).duration(320)} style={styles.metricTileWrap}>
+            <MetricTile
             label="Body fat"
             value={stats.bodyFatPct}
             suffix="%"
             decimals={1}
             icon="pulse-outline"
             empty="—"
-          />
+            delay={300}
+            />
+          </Animated.View>
         </View>
 
         <View style={styles.chipRow}>
           {build.focusAreas.map((area) => (
-            <View key={area} style={styles.chip}>
+            <Animated.View key={area} entering={FadeInDown.duration(300)} style={styles.chip}>
               <Text style={styles.chipText}>{area}</Text>
-            </View>
+            </Animated.View>
           ))}
         </View>
 
@@ -290,6 +331,7 @@ function MetricTile({
   decimals = 0,
   icon,
   empty = '—',
+  delay = 0,
 }: {
   label: string;
   value: number | null;
@@ -297,6 +339,7 @@ function MetricTile({
   decimals?: number;
   icon: keyof typeof Ionicons.glyphMap;
   empty?: string;
+  delay?: number;
 }) {
   const hasValue = value != null && !Number.isNaN(value);
 
@@ -305,8 +348,14 @@ function MetricTile({
       <Ionicons name={icon} size={14} color={colors.textMuted} />
       {hasValue ? (
         <View style={styles.metricValueRow}>
-          <AnimatedCount value={value} decimals={decimals} style={styles.metricValue} duration={800} />
-          {suffix ? <Text style={styles.metricSuffix}>{suffix}</Text> : null}
+          <AnimatedCount
+            value={value}
+            decimals={decimals}
+            suffix={suffix}
+            style={styles.metricValue}
+            duration={1000}
+            delay={delay}
+          />
         </View>
       ) : (
         <Text style={styles.metricEmpty}>{empty}</Text>
@@ -527,6 +576,10 @@ const styles = StyleSheet.create({
     color: colors.accent,
     letterSpacing: 0.5,
   },
+  ringValueRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+  },
   ringLabel: {
     fontFamily: fonts.sansSemiBold,
     fontSize: 8,
@@ -559,6 +612,9 @@ const styles = StyleSheet.create({
   metricsRow: {
     flexDirection: 'row',
     gap: spacing.sm,
+  },
+  metricTileWrap: {
+    flex: 1,
   },
   metricTile: {
     flex: 1,

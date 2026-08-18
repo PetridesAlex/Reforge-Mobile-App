@@ -1,4 +1,4 @@
-import { PLACEHOLDER_IMAGES, type LocalImageSource } from '@/constants/media';
+import { GYM_IMAGES, type LocalImageSource } from '@/constants/media';
 import type { AssignedProgramView, Exercise, MuscleGroup } from '@/types';
 import type { WorkoutOfTheDayView } from '@/services/member';
 
@@ -20,7 +20,7 @@ export const WORKOUT_CATEGORIES: Record<WorkoutCategoryId, WorkoutCategoryConfig
     id: 'strength',
     label: 'Strength',
     subtitle: 'Lifts, hypertrophy, and power work from your coach',
-    image: PLACEHOLDER_IMAGES.strength,
+    image: GYM_IMAGES.athleteDumbbells,
     tint: '#1E2A1A',
     muscleGroups: ['Chest', 'Back', 'Shoulders', 'Arms', 'Legs', 'Core'],
     wodKeywords: ['strength', 'iron', 'lift', 'squat', 'deadlift', 'hypertrophy', 'power', 'barbell'],
@@ -30,7 +30,7 @@ export const WORKOUT_CATEGORIES: Record<WorkoutCategoryId, WorkoutCategoryConfig
     id: 'cardio',
     label: 'Cardio',
     subtitle: 'Engine work, conditioning, and metcons',
-    image: PLACEHOLDER_IMAGES.cardio,
+    image: GYM_IMAGES.dumbbellsWod,
     tint: '#1A2430',
     muscleGroups: ['Cardio'],
     wodKeywords: ['cardio', 'condition', 'engine', 'metcon', 'amrap', 'interval', 'row', 'run', 'bike'],
@@ -40,7 +40,7 @@ export const WORKOUT_CATEGORIES: Record<WorkoutCategoryId, WorkoutCategoryConfig
     id: 'mobility',
     label: 'Mobility',
     subtitle: 'Recovery, flexibility, and movement prep',
-    image: PLACEHOLDER_IMAGES.mobility,
+    image: GYM_IMAGES.kettlebellStill,
     tint: '#241A2A',
     muscleGroups: ['Mobility'],
     wodKeywords: ['mobility', 'recovery', 'stretch', 'yoga', 'flex', 'warm-up', 'warmup'],
@@ -50,7 +50,7 @@ export const WORKOUT_CATEGORIES: Record<WorkoutCategoryId, WorkoutCategoryConfig
     id: 'class',
     label: 'Classes',
     subtitle: 'Group sessions on the studio schedule',
-    image: PLACEHOLDER_IMAGES.classGroup,
+    image: GYM_IMAGES.studioFloor,
     tint: '#2A1E16',
     muscleGroups: [],
     wodKeywords: [],

@@ -9,6 +9,7 @@ import {
   View,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 
 import { ChallengePodium } from '@/components/challenges/ChallengePodium';
 import { LeaderboardList } from '@/components/challenges/LeaderboardList';
@@ -167,6 +168,14 @@ export default function StaffChallengesScreen() {
   };
 
   const pending = useMemo(() => results.filter((r) => r.status === 'pending'), [results]);
+  const statusStats = useMemo(
+    () => ({
+      live: rows.filter((r) => r.status === 'live').length,
+      draft: rows.filter((r) => r.status === 'draft').length,
+      closed: rows.filter((r) => r.status === 'closed').length,
+    }),
+    [rows],
+  );
 
   if (!allowed) {
     return (
@@ -205,7 +214,24 @@ export default function StaffChallengesScreen() {
           <Ionicons name="add" size={20} color={colors.background} />
         </Pressable>
       </View>
-      <Text style={styles.sub}>Weekly competition · verify results · podium</Text>
+      <View style={styles.heroPanel}>
+        <LinearGradient colors={['rgba(200,255,0,0.12)', 'transparent']} style={styles.heroGlow} />
+        <Text style={styles.sub}>Weekly competition · verify results · podium</Text>
+        <View style={styles.statRow}>
+          <View style={styles.statChip}>
+            <Text style={styles.statChipValue}>{statusStats.live}</Text>
+            <Text style={styles.statChipLabel}>LIVE</Text>
+          </View>
+          <View style={styles.statChip}>
+            <Text style={styles.statChipValue}>{statusStats.draft}</Text>
+            <Text style={styles.statChipLabel}>DRAFT</Text>
+          </View>
+          <View style={styles.statChip}>
+            <Text style={styles.statChipValue}>{statusStats.closed}</Text>
+            <Text style={styles.statChipLabel}>CLOSED</Text>
+          </View>
+        </View>
+      </View>
 
       {error ? <ErrorState message={error} onRetry={load} /> : null}
 
@@ -405,7 +431,45 @@ const styles = StyleSheet.create({
     fontFamily: fonts.sans,
     fontSize: 13,
     color: colors.textMuted,
+  },
+  heroPanel: {
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    borderColor: 'rgba(200,255,0,0.22)',
+    backgroundColor: colors.surfaceElevated,
+    padding: spacing.md,
     marginBottom: spacing.lg,
+    overflow: 'hidden',
+    gap: spacing.sm,
+  },
+  heroGlow: {
+    ...StyleSheet.absoluteFillObject,
+  },
+  statRow: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+  },
+  statChip: {
+    flex: 1,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
+    alignItems: 'center',
+    paddingVertical: spacing.sm,
+    gap: 2,
+  },
+  statChipValue: {
+    fontFamily: fonts.display,
+    color: colors.accent,
+    fontSize: 24,
+    lineHeight: 24,
+  },
+  statChipLabel: {
+    fontFamily: fonts.sansSemiBold,
+    fontSize: 10,
+    color: colors.textSecondary,
+    letterSpacing: 1,
   },
   addBtn: {
     width: 36,

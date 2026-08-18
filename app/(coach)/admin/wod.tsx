@@ -24,7 +24,7 @@ import * as adminService from '@/services/admin';
 import type { Profile } from '@/types';
 import { colors, fonts, radius, spacing, typography } from '@/constants/theme';
 
-type RsvpTab = 'joined' | 'skipped' | 'pending';
+type RsvpTab = 'joined' | 'skipped' | 'pending' | 'completed' | 'inProgress';
 
 function initials(name: string) {
   return name
@@ -164,13 +164,25 @@ export default function AdminWodScreen() {
   }
 
   const rsvpPeople =
-    rsvpTab === 'joined' ? wod?.joined ?? [] : rsvpTab === 'skipped' ? wod?.skipped ?? [] : wod?.pending ?? [];
+    rsvpTab === 'joined'
+      ? wod?.joined ?? []
+      : rsvpTab === 'skipped'
+        ? wod?.skipped ?? []
+        : rsvpTab === 'pending'
+          ? wod?.pending ?? []
+          : rsvpTab === 'completed'
+            ? wod?.completed ?? []
+            : wod?.inProgress ?? [];
   const rsvpEmpty =
     rsvpTab === 'joined'
       ? 'Nobody has joined yet'
       : rsvpTab === 'skipped'
         ? 'No skips yet'
-        : 'Everyone responded';
+        : rsvpTab === 'pending'
+          ? 'Everyone responded'
+          : rsvpTab === 'completed'
+            ? 'No one has completed yet'
+            : 'No active sessions right now';
 
   return (
     <Screen
@@ -338,6 +350,31 @@ export default function AdminWodScreen() {
             />
           </View>
 
+          <Text style={[styles.sectionKicker, { marginTop: spacing.md }]}>EXECUTION</Text>
+          <View style={styles.statsRow}>
+            <StatTile
+              value={wod.completedCount}
+              label="Completed"
+              active={rsvpTab === 'completed'}
+              tone="ok"
+              onPress={() => setRsvpTab('completed')}
+            />
+            <StatTile
+              value={wod.inProgressCount}
+              label="In progress"
+              active={rsvpTab === 'inProgress'}
+              tone="muted"
+              onPress={() => setRsvpTab('inProgress')}
+            />
+            <StatTile
+              value={wod.completionRatePct}
+              label="Rate %"
+              active={false}
+              tone="danger"
+              onPress={() => setRsvpTab('completed')}
+            />
+          </View>
+
           {/* Detail */}
           <View style={styles.panel}>
             <Text style={styles.panelLabel}>SESSION</Text>
@@ -353,7 +390,15 @@ export default function AdminWodScreen() {
           {/* RSVP */}
           <View style={styles.rsvpHeader}>
             <Text style={styles.rsvpTitle}>
-              {rsvpTab === 'joined' ? 'Joined' : rsvpTab === 'skipped' ? 'Skipped' : 'Waiting'}
+              {rsvpTab === 'joined'
+                ? 'Joined'
+                : rsvpTab === 'skipped'
+                  ? 'Skipped'
+                  : rsvpTab === 'pending'
+                    ? 'Waiting'
+                    : rsvpTab === 'completed'
+                      ? 'Completed'
+                      : 'In progress'}
             </Text>
             <Text style={styles.rsvpCount}>{rsvpPeople.length}</Text>
           </View>

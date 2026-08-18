@@ -6,6 +6,7 @@ import { Animated, Pressable, ScrollView, StyleSheet, Text, View } from 'react-n
 import { Ionicons } from '@expo/vector-icons';
 
 import { MemberAppGuide } from '@/components/onboarding/MemberAppGuide';
+import { MemberSubscriptionCard } from '@/components/billing/MemberSubscriptionCard';
 import { PerformanceBuildProfile } from '@/components/performance/PerformanceBuildProfile';
 import { TrophyCabinetCard } from '@/components/achievements/TrophyCabinetCard';
 import { AppBottomSheet, SheetFormError } from '@/components/ui/AppBottomSheet';
@@ -34,6 +35,7 @@ import {
   isMoodFreshToday,
 } from '@/lib/community/moods';
 import { pickAvatarImage } from '@/lib/utils/pickAvatar';
+import type { MembershipStatus } from '@/services/mock/data';
 import * as community from '@/services/community';
 import * as memberService from '@/services/member';
 import { colors, fonts, radius, spacing, typography } from '@/constants/theme';
@@ -59,7 +61,11 @@ const MENU_ITEMS = [
 export default function ProfileScreen() {
   const { profile, signOut, updateAvatar, updateProfile } = useAuth();
   const [coachName, setCoachName] = useState<string | null>(null);
-  const [plan, setPlan] = useState<string | null>(null);
+  const [programName, setProgramName] = useState<string | null>(null);
+  const [membershipPlan, setMembershipPlan] = useState<string | null>(null);
+  const [membershipStatus, setMembershipStatus] = useState<MembershipStatus | null>(null);
+  const [membershipEnds, setMembershipEnds] = useState<string | null>(null);
+  const [membershipAmountEur, setMembershipAmountEur] = useState<number | null>(null);
   const [signingOut, setSigningOut] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -160,7 +166,11 @@ export default function ProfileScreen() {
     if (!profile) return;
     memberService.getMemberProfileExtras(profile.id).then((extras) => {
       setCoachName(extras.coach?.full_name ?? null);
-      setPlan(extras.programName ?? extras.membership);
+      setProgramName(extras.programName ?? null);
+      setMembershipPlan(extras.membership ?? null);
+      setMembershipStatus((extras.membershipStatus as MembershipStatus | null) ?? null);
+      setMembershipEnds(extras.membershipEnds ?? null);
+      setMembershipAmountEur(extras.membershipAmountEur ?? null);
     });
     memberService.getMemberDashboard(profile.id, profile).then((dash) => {
       setPerformanceStats({
@@ -403,7 +413,15 @@ export default function ProfileScreen() {
         />
         <Text style={styles.name}>{profile?.full_name}</Text>
         <View style={styles.membershipBadge}>
-          <Text style={styles.membershipText}>{plan ?? 'REFORGE Member'}</Text>
+          <Text style={styles.membershipText}>
+            {membershipStatus === 'paid'
+              ? 'Active member'
+              : membershipStatus === 'trial'
+                ? 'Trial member'
+                  : membershipStatus === 'unpaid' || membershipStatus === 'overdue'
+                  ? 'Payment due'
+                  : programName ?? membershipPlan ?? 'REFORGE Member'}
+          </Text>
         </View>
         {todayMood ? (
           <View style={styles.moodBadge}>
@@ -448,6 +466,13 @@ export default function ProfileScreen() {
       {profile?.id ? (
         <TrophyCabinetCard memberId={profile.id} memberName={profile.full_name} />
       ) : null}
+
+      <MemberSubscriptionCard
+        planLabel={membershipPlan ?? 'REFORGE Group'}
+        status={membershipStatus}
+        amountEur={membershipAmountEur}
+        periodEnd={membershipEnds}
+      />
 
       <View style={styles.contactHead}>
         <View style={{ flex: 1 }}>
@@ -558,9 +583,9 @@ export default function ProfileScreen() {
           </View>
           <View style={styles.infoCopy}>
             <Text style={styles.infoLabel}>Program</Text>
-            <Text style={styles.infoValue}>{plan ?? 'No active plan'}</Text>
+            <Text style={styles.infoValue}>{programName ?? 'No active plan'}</Text>
           </View>
-          {plan ? (
+          {programName ? (
             <View style={styles.activeChip}>
               <View style={styles.activeDot} />
               <Text style={styles.activeChipText}>Active</Text>

@@ -686,7 +686,7 @@ export const mockInactiveMemberIds = new Set<string>();
 export let mockStudioSettings: StudioSettings = {
   name: 'REFORGE Limassol',
   location: 'City Box Gym · Augoustas Theodoras 9, Limassol',
-  membershipLabel: 'REFORGE Strength',
+  membershipLabel: 'REFORGE Group',
   allowMemberBooking: true,
   groupChatEnabled: true,
   workingDays: [1, 2, 3, 4, 5, 6],
@@ -768,12 +768,12 @@ const membershipDefaults: Record<
   string,
   Pick<MemberMembership, 'plan' | 'plan_label' | 'status' | 'amount_eur' | 'notes'>
 > = {
-  [IDS.member]: { plan: 'monthly', plan_label: 'REFORGE Strength', status: 'paid', amount_eur: 180, notes: null },
+  [IDS.member]: { plan: 'monthly', plan_label: 'REFORGE Group', status: 'paid', amount_eur: 100, notes: null },
   [IDS.member2]: {
     plan: 'monthly',
-    plan_label: 'REFORGE Strength',
+    plan_label: 'REFORGE Group',
     status: 'overdue',
-    amount_eur: 180,
+    amount_eur: 100,
     notes: 'Follow up on payment',
   },
   [IDS.member3]: {
@@ -785,31 +785,31 @@ const membershipDefaults: Record<
   },
   [IDS.member4]: {
     plan: 'monthly',
-    plan_label: 'REFORGE Strength',
+    plan_label: 'REFORGE Group',
     status: 'unpaid',
-    amount_eur: 180,
+    amount_eur: 100,
     notes: 'New member — awaiting first payment',
   },
-  [IDS.tina]: { plan: 'monthly', plan_label: 'REFORGE Strength', status: 'paid', amount_eur: 180, notes: null },
-  [IDS.marianna]: { plan: 'monthly', plan_label: 'REFORGE Strength', status: 'paid', amount_eur: 180, notes: null },
-  [IDS.michael]: { plan: 'monthly', plan_label: 'REFORGE Strength', status: 'paid', amount_eur: 180, notes: null },
-  [IDS.kostas]: { plan: 'monthly', plan_label: 'REFORGE Strength', status: 'paid', amount_eur: 180, notes: null },
+  [IDS.tina]: { plan: 'monthly', plan_label: 'REFORGE Group', status: 'paid', amount_eur: 100, notes: null },
+  [IDS.marianna]: { plan: 'monthly', plan_label: 'REFORGE Group', status: 'paid', amount_eur: 100, notes: null },
+  [IDS.michael]: { plan: 'monthly', plan_label: 'REFORGE Group', status: 'paid', amount_eur: 100, notes: null },
+  [IDS.kostas]: { plan: 'monthly', plan_label: 'REFORGE Group', status: 'paid', amount_eur: 100, notes: null },
   [IDS.dimitris]: {
     plan: 'monthly',
-    plan_label: 'REFORGE Strength',
+    plan_label: 'REFORGE Group',
     status: 'unpaid',
-    amount_eur: 180,
+    amount_eur: 100,
     notes: null,
   },
-  [IDS.sk]: { plan: 'monthly', plan_label: 'REFORGE Strength', status: 'paid', amount_eur: 180, notes: null },
+  [IDS.sk]: { plan: 'monthly', plan_label: 'REFORGE Group', status: 'paid', amount_eur: 100, notes: null },
   [IDS.phoneMember]: {
     plan: 'monthly',
-    plan_label: 'REFORGE Strength',
+    plan_label: 'REFORGE Group',
     status: 'unpaid',
-    amount_eur: 180,
+    amount_eur: 100,
     notes: 'Phone-only contact — confirm name',
   },
-  [IDS.panos]: { plan: 'monthly', plan_label: 'REFORGE Strength', status: 'paid', amount_eur: 180, notes: null },
+  [IDS.panos]: { plan: 'monthly', plan_label: 'REFORGE Group', status: 'paid', amount_eur: 100, notes: null },
 };
 
 export let mockMemberships: MemberMembership[] = MEMBER_IDS.map((memberId, i) => {

@@ -44,6 +44,7 @@ function recordLabel(type: PersonalRecord['record_type']): string {
 
 export default function MyPrsScreen() {
   const { profile } = useAuth();
+  const hasSupabaseWorkouts = useSupabaseWorkouts();
   const [prs, setPrs] = useState<PersonalRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -53,7 +54,7 @@ export default function MyPrsScreen() {
     if (!profile) return;
     try {
       setError(null);
-      if (!useSupabaseWorkouts()) {
+      if (!hasSupabaseWorkouts) {
         setPrs([]);
         return;
       }
@@ -64,7 +65,7 @@ export default function MyPrsScreen() {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [profile]);
+  }, [profile, hasSupabaseWorkouts]);
 
   useEffect(() => {
     void load();
@@ -116,8 +117,14 @@ export default function MyPrsScreen() {
       {!error && !prs.length ? (
         <EmptyState
           icon="flash-outline"
-          title="No PRs yet"
-          description="Complete weighted sets in a live workout and REFORGE will lock in your bests."
+          variant="panel"
+          title="Your PRs will appear here"
+          description="REFORGE auto-detects personal records from the weighted sets you log in your workouts."
+          steps={[
+            { label: 'Log sets', desc: 'Strength or weighted cardio (weight + reps)' },
+            { label: 'Finish', desc: 'We sweep your session to save PRs automatically' },
+            { label: 'Check back', desc: 'Come here to see your bests per exercise' },
+          ]}
         />
       ) : null}
 
