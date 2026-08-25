@@ -1046,7 +1046,26 @@ export async function createBooking(
   startsAt: string,
   endsAt: string,
 ): Promise<Booking> {
+  if (useSupabaseWorkouts()) {
+    try {
+      const bookingsSupabase = await import('@/services/bookings.supabase');
+      const bookingNotifications = await import('@/services/bookingNotifications');
+      const member = mockProfiles.find((p) => p.id === memberId);
+      const created = await bookingsSupabase.createBooking({
+        memberId,
+        coachId,
+        startsAt,
+        endsAt,
+      });
+      await bookingNotifications.notifyBookingCreated(created, member?.full_name);
+      return created;
+    } catch {
+      // fall through to mock
+    }
+  }
+
   await delay(300);
+  const member = mockProfiles.find((p) => p.id === memberId);
   const booking: Booking = {
     id: newId('bk'),
     member_id: memberId,
@@ -1061,10 +1080,14 @@ export async function createBooking(
   };
   mockBookings.unshift(booking);
   persistMockBookings();
-  return {
+  const enriched = {
     ...booking,
     coach: mockProfiles.find((p) => p.id === coachId),
   };
+  const bookingNotifications = await import('@/services/bookingNotifications');
+  await bookingNotifications.notifyBookingCreated(enriched, member?.full_name);
+  await bookingNotifications.notifyBookingConfirmed(enriched, member?.full_name);
+  return enriched;
 }
 
 export async function setBookingAttendance(
@@ -1216,10 +1239,18 @@ export async function cancelBooking(bookingId: string, memberId: string): Promis
   if (hoursUntil < 12) throw new Error('Cancellations must be at least 12 hours before the session');
   booking.status = 'cancelled';
   persistMockBookings();
-  return {
+  const enriched = {
     ...booking,
     coach: mockProfiles.find((p) => p.id === booking.coach_id),
+    member: mockProfiles.find((p) => p.id === booking.member_id),
   };
+  const bookingNotifications = await import('@/services/bookingNotifications');
+  await bookingNotifications.notifyBookingCancelled(
+    enriched,
+    enriched.member?.full_name,
+    true,
+  );
+  return enriched;
 }
 
 export async function getBooking(bookingId: string, memberId?: string): Promise<Booking | null> {

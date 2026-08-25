@@ -15,6 +15,7 @@ import { Skeleton } from '@/components/ui/Skeleton';
 import { useAuth } from '@/hooks/useAuth';
 import { useStudioSync } from '@/hooks/useStudioSync';
 import * as community from '@/services/community';
+import { bookingNotificationRoute, isBookingNotification } from '@/services/bookingNotifications';
 import type { AppNotification, ChatThreadPreview, Profile } from '@/types';
 import { colors, fonts, radius, spacing, typography } from '@/constants/theme';
 
@@ -73,6 +74,8 @@ export default function MessagesScreen() {
     await community.markNotificationRead(profile.id, notification.id);
     if (notification.thread_id) {
       router.push(`/(member)/messages/${notification.thread_id}`);
+    } else if (isBookingNotification(notification.type)) {
+      router.push(bookingNotificationRoute(notification, profile.role) as never);
     }
     await load();
   };

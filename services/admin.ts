@@ -1028,8 +1028,24 @@ export async function updatePrivateSessionStatus(
   await delay(200);
   const booking = mockBookings.find((b) => b.id === bookingId);
   if (!booking) throw new Error('Private session not found');
+  const previousStatus = booking.status;
   booking.status = status;
-  return enrichPrivate(booking);
+  const enriched = enrichPrivate(booking);
+  const bookingNotifications = await import('@/services/bookingNotifications');
+  if (status === 'confirmed' && previousStatus !== 'confirmed') {
+    await bookingNotifications.notifyBookingConfirmed(
+      enriched,
+      enriched.member?.full_name,
+    );
+  }
+  if (status === 'cancelled' && previousStatus !== 'cancelled') {
+    await bookingNotifications.notifyBookingCancelled(
+      enriched,
+      enriched.member?.full_name,
+      false,
+    );
+  }
+  return enriched;
 }
 
 export async function deletePrivateSession(bookingId: string): Promise<void> {

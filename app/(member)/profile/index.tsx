@@ -6,7 +6,7 @@ import { Animated, Pressable, ScrollView, StyleSheet, Text, View } from 'react-n
 import { Ionicons } from '@expo/vector-icons';
 
 import { MemberAppGuide } from '@/components/onboarding/MemberAppGuide';
-import { MemberSubscriptionCard } from '@/components/billing/MemberSubscriptionCard';
+import { DigitalMembershipCard } from '@/components/billing/DigitalMembershipCard';
 import { PerformanceBuildProfile } from '@/components/performance/PerformanceBuildProfile';
 import { TrophyCabinetCard } from '@/components/achievements/TrophyCabinetCard';
 import { AppBottomSheet, SheetFormError } from '@/components/ui/AppBottomSheet';
@@ -66,6 +66,7 @@ export default function ProfileScreen() {
   const [membershipStatus, setMembershipStatus] = useState<MembershipStatus | null>(null);
   const [membershipEnds, setMembershipEnds] = useState<string | null>(null);
   const [membershipAmountEur, setMembershipAmountEur] = useState<number | null>(null);
+  const [membershipLoading, setMembershipLoading] = useState(true);
   const [signingOut, setSigningOut] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -164,14 +165,18 @@ export default function ProfileScreen() {
 
   useEffect(() => {
     if (!profile) return;
-    memberService.getMemberProfileExtras(profile.id).then((extras) => {
-      setCoachName(extras.coach?.full_name ?? null);
-      setProgramName(extras.programName ?? null);
-      setMembershipPlan(extras.membership ?? null);
-      setMembershipStatus((extras.membershipStatus as MembershipStatus | null) ?? null);
-      setMembershipEnds(extras.membershipEnds ?? null);
-      setMembershipAmountEur(extras.membershipAmountEur ?? null);
-    });
+    setMembershipLoading(true);
+    memberService
+      .getMemberProfileExtras(profile.id)
+      .then((extras) => {
+        setCoachName(extras.coach?.full_name ?? null);
+        setProgramName(extras.programName ?? null);
+        setMembershipPlan(extras.membership ?? null);
+        setMembershipStatus((extras.membershipStatus as MembershipStatus | null) ?? null);
+        setMembershipEnds(extras.membershipEnds ?? null);
+        setMembershipAmountEur(extras.membershipAmountEur ?? null);
+      })
+      .finally(() => setMembershipLoading(false));
     memberService.getMemberDashboard(profile.id, profile).then((dash) => {
       setPerformanceStats({
         weeklyWorkouts: dash.stats.weeklyWorkouts,
@@ -412,17 +417,15 @@ export default function ProfileScreen() {
           onPress={onUpload}
         />
         <Text style={styles.name}>{profile?.full_name}</Text>
-        <View style={styles.membershipBadge}>
-          <Text style={styles.membershipText}>
-            {membershipStatus === 'paid'
-              ? 'Active member'
-              : membershipStatus === 'trial'
-                ? 'Trial member'
-                  : membershipStatus === 'unpaid' || membershipStatus === 'overdue'
-                  ? 'Payment due'
-                  : programName ?? membershipPlan ?? 'REFORGE Member'}
-          </Text>
-        </View>
+        <DigitalMembershipCard
+          memberName={profile?.full_name ?? 'Member'}
+          planLabel={membershipPlan ?? 'REFORGE Group'}
+          status={membershipStatus}
+          amountEur={membershipAmountEur}
+          periodEnd={membershipEnds}
+          memberId={profile?.id}
+          loading={membershipLoading}
+        />
         {todayMood ? (
           <View style={styles.moodBadge}>
             <Text style={styles.moodBadgeEmoji}>{todayMood.emoji}</Text>
@@ -466,13 +469,6 @@ export default function ProfileScreen() {
       {profile?.id ? (
         <TrophyCabinetCard memberId={profile.id} memberName={profile.full_name} />
       ) : null}
-
-      <MemberSubscriptionCard
-        planLabel={membershipPlan ?? 'REFORGE Group'}
-        status={membershipStatus}
-        amountEur={membershipAmountEur}
-        periodEnd={membershipEnds}
-      />
 
       <View style={styles.contactHead}>
         <View style={{ flex: 1 }}>
@@ -945,18 +941,6 @@ const styles = StyleSheet.create({
     color: colors.text,
     marginTop: spacing.xs,
     textAlign: 'center',
-  },
-  membershipBadge: {
-    backgroundColor: colors.accentMuted,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.xs,
-    borderRadius: radius.full,
-    marginTop: spacing.xs,
-  },
-  membershipText: {
-    ...typography.caption,
-    color: colors.accent,
-    fontWeight: '700',
   },
   moodBadge: {
     flexDirection: 'row',

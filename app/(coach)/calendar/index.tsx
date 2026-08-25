@@ -606,7 +606,9 @@ export default function CoachCalendarScreen() {
                   <Text style={styles.entryAction}>Tap to manage roster →</Text>
                 ) : null}
 
-                {entry.kind === 'private' && isAdmin && entry.status !== 'cancelled' ? (
+                {entry.kind === 'private' &&
+                entry.status !== 'cancelled' &&
+                (isAdmin || entry.coachId === profile?.id) ? (
                   <View style={styles.entryActions}>
                     {entry.status === 'pending' ? (
                       <PrimaryButton

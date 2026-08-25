@@ -234,7 +234,10 @@ export async function getUnreadChatNotifications(userId: string): Promise<number
       !n.read &&
       (n.type === 'chat_request' ||
         n.type === 'chat_message' ||
-        n.type === 'chat_invite'),
+        n.type === 'chat_invite' ||
+        n.type === 'booking_created' ||
+        n.type === 'booking_confirmed' ||
+        n.type === 'booking_cancelled'),
   ).length;
 }
 
@@ -256,7 +259,10 @@ export async function getChatNotifications(userId: string): Promise<AppNotificat
         !n.read &&
         (n.type === 'chat_request' ||
           n.type === 'chat_message' ||
-          n.type === 'chat_invite'),
+          n.type === 'chat_invite' ||
+          n.type === 'booking_created' ||
+          n.type === 'booking_confirmed' ||
+          n.type === 'booking_cancelled'),
     )
     .sort((a, b) => b.created_at.localeCompare(a.created_at));
 }

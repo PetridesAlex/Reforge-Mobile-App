@@ -11,6 +11,7 @@ const CONTENT_TABLES = [
   'studio_news',
   'workouts_of_the_day',
   'gym_classes',
+  'bookings',
   'notifications',
   'wod_rsvps',
   'member_absences',

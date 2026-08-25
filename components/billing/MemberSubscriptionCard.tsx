@@ -4,6 +4,10 @@ import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 
 import { AnimatedCount } from '@/components/ui/AnimatedCount';
+import {
+  membershipNeedsPayment,
+  membershipStatusMeta,
+} from '@/lib/memberships/statusMeta';
 import type { MembershipStatus } from '@/services/mock/data';
 import { colors, fonts, radius, spacing } from '@/constants/theme';
 
@@ -14,52 +18,6 @@ type Props = {
   periodEnd?: string | null;
   loading?: boolean;
 };
-
-function statusMeta(status: MembershipStatus | null) {
-  switch (status) {
-    case 'paid':
-      return {
-        label: 'Active',
-        headline: 'Subscription active',
-        body: 'Your membership is paid and up to date.',
-        icon: 'checkmark-circle' as const,
-        tone: 'ok' as const,
-      };
-    case 'trial':
-      return {
-        label: 'Trial',
-        headline: 'Trial membership',
-        body: 'Enjoy full access during your trial period.',
-        icon: 'sparkles' as const,
-        tone: 'trial' as const,
-      };
-    case 'paused':
-      return {
-        label: 'Paused',
-        headline: 'Membership paused',
-        body: 'Contact the studio if you want to resume training.',
-        icon: 'pause-circle' as const,
-        tone: 'muted' as const,
-      };
-    case 'overdue':
-      return {
-        label: 'Overdue',
-        headline: 'Payment overdue',
-        body: 'Please renew your subscription to keep full access.',
-        icon: 'alert-circle' as const,
-        tone: 'danger' as const,
-      };
-    case 'unpaid':
-    default:
-      return {
-        label: 'Payment due',
-        headline: 'Subscription needs payment',
-        body: 'Contact your coach or the studio to complete payment.',
-        icon: 'card-outline' as const,
-        tone: 'warn' as const,
-      };
-  }
-}
 
 export function MemberSubscriptionCard({
   planLabel,
@@ -76,8 +34,8 @@ export function MemberSubscriptionCard({
     );
   }
 
-  const meta = statusMeta(status);
-  const needsPayment = status === 'unpaid' || status === 'overdue';
+  const meta = membershipStatusMeta(status);
+  const needsPayment = membershipNeedsPayment(status);
   const periodLabel =
     periodEnd != null
       ? format(parseISO(periodEnd.length === 10 ? `${periodEnd}T12:00:00` : periodEnd), 'MMM d, yyyy')

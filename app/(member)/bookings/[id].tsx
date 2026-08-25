@@ -5,6 +5,7 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 
+import { BookingCalendarView } from '@/components/bookings/BookingCalendarView';
 import { Avatar } from '@/components/ui/Avatar';
 import { ErrorState } from '@/components/ui/ErrorState';
 import { PrimaryButton } from '@/components/ui/PrimaryButton';
@@ -14,6 +15,7 @@ import { BackButton } from '@/components/ui/BackButton';
 import { useAuth } from '@/hooks/useAuth';
 import { formatTime } from '@/lib/utils/dates';
 import * as memberService from '@/services/member';
+import { bookingsToCalendarItems } from '@/lib/bookings/calendar';
 import type { Booking, BookingStatus } from '@/types';
 import { colors, fonts, radius, spacing, typography } from '@/constants/theme';
 
@@ -83,6 +85,7 @@ export default function BookingDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { profile } = useAuth();
   const [booking, setBooking] = useState<Booking | null>(null);
+  const [calendarBookings, setCalendarBookings] = useState<Booking[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [cancelling, setCancelling] = useState(false);
@@ -92,7 +95,12 @@ export default function BookingDetailScreen() {
     if (!id) return;
     try {
       setError(null);
-      setBooking(await memberService.getBooking(id, profile?.id));
+      const [row, allBookings] = await Promise.all([
+        memberService.getBooking(id, profile?.id),
+        profile ? memberService.getBookings(profile.id) : Promise.resolve({ upcoming: [], past: [] }),
+      ]);
+      setBooking(row);
+      setCalendarBookings([...allBookings.upcoming, ...allBookings.past]);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to load');
     } finally {
@@ -116,6 +124,11 @@ export default function BookingDetailScreen() {
       status: statusMeta(booking.status),
     };
   }, [booking]);
+
+  const calendarItems = useMemo(
+    () => bookingsToCalendarItems(calendarBookings),
+    [calendarBookings],
+  );
 
   const onCancel = async () => {
     if (!profile || !booking) return;
@@ -256,6 +269,27 @@ export default function BookingDetailScreen() {
             icon="document-text-outline"
             label="Session type"
             value={booking.notes ?? 'Private lesson'}
+          />
+        </View>
+
+        <View style={styles.calendarPanel}>
+          <BookingCalendarView
+            compact
+            highlightId={booking.id}
+            items={calendarItems}
+            title="On your calendar"
+            emptyMessage="This session will appear here once saved."
+            onSelectItem={(item) => {
+              if (item.id !== booking.id) {
+                router.push(`/(member)/bookings/${item.id}`);
+              }
+            }}
+          />
+          <PrimaryButton
+            title="Open full calendar"
+            variant="secondary"
+            onPress={() => router.push('/(member)/bookings')}
+            style={styles.calendarCta}
           />
         </View>
 
@@ -515,6 +549,19 @@ const styles = StyleSheet.create({
     ...typography.caption,
     color: colors.textSecondary,
     marginTop: 2,
+  },
+  calendarPanel: {
+    marginHorizontal: spacing.lg,
+    marginTop: spacing.lg,
+    padding: spacing.md,
+    borderRadius: radius.xl,
+    backgroundColor: colors.surfaceElevated,
+    borderWidth: 1,
+    borderColor: colors.border,
+    gap: spacing.sm,
+  },
+  calendarCta: {
+    marginTop: spacing.xs,
   },
   attendancePanel: {
     position: 'relative',

@@ -322,7 +322,14 @@ export async function getChatNotifications(userId: string): Promise<AppNotificat
     .select('*')
     .eq('user_id', userId)
     .eq('read', false)
-    .in('type', ['chat_request', 'chat_message', 'chat_invite'])
+    .in('type', [
+      'chat_request',
+      'chat_message',
+      'chat_invite',
+      'booking_created',
+      'booking_confirmed',
+      'booking_cancelled',
+    ])
     .order('created_at', { ascending: false })
     .limit(50);
 

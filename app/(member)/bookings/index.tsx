@@ -1,9 +1,10 @@
 import { router, useFocusEffect } from 'expo-router';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Pressable, RefreshControl, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 
+import { BookingCalendarView } from '@/components/bookings/BookingCalendarView';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { ErrorState } from '@/components/ui/ErrorState';
 import { ClassRosterStrip } from '@/components/bookings/ClassRosterStrip';
@@ -16,14 +17,18 @@ import { useStudioSync } from '@/hooks/useStudioSync';
 import { PLACEHOLDER_IMAGES, workoutImageForDay } from '@/constants/media';
 import { formatDateTime } from '@/lib/utils/dates';
 import * as memberService from '@/services/member';
+import {
+  bookingsToCalendarItems,
+  classesToCalendarItems,
+} from '@/lib/bookings/calendar';
 import type { AttendanceSummary, Booking, GymClass } from '@/types';
 import { colors, fonts, radius, spacing } from '@/constants/theme';
 
-type Tab = 'private' | 'classes' | 'attendance';
+type Tab = 'calendar' | 'private' | 'classes' | 'attendance';
 
 export default function BookingsScreen() {
   const { profile } = useAuth();
-  const [tab, setTab] = useState<Tab>('private');
+  const [tab, setTab] = useState<Tab>('calendar');
   const [privateTab, setPrivateTab] = useState<'upcoming' | 'past'>('upcoming');
   const [upcoming, setUpcoming] = useState<Booking[]>([]);
   const [past, setPast] = useState<Booking[]>([]);
@@ -108,6 +113,14 @@ export default function BookingsScreen() {
     }
   };
 
+  const calendarItems = useMemo(
+    () => [
+      ...bookingsToCalendarItems([...upcoming, ...past]),
+      ...classesToCalendarItems(classes),
+    ],
+    [upcoming, past, classes],
+  );
+
   if (loading) {
     return (
       <Screen>
@@ -153,6 +166,7 @@ export default function BookingsScreen() {
       <View style={styles.tabs}>
         {(
           [
+            ['calendar', 'Calendar'],
             ['private', 'Private'],
             ['classes', 'Classes'],
             ['attendance', 'Attendance'],
@@ -175,6 +189,30 @@ export default function BookingsScreen() {
       </View>
 
       {error ? <Text style={styles.errorInline}>{error}</Text> : null}
+
+      {tab === 'calendar' ? (
+        <>
+          <Pressable
+            onPress={() => router.push('/(member)/bookings/new')}
+            style={({ pressed }) => [styles.cta, pressed && styles.pressed]}>
+            <Text style={styles.ctaText}>Book private session</Text>
+            <Text style={styles.ctaArrow}>›</Text>
+          </Pressable>
+
+          <BookingCalendarView
+            items={calendarItems}
+            title="Your training calendar"
+            emptyMessage="No sessions booked for this day. Tap a highlighted day or book a new session."
+            onSelectItem={(item) => {
+              if (item.kind === 'private') {
+                router.push(`/(member)/bookings/${item.id}`);
+              } else {
+                setTab('classes');
+              }
+            }}
+          />
+        </>
+      ) : null}
 
       {tab === 'private' ? (
         <>

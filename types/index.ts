@@ -262,6 +262,9 @@ export type AppNotificationType =
   | 'store_low_stock'
   | 'community_like'
   | 'community_comment'
+  | 'booking_created'
+  | 'booking_confirmed'
+  | 'booking_cancelled'
   | 'general';
 
 export type AppNotification = {

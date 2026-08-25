@@ -20,6 +20,9 @@ function iconForType(type?: AppNotification['type']): React.ComponentProps<typeo
   if (type === 'chat_message') return 'mail-unread-outline';
   if (type === 'community_like') return 'heart-outline';
   if (type === 'community_comment') return 'chatbubble-outline';
+  if (type === 'booking_created' || type === 'booking_confirmed' || type === 'booking_cancelled') {
+    return 'calendar-outline';
+  }
   return 'notifications-outline';
 }
 
@@ -28,6 +31,8 @@ function accentForType(type?: AppNotification['type']) {
   if (type === 'chat_request') return colors.accent;
   if (type === 'chat_message') return colors.success;
   if (type === 'community_like' || type === 'community_comment') return colors.accent;
+  if (type === 'booking_created' || type === 'booking_confirmed') return colors.accent;
+  if (type === 'booking_cancelled') return colors.danger;
   return colors.textMuted;
 }
 
