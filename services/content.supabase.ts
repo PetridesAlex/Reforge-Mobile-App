@@ -13,7 +13,20 @@ import {
 } from '@/lib/workouts/wod';
 import { getSupabase } from '@/lib/supabase/client';
 import type { StudioNews, WorkoutOfTheDay, WodRsvpStatus } from '@/services/mock/data';
-import type { GymClass, Profile } from '@/types';
+import type { GymClass, MemberDashboard, Profile } from '@/types';
+
+type MemberWodView = NonNullable<MemberDashboard['workoutOfTheDay']>;
+
+function memberWodStatus(input: {
+  hasActiveSession: boolean;
+  hasCompletedSession: boolean;
+  rsvpStatus?: string | null;
+}): MemberWodView['myStatus'] {
+  if (input.hasActiveSession) return 'joined';
+  if (input.hasCompletedSession) return 'completed';
+  if (input.rsvpStatus === 'joined' || input.rsvpStatus === 'skipped') return input.rsvpStatus;
+  return null;
+}
 
 export type WodAdminView = WorkoutOfTheDay & {
   joined: Profile[];
@@ -353,7 +366,9 @@ export async function getMemberStudioNews(
   }));
 }
 
-export async function getMemberWorkoutOfTheDay(memberId: string) {
+export async function getMemberWorkoutOfTheDay(
+  memberId: string,
+): Promise<MemberWodView | null> {
   const supabase = getSupabase();
   const date = todayKey();
   const { data, error } = await supabase
@@ -378,12 +393,11 @@ export async function getMemberWorkoutOfTheDay(memberId: string) {
     .order('started_at', { ascending: false });
   const activeSession = (mySessions ?? []).find((s) => s.status === 'active');
   const completedSession = (mySessions ?? []).find((s) => s.status === 'completed');
-  const myStatus =
-    activeSession != null
-      ? 'joined'
-      : completedSession != null
-        ? 'completed'
-        : ((mine?.status as WodRsvpStatus | undefined) ?? null);
+  const myStatus = memberWodStatus({
+    hasActiveSession: activeSession != null,
+    hasCompletedSession: completedSession != null,
+    rsvpStatus: typeof mine?.status === 'string' ? mine.status : null,
+  });
 
   return {
     id: wod.id,
@@ -458,7 +472,7 @@ export async function listMemberWorkoutsOfTheDay(
   memberId: string,
   fromDate: string,
   toDate: string,
-) {
+): Promise<MemberWodView[]> {
   const supabase = getSupabase();
   const { data, error } = await supabase
     .from('workouts_of_the_day')
@@ -489,12 +503,11 @@ export async function listMemberWorkoutsOfTheDay(
       .sort((a, b) => String(b.started_at).localeCompare(String(a.started_at)));
     const activeSession = myWodSessions.find((s) => s.status === 'active');
     const completedSession = myWodSessions.find((s) => s.status === 'completed');
-    const myStatus =
-      activeSession != null
-        ? 'joined'
-        : completedSession != null
-          ? 'completed'
-          : ((mine?.status as WodRsvpStatus | undefined) ?? null);
+    const myStatus = memberWodStatus({
+      hasActiveSession: activeSession != null,
+      hasCompletedSession: completedSession != null,
+      rsvpStatus: typeof mine?.status === 'string' ? mine.status : null,
+    });
     return {
       id: wod.id,
       date: wod.date,

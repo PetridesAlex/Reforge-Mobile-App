@@ -91,39 +91,43 @@ export default function BookSessionScreen() {
 
       <SectionHeader title="Pick a date" kicker="Step 1" />
 
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={styles.dateScroll}>
-        {dates.map((d) => {
-          const active = format(d, 'yyyy-MM-dd') === format(selectedDate, 'yyyy-MM-dd');
-          const isToday = format(d, 'yyyy-MM-dd') === format(new Date(), 'yyyy-MM-dd');
-          return (
-            <Pressable
-              key={d.toISOString()}
-              onPress={() => setSelectedDate(d)}
-              style={({ pressed }) => [styles.dateChip, pressed && styles.pressed]}>
-              {active ? (
-                <LinearGradient
-                  colors={['rgba(200,255,0,0.22)', 'rgba(200,255,0,0.08)']}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 1 }}
-                  style={styles.dateChipGlow}
-                />
-              ) : null}
-              <Text style={[styles.dateDow, active && styles.dateActiveText]}>
-                {isToday ? 'Today' : format(d, 'EEE')}
-              </Text>
-              <Text style={[styles.dateDayNum, active && styles.dateActiveText]}>
-                {format(d, 'd')}
-              </Text>
-              <Text style={[styles.dateMonth, active && styles.dateActiveText]}>
-                {format(d, 'MMM')}
-              </Text>
-            </Pressable>
-          );
-        })}
-      </ScrollView>
+      <View style={styles.dateScrollWrap}>
+        <ScrollView
+          horizontal
+          nestedScrollEnabled
+          directionalLockEnabled
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.dateScroll}>
+          {dates.map((d) => {
+            const active = format(d, 'yyyy-MM-dd') === format(selectedDate, 'yyyy-MM-dd');
+            const isToday = format(d, 'yyyy-MM-dd') === format(new Date(), 'yyyy-MM-dd');
+            return (
+              <Pressable
+                key={d.toISOString()}
+                onPress={() => setSelectedDate(d)}
+                style={({ pressed }) => [styles.dateChip, active && styles.dateChipActive, pressed && styles.pressed]}>
+                {active ? (
+                  <LinearGradient
+                    colors={['rgba(200,255,0,0.22)', 'rgba(200,255,0,0.08)']}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 1 }}
+                    style={styles.dateChipGlow}
+                  />
+                ) : null}
+                <Text style={[styles.dateDow, active && styles.dateActiveText]}>
+                  {isToday ? 'Today' : format(d, 'EEE')}
+                </Text>
+                <Text style={[styles.dateDayNum, active && styles.dateActiveText]}>
+                  {format(d, 'd')}
+                </Text>
+                <Text style={[styles.dateMonth, active && styles.dateActiveText]}>
+                  {format(d, 'MMM')}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </ScrollView>
+      </View>
 
       <SectionHeader
         title={format(selectedDate, 'EEEE d MMM')}
@@ -284,15 +288,20 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
     maxWidth: 360,
   },
+  dateScrollWrap: {
+    height: 112,
+    marginBottom: spacing.lg,
+  },
   dateScroll: {
     gap: spacing.sm,
-    paddingBottom: spacing.lg,
+    paddingRight: spacing.md,
+    alignItems: 'stretch',
   },
   dateChip: {
     position: 'relative',
     overflow: 'hidden',
     width: 72,
-    minHeight: 96,
+    height: 96,
     borderRadius: radius.lg,
     borderWidth: 1,
     borderColor: colors.border,
@@ -301,6 +310,9 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: 2,
     paddingVertical: spacing.sm,
+  },
+  dateChipActive: {
+    borderColor: 'rgba(200,255,0,0.45)',
   },
   dateChipGlow: {
     ...StyleSheet.absoluteFillObject,

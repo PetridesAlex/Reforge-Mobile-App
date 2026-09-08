@@ -23,24 +23,23 @@ export function Screen({
 }: ScreenProps) {
   const insets = useSafeAreaInsets();
 
-  const containerStyle = [
-    styles.container,
-    {
-      paddingTop: insets.top,
-      paddingBottom: insets.bottom,
-    },
-    style,
-  ];
-
   if (scrollable) {
     return (
       <ScrollView
-        style={containerStyle}
+        style={[styles.container, style]}
         contentContainerStyle={[
+          {
+            paddingTop: insets.top,
+            paddingBottom: Math.max(insets.bottom, spacing.md) + spacing.lg,
+          },
           padded && styles.padded,
           contentContainerStyle,
         ]}
         showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+        nestedScrollEnabled
+        bounces
+        scrollEventThrottle={16}
         refreshControl={refreshControl}>
         {children}
       </ScrollView>
@@ -48,7 +47,17 @@ export function Screen({
   }
 
   return (
-    <View style={[containerStyle, padded && styles.padded, contentContainerStyle]}>
+    <View
+      style={[
+        styles.container,
+        {
+          paddingTop: insets.top,
+          paddingBottom: insets.bottom,
+        },
+        padded && styles.padded,
+        style,
+        contentContainerStyle,
+      ]}>
       {children}
     </View>
   );
@@ -61,6 +70,5 @@ const styles = StyleSheet.create({
   },
   padded: {
     paddingHorizontal: spacing.md,
-    paddingBottom: spacing.lg,
   },
 });

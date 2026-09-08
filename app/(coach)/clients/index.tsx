@@ -800,7 +800,6 @@ export default function ClientsScreen() {
                         )}
                         <Pressable
                           onPress={(e) => {
-                            // @ts-expect-error RN web event
                             e?.stopPropagation?.();
                             setConfirmRemoveId(c.member.id);
                           }}

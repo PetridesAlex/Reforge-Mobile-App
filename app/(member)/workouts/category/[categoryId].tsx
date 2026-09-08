@@ -545,7 +545,7 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(200,255,0,0.25)',
   },
   heroPillText: {
-    fontFamily: fonts.mono,
+    fontFamily: fonts.sansMedium,
     fontSize: 10,
     letterSpacing: 1.4,
     color: colors.accent,
@@ -897,7 +897,7 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
   },
   coachingKicker: {
-    fontFamily: fonts.mono,
+    fontFamily: fonts.sansMedium,
     fontSize: 10,
     letterSpacing: 1.4,
     color: colors.accent,

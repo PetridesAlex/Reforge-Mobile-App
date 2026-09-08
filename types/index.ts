@@ -452,9 +452,9 @@ export type MemberDashboard = {
     movements: import('@/lib/workouts/wod').WodMovement[];
     joinedCount: number;
     myStatus: 'joined' | 'skipped' | 'completed' | null;
-    mySessionStatus?: 'active' | 'completed' | null;
-    activeSessionId?: string | null;
-    completedSessionId?: string | null;
+    mySessionStatus: 'active' | 'completed' | null;
+    activeSessionId: string | null;
+    completedSessionId: string | null;
   } | null;
 };
 

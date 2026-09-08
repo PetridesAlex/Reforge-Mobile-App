@@ -470,6 +470,13 @@ export default function ProfileScreen() {
         <TrophyCabinetCard memberId={profile.id} memberName={profile.full_name} />
       ) : null}
 
+      <MemberSubscriptionCard
+        planLabel={membershipPlan ?? 'REFORGE Group'}
+        status={membershipStatus}
+        amountEur={membershipAmountEur}
+        periodEnd={membershipEnds}
+      />
+
       <View style={styles.contactHead}>
         <View style={{ flex: 1 }}>
           <SectionHeader title="Contact" kicker="Account" />

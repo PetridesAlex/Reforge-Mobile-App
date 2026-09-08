@@ -382,11 +382,14 @@ function mapMockWodView(wod: (typeof mockWorkoutsOfTheDay)[number], memberId: st
   const completedSession = mockSessions.find(
     (s) => s.member_id === memberId && s.status === 'completed' && s.notes === wodSessionTag,
   );
-  const myStatus = activeSession
+  const rsvpStatus = mine?.status;
+  const myStatus: WorkoutOfTheDayView['myStatus'] = activeSession
     ? 'joined'
     : completedSession
       ? 'completed'
-      : (mine?.status ?? null);
+      : rsvpStatus === 'joined' || rsvpStatus === 'skipped'
+        ? rsvpStatus
+        : null;
   return {
     id: wod.id,
     date: wod.date,

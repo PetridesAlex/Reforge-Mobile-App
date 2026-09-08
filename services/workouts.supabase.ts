@@ -308,6 +308,9 @@ export async function finishSession(
 
   if (error) throw new Error(formatSupabaseError(error));
 
+  // Best-effort: evaluate completion XP/achievements when the session finishes.
+  await supabase.rpc('evaluate_session_achievements', { p_member: session.member_id });
+
   // Best-effort PR sweep.
   // Normally PRs are detected during set logging (persistSetUpdate). This makes sure
   // PRs still get created after the session completes even if the UI/network
@@ -390,9 +393,8 @@ export async function finishSoloSession(input: {
 
   if (error) throw new Error(formatSupabaseError(error));
 
-  await supabase
-    .rpc('evaluate_session_achievements', { p_member: input.memberId })
-    .catch(() => undefined);
+  // Best-effort: evaluate completion XP/achievements when the session finishes.
+  await supabase.rpc('evaluate_session_achievements', { p_member: input.memberId });
 
   return {
     sessionId: data.id as string,

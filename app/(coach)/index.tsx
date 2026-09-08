@@ -681,7 +681,7 @@ export default function CoachDashboardScreen() {
           <EmptyState title="No sessions today" />
         ) : (
           data.todaySessions.map((s) => (
-            <View key={s.bookingId} style={styles.coachSessionRow}>
+            <View key={s.id} style={styles.coachSessionRow}>
               <Text style={styles.coachSessionTime}>{s.time}</Text>
               <Text style={styles.coachSessionName}>{s.clientName}</Text>
               <Text style={styles.coachSessionStatus}>{s.status}</Text>
